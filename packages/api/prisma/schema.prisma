@@ -1,0 +1,767 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum Role {
+  worker
+  employer
+  admin
+  moderator
+}
+
+enum UserStatus {
+  active
+  banned
+  restricted
+  deleted
+}
+
+enum Visibility {
+  public
+  verified_only
+  hidden
+  invite_only
+}
+
+enum BusinessType {
+  restaurant
+  catering
+  event_agency
+  banquet_hall
+  individual
+  hotel
+  conference
+  other
+}
+
+enum EmployerType {
+  company
+  individual
+}
+
+enum WorkerLevel {
+  beginner
+  experienced
+  expert
+}
+
+enum StaffCategory {
+  waiter
+  bartender
+  cook
+  administrator
+  coordinator
+  technical
+  hookah_master
+  banquet_manager
+  dj
+  barista
+  sommelier
+  hostess
+  cleaner
+  other
+}
+
+enum RateType {
+  hourly
+  per_shift
+  fixed
+  daily
+  weekly
+  after_event
+}
+
+enum EmploymentType {
+  single_shift
+  series
+  permanent
+  part_time
+  project
+}
+
+enum EventType {
+  wedding
+  corporate
+  banquet
+  conference
+  festival
+  private_party
+  birthday
+  catering_event
+  other
+}
+
+enum VacancyStatus {
+  draft
+  pending_moderation
+  active
+  closed
+  archived
+  rejected
+}
+
+enum ApplicationStatus {
+  pending
+  viewed
+  invited
+  interview
+  confirmed
+  shift_started
+  completed
+  cancelled
+  rejected
+}
+
+enum BookingStatus {
+  pending
+  confirmed
+  cancelled
+  completed
+}
+
+enum DocumentType {
+  medical_book
+  passport
+  certificate
+  other
+}
+
+enum DocumentStatus {
+  pending
+  verified
+  rejected
+}
+
+enum ReviewTargetType {
+  worker
+  employer
+}
+
+enum ReviewStatus {
+  pending
+  approved
+  rejected
+  disputed
+}
+
+enum ReportCategory {
+  spam
+  abuse
+  fraud
+  inappropriate_content
+  other
+}
+
+enum ReportTargetType {
+  user
+  vacancy
+  message
+  review
+}
+
+enum ReportStatus {
+  open
+  in_review
+  resolved
+  dismissed
+}
+
+enum NotificationChannel {
+  in_app
+  email
+  push
+  sms
+  telegram
+}
+
+enum PaymentProvider {
+  yookassa
+  stripe
+}
+
+enum PaymentType {
+  subscription
+  boost
+  contact_access
+  other
+}
+
+enum PaymentStatus {
+  pending
+  completed
+  failed
+  refunded
+}
+
+enum SubscriptionPlan {
+  free
+  basic
+  pro
+  enterprise
+}
+
+enum SubscriptionStatus {
+  active
+  cancelled
+  expired
+  past_due
+}
+
+// ─────────────────────────────────────────────
+// MODELS
+// ─────────────────────────────────────────────
+
+model User {
+  id             String     @id @default(cuid())
+  email          String?    @unique
+  phone          String?    @unique
+  passwordHash   String?    @map("password_hash")
+  emailVerified  Boolean    @default(false) @map("email_verified")
+  phoneVerified  Boolean    @default(false) @map("phone_verified")
+  status         UserStatus @default(active)
+  activeRole     Role?      @map("active_role")
+  lastLoginAt    DateTime?  @map("last_login_at")
+  lastLoginIp    String?    @map("last_login_ip")
+  consentGivenAt DateTime?  @map("consent_given_at")
+  consentIp      String?    @map("consent_ip")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  roles           UserRole[]
+  workerProfile   WorkerProfile?
+  employerProfile EmployerProfile?
+  sentMessages    Message[]       @relation("MessageSender")
+  receivedMessages Message[]      @relation("MessageReceiver")
+  notifications   Notification[]
+  payments        Payment[]
+  reviews         Review[]        @relation("ReviewAuthor")
+  reviewsReceived Review[]        @relation("ReviewTarget")
+  reports         Report[]        @relation("ReportReporter")
+  reportsReceived Report[]        @relation("ReportTarget")
+  actionLogs      ActionLog[]
+  blacklistEntries Blacklist[]    @relation("BlacklistUser")
+  blacklistCreated Blacklist[]    @relation("BlacklistCreator")
+  contentUpdates  ContentPage[]
+  favorites       Favorite[]
+
+  @@index([email])
+  @@index([phone])
+  @@index([status])
+  @@map("users")
+}
+
+model UserRole {
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+  role   Role
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@map("user_roles")
+}
+
+model WorkerProfile {
+  id              String     @id @default(cuid())
+  userId          String     @unique @map("user_id")
+  slug            String     @unique
+  firstName       String     @map("first_name")
+  lastName        String     @map("last_name")
+  age             Int?
+  cityId          String?    @map("city_id")
+  bio             String?    @db.Text
+  photoUrl        String?    @map("photo_url")
+  videoUrl        String?    @map("video_url")
+  experienceYears Int        @default(0) @map("experience_years")
+  hasMedicalBook  Boolean    @default(false) @map("has_medical_book")
+  desiredRate     Decimal?   @map("desired_rate") @db.Decimal(10, 2)
+  rateType        RateType?  @map("rate_type")
+  willingToTravel Boolean    @default(false) @map("willing_to_travel")
+  overtimeReady   Boolean    @default(false) @map("overtime_ready")
+  visibility      Visibility @default(public)
+  isVerified      Boolean    @default(false) @map("is_verified")
+  verifiedAt      DateTime?  @map("verified_at")
+  ratingScore     Decimal    @default(0) @map("rating_score") @db.Decimal(3, 2)
+  totalReviews    Int        @default(0) @map("total_reviews")
+  totalShifts     Int        @default(0) @map("total_shifts")
+  languages       String[]   @default([])
+  dressSizes      String?    @map("dress_sizes")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  user          User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  city          City?                   @relation(fields: [cityId], references: [id])
+  categories    WorkerCategory[]
+  portfolio     WorkerPortfolioPhoto[]
+  documents     WorkerDocument[]
+  applications  Application[]
+  bookings      Booking[]
+  availability  WorkerAvailability[]
+  workHistory   WorkHistory[]
+
+  @@index([cityId, visibility])
+  @@index([ratingScore(sort: Desc)])
+  @@index([slug])
+  @@map("worker_profiles")
+}
+
+model WorkerCategory {
+  id             String        @id @default(cuid())
+  workerId       String        @map("worker_id")
+  category       StaffCategory
+  specialization String?
+  level          WorkerLevel   @default(beginner)
+
+  worker WorkerProfile @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@unique([workerId, category])
+  @@index([workerId])
+  @@index([category])
+  @@map("worker_categories")
+}
+
+model WorkerPortfolioPhoto {
+  id        String    @id @default(cuid())
+  workerId  String    @map("worker_id")
+  url       String
+  thumbUrl  String?   @map("thumb_url")
+  caption   String?
+  eventType EventType?  @map("event_type")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  worker WorkerProfile @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([workerId])
+  @@map("worker_portfolio_photos")
+}
+
+model WorkerDocument {
+  id        String         @id @default(cuid())
+  workerId  String         @map("worker_id")
+  type      DocumentType
+  url       String
+  fileName  String?        @map("file_name")
+  status    DocumentStatus @default(pending)
+  note      String?
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+
+  worker WorkerProfile @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([workerId])
+  @@map("worker_documents")
+}
+
+model WorkHistory {
+  id          String   @id @default(cuid())
+  workerId    String   @map("worker_id")
+  title       String
+  company     String?
+  description String?  @db.Text
+  dateFrom    DateTime @map("date_from")
+  dateTo      DateTime? @map("date_to")
+  isExternal  Boolean  @default(false) @map("is_external")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  worker WorkerProfile @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([workerId])
+  @@map("work_history")
+}
+
+model EmployerProfile {
+  id                      String       @id @default(cuid())
+  userId                  String       @unique @map("user_id")
+  slug                    String       @unique
+  type                    EmployerType @default(company)
+  companyName             String?      @map("company_name")
+  contactName             String?      @map("contact_name")
+  description             String?      @db.Text
+  logoUrl                 String?      @map("logo_url")
+  businessType            BusinessType @default(other) @map("business_type")
+  cityId                  String?      @map("city_id")
+  website                 String?
+  inn                     String?
+  isVerified              Boolean      @default(false) @map("is_verified")
+  verifiedAt              DateTime?    @map("verified_at")
+  verificationRequestedAt DateTime?    @map("verification_requested_at")
+  reliabilityScore        Decimal      @default(0) @map("reliability_score") @db.Decimal(5, 2)
+  responseRate            Decimal      @default(0) @map("response_rate") @db.Decimal(5, 2)
+  ratingScore             Decimal?     @map("rating_score") @db.Decimal(3, 2)
+  commissionRate          Decimal      @default(0) @map("commission_rate") @db.Decimal(5, 4)
+  createdAt               DateTime     @default(now()) @map("created_at")
+  updatedAt               DateTime     @updatedAt @map("updated_at")
+
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  city         City?              @relation(fields: [cityId], references: [id])
+  vacancies    Vacancy[]
+  templates    VacancyTemplate[]
+  bookings     Booking[]
+  subscription Subscription?
+
+  @@index([cityId])
+  @@index([businessType])
+  @@index([slug])
+  @@map("employer_profiles")
+}
+
+model City {
+  id       String  @id @default(cuid())
+  name     String
+  region   String?
+  slug     String  @unique
+  isActive Boolean @default(true) @map("is_active")
+  lat      Decimal? @db.Decimal(10, 7)
+  lng      Decimal? @db.Decimal(10, 7)
+
+  workers   WorkerProfile[]
+  employers EmployerProfile[]
+  vacancies Vacancy[]
+
+  @@map("cities")
+}
+
+model Vacancy {
+  id                String         @id @default(cuid())
+  employerId        String         @map("employer_id")
+  cityId            String?        @map("city_id")
+  title             String
+  category          StaffCategory
+  specialization    String?
+  eventType         EventType?     @map("event_type")
+  venueLevel        Int?           @map("venue_level") @db.SmallInt
+  rate              Decimal        @db.Decimal(10, 2)
+  rateType          RateType       @map("rate_type")
+  employmentType    EmploymentType @map("employment_type")
+  dateStart         DateTime       @map("date_start")
+  dateEnd           DateTime?      @map("date_end")
+  timeStart         String?        @map("time_start")
+  timeEnd           String?        @map("time_end")
+  address           String?
+  lat               Decimal?       @db.Decimal(10, 7)
+  lng               Decimal?       @db.Decimal(10, 7)
+  workersNeeded     Int            @default(1) @map("workers_needed")
+  workersConfirmed  Int            @default(0) @map("workers_confirmed")
+  dressCode         String?        @map("dress_code")
+  experienceRequired Int?          @map("experience_required")
+  responsibilities  String?        @db.Text
+  requirements      String?        @db.Text
+  conditions        String?        @db.Text
+  description       String?        @db.Text
+  foodProvided      Boolean        @default(false) @map("food_provided")
+  transportProvided Boolean        @default(false) @map("transport_provided")
+  tipsPossible      Boolean?       @map("tips_possible")
+  isUrgent          Boolean        @default(false) @map("is_urgent")
+  isTemplate        Boolean        @default(false) @map("is_template")
+  templateName      String?        @map("template_name")
+  status            VacancyStatus  @default(draft)
+  moderatedBy       String?        @map("moderated_by")
+  moderationNote    String?        @map("moderation_note")
+  publishedAt       DateTime?      @map("published_at")
+  expiresAt         DateTime?      @map("expires_at")
+  viewsCount        Int            @default(0) @map("views_count")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+
+  employer     EmployerProfile @relation(fields: [employerId], references: [id], onDelete: Cascade)
+  city         City?           @relation(fields: [cityId], references: [id])
+  applications Application[]
+  bookings     Booking[]
+
+  @@index([cityId, status, dateStart])
+  @@index([category, status])
+  @@index([employerId, status])
+  @@index([status, publishedAt])
+  @@map("vacancies")
+}
+
+model VacancyTemplate {
+  id          String   @id @default(cuid())
+  employerId  String   @map("employer_id")
+  name        String
+  vacancyData Json     @map("vacancy_data") @db.JsonB
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  employer EmployerProfile @relation(fields: [employerId], references: [id], onDelete: Cascade)
+
+  @@index([employerId])
+  @@map("vacancy_templates")
+}
+
+model Application {
+  id                        String            @id @default(cuid())
+  vacancyId                 String            @map("vacancy_id")
+  workerId                  String            @map("worker_id")
+  coverMessage              String?           @map("cover_message") @db.Text
+  status                    ApplicationStatus @default(pending)
+  statusHistory             Json              @default("[]") @map("status_history") @db.JsonB
+  cancelledBy               String?           @map("cancelled_by")
+  cancelReason              String?           @map("cancel_reason")
+  shiftConfirmedByWorker    Boolean           @default(false) @map("shift_confirmed_by_worker")
+  shiftConfirmedByEmployer  Boolean           @default(false) @map("shift_confirmed_by_employer")
+  createdAt                 DateTime          @default(now()) @map("created_at")
+  updatedAt                 DateTime          @updatedAt @map("updated_at")
+
+  vacancy      Vacancy        @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+  worker       WorkerProfile  @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  reviews      Review[]
+  conversation Conversation?
+
+  @@unique([vacancyId, workerId])
+  @@index([vacancyId, status])
+  @@index([workerId, status])
+  @@map("applications")
+}
+
+model Booking {
+  id              String        @id @default(cuid())
+  employerId      String        @map("employer_id")
+  workerId        String        @map("worker_id")
+  linkedVacancyId String?       @map("linked_vacancy_id")
+  date            DateTime
+  timeStart       String?       @map("time_start")
+  timeEnd         String?       @map("time_end")
+  location        String?
+  description     String?       @db.Text
+  rate            Decimal?      @db.Decimal(10, 2)
+  status          BookingStatus @default(pending)
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  employer      EmployerProfile @relation(fields: [employerId], references: [id], onDelete: Cascade)
+  worker        WorkerProfile   @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  linkedVacancy Vacancy?        @relation(fields: [linkedVacancyId], references: [id])
+  reviews       Review[]
+  conversation  Conversation?
+
+  @@index([employerId])
+  @@index([workerId])
+  @@index([date])
+  @@map("bookings")
+}
+
+model WorkerAvailability {
+  id       String   @id @default(cuid())
+  workerId String   @map("worker_id")
+  date     DateTime @db.Date
+  isBlocked Boolean @default(false) @map("is_blocked")
+  isBooked  Boolean @default(false) @map("is_booked")
+  note     String?
+
+  worker WorkerProfile @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@unique([workerId, date])
+  @@index([workerId, date])
+  @@map("worker_availability")
+}
+
+model Conversation {
+  id             String   @id @default(cuid())
+  applicationId  String?  @unique @map("application_id")
+  bookingId      String?  @unique @map("booking_id")
+  participantIds String[] @map("participant_ids")
+  lastMessageAt  DateTime? @map("last_message_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  application Application? @relation(fields: [applicationId], references: [id])
+  booking     Booking?     @relation(fields: [bookingId], references: [id])
+  messages    Message[]
+
+  @@index([participantIds])
+  @@map("conversations")
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String   @map("conversation_id")
+  senderId       String   @map("sender_id")
+  receiverId     String   @map("receiver_id")
+  content        String   @db.Text
+  attachmentUrl  String?  @map("attachment_url")
+  readAt         DateTime? @map("read_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation("MessageSender", fields: [senderId], references: [id])
+  receiver     User         @relation("MessageReceiver", fields: [receiverId], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@index([receiverId, readAt])
+  @@map("messages")
+}
+
+model Review {
+  id            String           @id @default(cuid())
+  authorId      String           @map("author_id")
+  targetId      String           @map("target_id")
+  targetType    ReviewTargetType @map("target_type")
+  applicationId String?          @map("application_id")
+  bookingId     String?          @map("booking_id")
+  rating        Int              @db.SmallInt
+  text          String?          @db.Text
+  isPublic      Boolean          @default(true) @map("is_public")
+  status        ReviewStatus     @default(pending)
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+
+  author      User         @relation("ReviewAuthor", fields: [authorId], references: [id])
+  target      User         @relation("ReviewTarget", fields: [targetId], references: [id])
+  application Application? @relation(fields: [applicationId], references: [id])
+  booking     Booking?     @relation(fields: [bookingId], references: [id])
+
+  @@index([targetId, targetType, isPublic])
+  @@index([authorId])
+  @@map("reviews")
+}
+
+model Report {
+  id          String           @id @default(cuid())
+  reporterId  String           @map("reporter_id")
+  targetType  ReportTargetType @map("target_type")
+  targetId    String           @map("target_id")
+  category    ReportCategory
+  description String?          @db.Text
+  status      ReportStatus     @default(open)
+  assignedTo  String?          @map("assigned_to")
+  resolution  String?          @db.Text
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  reporter User @relation("ReportReporter", fields: [reporterId], references: [id])
+  target   User @relation("ReportTarget", fields: [targetId], references: [id])
+
+  @@index([status])
+  @@index([targetType, targetId])
+  @@map("reports")
+}
+
+model Notification {
+  id        String              @id @default(cuid())
+  userId    String              @map("user_id")
+  type      String
+  payload   Json                @db.JsonB
+  isRead    Boolean             @default(false) @map("is_read")
+  channel   NotificationChannel @default(in_app)
+  createdAt DateTime            @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
+}
+
+model Payment {
+  id                String          @id @default(cuid())
+  userId            String          @map("user_id")
+  amount            Decimal         @db.Decimal(12, 2)
+  currency          String          @default("RUB")
+  provider          PaymentProvider
+  providerPaymentId String?         @map("provider_payment_id")
+  type              PaymentType
+  status            PaymentStatus   @default(pending)
+  metadata          Json?           @db.JsonB
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([providerPaymentId])
+  @@index([status])
+  @@map("payments")
+}
+
+model Subscription {
+  id                 String             @id @default(cuid())
+  employerId         String             @unique @map("employer_id")
+  plan               SubscriptionPlan   @default(free)
+  status             SubscriptionStatus @default(active)
+  currentPeriodStart DateTime?          @map("current_period_start")
+  currentPeriodEnd   DateTime?          @map("current_period_end")
+  paymentId          String?            @map("payment_id")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  employer EmployerProfile @relation(fields: [employerId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+model ContentPage {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  contentJson Json     @map("content_json") @db.JsonB
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  updatedById String?  @map("updated_by_id")
+
+  updatedBy User? @relation(fields: [updatedById], references: [id])
+
+  @@map("content_pages")
+}
+
+model ActionLog {
+  id         String   @id @default(cuid())
+  userId     String?  @map("user_id")
+  action     String
+  entityType String?  @map("entity_type")
+  entityId   String?  @map("entity_id")
+  metadata   Json?    @db.JsonB
+  ip         String?
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("action_logs")
+}
+
+model FeatureFlag {
+  key       String   @id
+  value     Json     @db.JsonB
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("feature_flags")
+}
+
+model Blacklist {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  reason    String?  @db.Text
+  createdBy String   @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user    User @relation("BlacklistUser", fields: [userId], references: [id])
+  creator User @relation("BlacklistCreator", fields: [createdBy], references: [id])
+
+  @@index([userId])
+  @@map("blacklist")
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  targetId  String   @map("target_id")
+  type      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, targetId, type])
+  @@index([userId, type])
+  @@map("favorites")
+}
