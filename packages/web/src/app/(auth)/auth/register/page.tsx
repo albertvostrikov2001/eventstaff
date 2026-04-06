@@ -11,8 +11,7 @@ import { useToast } from '@/components/ui/toast-context';
 import { FormField } from '@/components/forms/FormField';
 import { FormCheckbox } from '@/components/forms/FormField';
 import { Users, Briefcase } from 'lucide-react';
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+import { getPublicApiBase } from '@/lib/api/publicApiBase';
 
 const registerFormSchema = z
   .object({
@@ -58,6 +57,14 @@ export default function RegisterPage() {
   };
 
   const onSubmit = async (data: RegisterForm) => {
+    const API = getPublicApiBase();
+    if (!API) {
+      toast(
+        'С GitHub Pages нужен публичный API. Задайте переменную NEXT_PUBLIC_API_URL в настройках Actions и пересоберите сайт.',
+        'error',
+      );
+      return;
+    }
     try {
       const res = await fetch(`${API}/auth/register`, {
         method: 'POST',
@@ -72,22 +79,37 @@ export default function RegisterPage() {
         credentials: 'include',
       });
 
-      const json = await res.json();
+      const text = await res.text();
+      let json: { error?: { message?: string }; data?: { user: Parameters<typeof setUser>[0] } };
+      try {
+        json = text ? JSON.parse(text) : {};
+      } catch {
+        toast('Сервер вернул неверный ответ. Проверьте, что API запущен.', 'error');
+        return;
+      }
 
       if (!res.ok) {
         toast(json.error?.message ?? 'Ошибка регистрации', 'error');
         return;
       }
 
-      const user = json.data.user;
+      const user = json.data?.user;
+      if (!user) {
+        toast('Некорректный ответ сервера', 'error');
+        return;
+      }
       setUser(user);
 
       toast('Профиль создан! Заполните информацию о себе.', 'success');
 
       const redirect = data.role === 'employer' ? '/employer/profile' : '/worker/profile';
       router.push(redirect);
-    } catch {
-      toast('Ошибка подключения к серверу', 'error');
+    } catch (e) {
+      const net =
+        e instanceof TypeError
+          ? 'Не удалось связаться с API. Запустите сервер (например pnpm dev:all) и откройте сайт с того же хоста, что в CORS (localhost или 127.0.0.1).'
+          : 'Ошибка подключения к серверу';
+      toast(net, 'error');
     }
   };
 

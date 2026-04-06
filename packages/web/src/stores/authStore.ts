@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { RoleKey } from '@unity/shared';
+import { getPublicApiBase } from '@/lib/api/publicApiBase';
 
 interface WorkerProfileSummary {
   id: string;
@@ -67,11 +68,13 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   initAuth: async () => {
     set({ isLoading: true });
+    const api = getPublicApiBase();
+    if (!api) {
+      set({ user: null, isAuthenticated: false, isLoading: false, isInitialized: true });
+      return;
+    }
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1'}/auth/me`,
-        { credentials: 'include', cache: 'no-store' },
-      );
+      const res = await fetch(`${api}/auth/me`, { credentials: 'include', cache: 'no-store' });
       if (res.ok) {
         const json = await res.json();
         set({

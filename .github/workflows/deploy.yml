@@ -37,6 +37,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Check public API URL (required for login from GitHub Pages)
+        run: |
+          if [ -z "$NEXT_PUBLIC_API_URL" ]; then
+            echo "::warning title=NEXT_PUBLIC_API_URL::GitHub Pages cannot reach localhost. Add a Repository variable NEXT_PUBLIC_API_URL (e.g. https://your-api.example.com/api/v1), then re-run this workflow."
+          else
+            echo "NEXT_PUBLIC_API_URL is set for this build."
+          fi
+        env:
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
+
       # Next.js static export does not support middleware (no Node server on Pages).
       - name: Disable middleware for static export
         run: mv packages/web/src/middleware.ts packages/web/src/middleware.static.bak.ts
@@ -46,6 +56,7 @@ jobs:
           STATIC_EXPORT: 'true'
           NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
           NEXT_PUBLIC_SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+          NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
         run: pnpm --filter @unity/web exec next build
 
       - name: Add .nojekyll (GitHub Pages + paths with _)

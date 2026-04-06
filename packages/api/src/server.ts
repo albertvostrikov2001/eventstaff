@@ -22,6 +22,51 @@ const PORT = Number(process.env.API_PORT) || 4000;
 const HOST = process.env.API_HOST || '0.0.0.0';
 const isDev = process.env.NODE_ENV !== 'production';
 
+function isLocalBrowserOrigin(origin: string): boolean {
+  try {
+    const u = new URL(origin);
+    return u.protocol === 'http:' && (u.hostname === 'localhost' || u.hostname === '127.0.0.1');
+  } catch {
+    return false;
+  }
+}
+
+function extraCorsOrigins(): string[] {
+  return (
+    process.env.CORS_ORIGINS?.split(',')
+      .map((s) => s.trim())
+      .filter(Boolean) ?? []
+  );
+}
+
+/** Browser Origin header is scheme+host+port only (no path). Normalize config URLs. */
+function toOrigin(urlOrOrigin: string): string | null {
+  const s = urlOrOrigin.trim();
+  if (!s) return null;
+  try {
+    if (s.startsWith('http://') || s.startsWith('https://')) {
+      return new URL(s).origin;
+    }
+  } catch {
+    /* fall through */
+  }
+  return s;
+}
+
+function productionCorsOrigins(): string[] {
+  const out = new Set<string>();
+  for (const raw of extraCorsOrigins()) {
+    const o = toOrigin(raw);
+    if (o) out.add(o);
+  }
+  const site = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (site) {
+    const o = toOrigin(site);
+    if (o) out.add(o);
+  }
+  return [...out];
+}
+
 async function buildApp() {
   const app = Fastify({
     logger: {
@@ -31,9 +76,18 @@ async function buildApp() {
   });
 
   await app.register(cors, {
-    origin: isDev
-      ? ['http://localhost:3000', 'http://localhost:4000']
-      : [process.env.NEXT_PUBLIC_SITE_URL ?? ''],
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true);
+      if (isDev) {
+        if (isLocalBrowserOrigin(origin)) return cb(null, origin);
+        const extra = extraCorsOrigins();
+        if (extra.includes(origin)) return cb(null, origin);
+        return cb(null, false);
+      }
+      const allowed = productionCorsOrigins();
+      if (allowed.includes(origin)) return cb(null, origin);
+      return cb(null, false);
+    },
     credentials: true,
   });
 

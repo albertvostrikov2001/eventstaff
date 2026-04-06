@@ -5,12 +5,11 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { loginSchema, type LoginInput } from '@unity/shared';
+import { loginSchema, type LoginInput, type RoleKey } from '@unity/shared';
 import { useAuthStore } from '@/stores/authStore';
 import { useToast } from '@/components/ui/toast-context';
 import { FormField } from '@/components/forms/FormField';
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+import { getPublicApiBase } from '@/lib/api/publicApiBase';
 
 function LoginForm() {
   const router = useRouter();
@@ -24,6 +23,14 @@ function LoginForm() {
   });
 
   const onSubmit = async (data: LoginInput) => {
+    const API = getPublicApiBase();
+    if (!API) {
+      toast(
+        'С GitHub Pages нужен публичный API. В репозитории: Settings → Secrets and variables → Actions → Variables → NEXT_PUBLIC_API_URL (например https://ваш-сервер/api/v1), затем пересоберите Pages.',
+        'error',
+      );
+      return;
+    }
     try {
       const res = await fetch(`${API}/auth/login`, {
         method: 'POST',
@@ -32,15 +39,43 @@ function LoginForm() {
         credentials: 'include',
       });
 
-      const json = await res.json();
+      const text = await res.text();
+      let json: {
+        error?: { message?: string };
+        data?: {
+          user: {
+            id: string;
+            email?: string | null;
+            phone?: string | null;
+            roles?: string[];
+            activeRole?: string;
+          };
+        };
+      };
+      try {
+        json = text ? JSON.parse(text) : {};
+      } catch {
+        toast('Сервер вернул неверный ответ. Проверьте, что API запущен.', 'error');
+        return;
+      }
 
       if (!res.ok) {
         toast(json.error?.message ?? 'Неверный email или пароль', 'error');
         return;
       }
 
-      const user = json.data.user;
-      setUser(user);
+      const user = json.data?.user;
+      if (!user) {
+        toast('Некорректный ответ сервера', 'error');
+        return;
+      }
+      setUser({
+        id: user.id,
+        email: user.email ?? null,
+        phone: user.phone ?? null,
+        roles: (user.roles ?? []) as RoleKey[],
+        activeRole: (user.activeRole ?? user.roles?.[0] ?? 'worker') as RoleKey,
+      });
 
       const from = searchParams.get('from');
       const activeRole = user.activeRole ?? user.roles?.[0];
@@ -51,8 +86,12 @@ function LoginForm() {
         : '/worker/dashboard';
 
       router.push(from ?? defaultRedirect);
-    } catch {
-      toast('Ошибка подключения к серверу', 'error');
+    } catch (e) {
+      const net =
+        e instanceof TypeError
+          ? 'Не удалось связаться с API. Запустите сервер (например pnpm dev:all) и откройте сайт с того же хоста, что в CORS (localhost или 127.0.0.1).'
+          : 'Ошибка подключения к серверу';
+      toast(net, 'error');
     }
   };
 

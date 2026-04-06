@@ -7,10 +7,14 @@ const BCRYPT_ROUNDS = 12;
 const REFRESH_TTL = 60 * 60 * 24 * 30; // 30 days in seconds
 
 function makeCookieOpts(maxAge: number) {
+  const prod = process.env.NODE_ENV === 'production';
+  const crossSite =
+    prod &&
+    (process.env.AUTH_COOKIE_SAME_SITE === 'none' || process.env.AUTH_CROSS_SITE_COOKIES === 'true');
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax' as const,
+    secure: prod,
+    sameSite: (crossSite ? 'none' : 'lax') as const,
     path: '/',
     maxAge,
   };
