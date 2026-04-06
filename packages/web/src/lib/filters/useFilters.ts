@@ -6,8 +6,9 @@ import type { ZodSchema } from 'zod';
 
 function parseMultiValueParams(searchParams: URLSearchParams): Record<string, unknown> {
   const result: Record<string, unknown> = {};
-  const keys = new Set(searchParams.keys());
-  for (const key of keys) {
+  const keys = Array.from(new Set(Array.from(searchParams.keys())));
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
     const values = searchParams.getAll(key);
     result[key] = values.length === 1 ? values[0] : values;
   }

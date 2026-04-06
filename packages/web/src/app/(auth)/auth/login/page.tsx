@@ -1,6 +1,6 @@
 'use client';
 
-import type { Metadata } from 'next';
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
@@ -12,7 +12,7 @@ import { FormField } from '@/components/forms/FormField';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { setUser } = useAuthStore();
@@ -97,5 +97,19 @@ export default function LoginPage() {
         </button>
       </form>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="rounded-modal border border-gray-200 bg-white p-8 shadow-card">
+          <div className="h-8 animate-pulse rounded bg-gray-100" />
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

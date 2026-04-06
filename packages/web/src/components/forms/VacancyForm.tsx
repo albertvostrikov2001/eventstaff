@@ -1,6 +1,6 @@
 'use client';
 
-import { useForm } from 'react-hook-form';
+import { useForm, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   vacancyCreateSchema,
@@ -32,7 +32,7 @@ const STATUS_OPTIONS = [
 
 export function VacancyForm({ defaultValues, cities, onSubmit, submitLabel = 'Сохранить' }: VacancyFormProps) {
   const form = useForm<VacancyCreateInput & { status: string }>({
-    resolver: zodResolver(vacancyCreateSchema),
+    resolver: zodResolver(vacancyCreateSchema) as unknown as Resolver<VacancyCreateInput & { status: string }>,
     defaultValues: {
       workersNeeded: 1,
       foodProvided: false,

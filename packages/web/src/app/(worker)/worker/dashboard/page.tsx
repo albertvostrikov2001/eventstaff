@@ -32,7 +32,7 @@ export default function WorkerDashboardPage() {
 
   useEffect(() => {
     Promise.all([
-      apiClient.get<{ data: Application[] }>('/worker/applications', { limit: 5 } as Record<string, string>),
+      apiClient.get<{ data: Application[] }>('/worker/applications', { limit: 5 }),
       apiClient.get<{ data: { visibility: string } }>('/worker/profile'),
     ])
       .then(([appRes, profileRes]) => {

@@ -65,7 +65,9 @@ export function EmployerCard({
               {displayName}
             </Link>
             {isVerified && (
-              <ShieldCheck className="h-4 w-4 shrink-0 text-primary-500" title="Верифицирован" />
+              <span title="Верифицирован" className="inline-flex shrink-0">
+                <ShieldCheck className="h-4 w-4 text-primary-500" aria-hidden />
+              </span>
             )}
           </div>
           {businessLabel && (

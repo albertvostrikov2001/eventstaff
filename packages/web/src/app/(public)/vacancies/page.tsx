@@ -292,20 +292,20 @@ function VacanciesCatalog() {
           </div>
           {total > 20 && (
             <div className="mt-8 flex justify-center gap-2">
-              {filters.page > 1 && (
+              {(filters.page ?? 1) > 1 && (
                 <button
-                  onClick={() => setFilters({ page: filters.page - 1 })}
+                  onClick={() => setFilters({ page: (filters.page ?? 1) - 1 })}
                   className="rounded-input border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
                 >
                   Назад
                 </button>
               )}
               <span className="flex items-center px-4 text-sm text-gray-500">
-                Страница {filters.page} из {Math.ceil(total / 20)}
+                Страница {filters.page ?? 1} из {Math.ceil(total / 20)}
               </span>
-              {filters.page < Math.ceil(total / 20) && (
+              {(filters.page ?? 1) < Math.ceil(total / 20) && (
                 <button
-                  onClick={() => setFilters({ page: filters.page + 1 })}
+                  onClick={() => setFilters({ page: (filters.page ?? 1) + 1 })}
                   className="rounded-input border border-gray-300 px-4 py-2 text-sm hover:bg-gray-50"
                 >
                   Вперёд

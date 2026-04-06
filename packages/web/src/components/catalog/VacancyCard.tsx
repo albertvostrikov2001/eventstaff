@@ -60,7 +60,9 @@ export function VacancyCard({
           <div className="mt-0.5 flex items-center gap-1 text-sm text-gray-500">
             <span>{employerName}</span>
             {employer.isVerified && (
-              <ShieldCheck className="h-3.5 w-3.5 text-primary-500" title="Верифицирован" />
+              <span title="Верифицирован" className="inline-flex">
+                <ShieldCheck className="h-3.5 w-3.5 text-primary-500" aria-hidden />
+              </span>
             )}
           </div>
         </div>

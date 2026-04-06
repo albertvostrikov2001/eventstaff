@@ -4,6 +4,9 @@ import '@/styles/globals.css';
 import { AuthProvider } from '@/providers/AuthProvider';
 import { ToastProvider } from '@/components/ui/toast-context';
 
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'http://localhost:3000';
+
 const inter = Inter({
   subsets: ['latin', 'cyrillic'],
   variable: '--font-inter',
@@ -18,6 +21,7 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: {
     default: 'Юнити — Биржа event-персонала',
     template: '%s | Юнити',
