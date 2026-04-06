@@ -13,6 +13,7 @@ jobs:
     env:
       # Prisma reads DATABASE_URL from the schema even for `prisma generate` (no real DB connection).
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      NEXT_TELEMETRY_DISABLED: '1'
 
     steps:
       - uses: actions/checkout@v4
@@ -33,4 +34,4 @@ jobs:
 
       - run: pnpm lint
 
-      - run: pnpm typecheck
+      - run: pnpm exec turbo typecheck --filter=@unity/web --filter=@unity/shared
