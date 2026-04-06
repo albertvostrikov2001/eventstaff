@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+.git
+.github
+.next
+out
+dist
+**/*.md
+.env
+.env.*
+!.env.example
+coverage
+.turbo
+*.tsbuildinfo
+pnpm-debug.log*
