@@ -99,14 +99,10 @@ sed -i \
   -e "s|^NEXT_PUBLIC_WS_URL=.*|NEXT_PUBLIC_WS_URL=\"http://${APP_IP}\"|" \
   .env
 
+# Postgres/Redis без проброса портов на хост: API ходит по имени сервиса.
+# Иначе конфликт с системным redis/postgresql на VPS (address already in use :6379).
 cat >docker-compose.override.yml <<EOF
 services:
-  postgres:
-    ports:
-      - "127.0.0.1:5432:5432"
-  redis:
-    ports:
-      - "127.0.0.1:6379:6379"
   api:
     ports:
       - "127.0.0.1:4000:4000"
