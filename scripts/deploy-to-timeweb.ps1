@@ -14,17 +14,17 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $bootstrap = Join-Path $scriptDir "timeweb-vps-bootstrap.sh"
 
 if (-not (Test-Path -LiteralPath $bootstrap)) {
-  Write-Error "Не найден: $bootstrap"
+  Write-Error "Bootstrap script not found: $bootstrap"
 }
 
 $remoteCmd = "export APP_IP=$Ip; export REPO_URL=$RepoUrl; bash -s"
 
-Write-Host "Подключение root@${Ip} и запуск bootstrap (несколько минут)..." -ForegroundColor Cyan
+Write-Host "Connecting root@${Ip}, running bootstrap (may take several minutes)..." -ForegroundColor Cyan
 Get-Content -LiteralPath $bootstrap -Raw | ssh -o StrictHostKeyChecking=accept-new "root@$Ip" $remoteCmd
 
 if ($LASTEXITCODE -ne 0) {
-  Write-Host "SSH или скрипт завершились с ошибкой (код $LASTEXITCODE)." -ForegroundColor Red
+  Write-Host "SSH or bootstrap failed (exit $LASTEXITCODE)." -ForegroundColor Red
   exit $LASTEXITCODE
 }
 
-Write-Host "Готово. Браузер: http://${Ip}/" -ForegroundColor Green
+Write-Host "Done. Open: http://${Ip}/" -ForegroundColor Green
