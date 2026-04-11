@@ -6,8 +6,8 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Set-Location $root
 
-Write-Host "== Docker: сборка и запуск (postgres, redis, api, adminer) ==" -ForegroundColor Cyan
-docker compose up -d --build
+Write-Host "== Docker: postgres, redis, api + Adminer (profile tools) ==" -ForegroundColor Cyan
+docker compose -f docker-compose.yml -f docker-compose.local.yml --profile tools up -d --build
 if ($LASTEXITCODE -ne 0) {
   Write-Host @"
 
@@ -17,7 +17,7 @@ if ($LASTEXITCODE -ne 0) {
   3) Порт 5432 или 6379 занят другой программой — остановите локальный PostgreSQL/Redis.
 
 Запуск вручную из папки проекта:
-  docker compose up -d --build
+  docker compose -f docker-compose.yml -f docker-compose.local.yml --profile tools up -d --build
 
 "@ -ForegroundColor Yellow
   exit $LASTEXITCODE
@@ -38,7 +38,7 @@ for ($i = 0; $i -lt 30; $i++) {
 }
 
 if (-not $ok) {
-  Write-Host "API не ответил вовремя. Логи: docker compose logs api --tail 80" -ForegroundColor Yellow
+  Write-Host "API не ответил вовремя. Логи: docker compose -f docker-compose.yml -f docker-compose.local.yml logs api --tail 80" -ForegroundColor Yellow
   exit 1
 }
 
@@ -46,7 +46,7 @@ Write-Host "API работает." -ForegroundColor Green
 
 $runSeed = Read-Host "Залить тестовые данные (prisma db seed)? [y/N]"
 if ($runSeed -eq "y" -or $runSeed -eq "Y") {
-  docker compose exec -T api sh -c "cd /app && pnpm --filter @unity/api exec prisma db seed"
+  docker compose -f docker-compose.yml -f docker-compose.local.yml exec -T api sh -c "cd /app && pnpm --filter @unity/api exec prisma db seed"
 }
 
 Write-Host @"

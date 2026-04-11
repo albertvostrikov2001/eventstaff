@@ -16,8 +16,8 @@
     "db:studio": "pnpm --filter @unity/api prisma studio",
     "db:seed": "pnpm --filter @unity/api prisma db seed",
     "clean": "turbo clean && rimraf node_modules",
-    "docker:up": "docker compose up -d",
-    "docker:down": "docker compose down"
+    "docker:up": "docker compose -f docker-compose.yml -f docker-compose.local.yml up -d",
+    "docker:down": "docker compose -f docker-compose.yml -f docker-compose.local.yml down"
   },
   "devDependencies": {
     "prettier": "^3.4.2",

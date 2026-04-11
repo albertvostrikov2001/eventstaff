@@ -30,8 +30,9 @@ cd unity
 # 2. Скопировать переменные окружения
 cp .env.example .env
 
-# 3. Запустить PostgreSQL и Redis
-docker compose up -d
+# 3. Запустить PostgreSQL и Redis (и API — см. docker-compose.yml)
+pnpm docker:up
+# или: docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
 
 # 4. Установить зависимости
 pnpm install
@@ -48,7 +49,7 @@ pnpm dev
 - **Фронтенд**: http://localhost:3000
 - **API**: http://localhost:4000
 - **Swagger документация**: http://localhost:4000/docs
-- **Adminer (БД)**: http://localhost:8080
+- **Adminer (БД)**: http://localhost:8080 — только если подняли с профилем `tools` (см. `scripts/start-docker-stack.ps1`)
 
 ## Структура проекта
 
@@ -59,6 +60,7 @@ unity/
 │   ├── api/          # Fastify API сервер
 │   └── shared/       # Общие типы, схемы, константы
 ├── docker-compose.yml
+├── docker-compose.local.yml   # проброс портов БД/Redis только для разработки на ПК
 ├── .env.example
 ├── pnpm-workspace.yaml
 └── turbo.json

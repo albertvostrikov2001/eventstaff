@@ -24,11 +24,11 @@
    ```powershell
    cd "d:\Work Unity\EventStaff-main"
    ```
-2. Запуск:
+2. Запуск (Postgres/Redis на `localhost:5432` / `:6379`, API, опционально Adminer на `:8080` через профиль `tools`):
    ```powershell
-   docker compose up -d --build
+   docker compose -f docker-compose.yml -f docker-compose.local.yml --profile tools up -d --build
    ```
-   Первый раз сборка **API** может занять **несколько минут** (скачивание базовых образов + сборка Node).
+   Без Adminer: `pnpm docker:up` (тот же compose, но без `--profile tools`). Первый раз сборка **API** может занять **несколько минут**.
 
 **Автоматический сценарий (опционально):**
 
@@ -60,7 +60,7 @@ Invoke-WebRequest -Uri "http://localhost:4000/api/v1/health" -UseBasicParsing
 Если вы **ещё не** запускали seed:
 
 ```powershell
-docker compose exec api sh -c "cd /app && pnpm --filter @unity/api exec prisma db seed"
+docker compose -f docker-compose.yml -f docker-compose.local.yml exec api sh -c "cd /app && pnpm --filter @unity/api exec prisma db seed"
 ```
 
 В консоли появится список email и паролей (admin, работодатели, сотрудники).
@@ -113,9 +113,9 @@ pnpm dev
 ## Полезные команды
 
 ```powershell
-docker compose ps
-docker compose logs api --tail 100
-docker compose down
+docker compose -f docker-compose.yml -f docker-compose.local.yml ps
+docker compose -f docker-compose.yml -f docker-compose.local.yml logs api --tail 100
+docker compose -f docker-compose.yml -f docker-compose.local.yml down
 ```
 
 ---

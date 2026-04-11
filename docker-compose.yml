@@ -3,8 +3,6 @@ services:
     image: postgres:15-alpine
     container_name: unity-postgres
     restart: unless-stopped
-    ports:
-      - '5432:5432'
     environment:
       POSTGRES_USER: unity
       POSTGRES_PASSWORD: unity_secret
@@ -21,8 +19,6 @@ services:
     image: redis:7-alpine
     container_name: unity-redis
     restart: unless-stopped
-    ports:
-      - '6379:6379'
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
@@ -63,6 +59,8 @@ services:
     image: adminer:latest
     container_name: unity-adminer
     restart: unless-stopped
+    profiles:
+      - tools
     ports:
       - '8080:8080'
     depends_on:

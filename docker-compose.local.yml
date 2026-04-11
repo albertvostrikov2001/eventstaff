@@ -1,0 +1,13 @@
+# Локальная разработка: доступ к Postgres и Redis с хоста (Prisma, DBeaver, localhost:5432).
+# На VPS этот файл не используется — там нет конфликта портов с системными сервисами.
+#
+# Запуск: docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+# Или: pnpm docker:up
+
+services:
+  postgres:
+    ports:
+      - '5432:5432'
+  redis:
+    ports:
+      - '6379:6379'
