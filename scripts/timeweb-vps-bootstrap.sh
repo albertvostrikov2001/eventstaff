@@ -112,14 +112,11 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgresql://unity:unity_secret@postgres:5432/unity_db?schema=public
       REDIS_URL: redis://redis:6379
-  adminer:
-    ports:
-      - "127.0.0.1:8080:8080"
 EOF
 
-echo "== [8/9] Docker: postgres, redis, api =="
+echo "== [8/9] Docker: postgres, redis, api (без Adminer — порт 8080 часто занят на VPS) =="
 docker compose -f docker-compose.yml -f docker-compose.override.yml build --pull api
-docker compose -f docker-compose.yml -f docker-compose.override.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.override.yml up -d postgres redis api
 
 echo "Ожидание health API..."
 for i in $(seq 1 60); do
@@ -235,5 +232,5 @@ echo "  docker ps"
 echo "  systemctl status unity-web nginx --no-pager"
 echo "  curl -sf http://${APP_IP}/api/v1/health"
 echo ""
-echo "Adminer (только с сервера или SSH-туннель): http://127.0.0.1:8080"
+echo "Adminer не поднимается автоматически. При необходимости: cd ${APP_DIR} && docker compose -f docker-compose.yml -f docker-compose.override.yml run -d --name unity-adminer-once -p 127.0.0.1:18080:8080 adminer"
 echo "SSL: certbot --nginx -d ваш.домен  (после A-записи на ${APP_IP})"
