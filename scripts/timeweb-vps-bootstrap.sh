@@ -139,7 +139,8 @@ set -a
 # shellcheck disable=SC1091
 source .env
 set +a
-pnpm install --frozen-lockfile
+# turbo в devDependencies — при NODE_ENV=production pnpm их не ставит, root build падает с «turbo: not found»
+NODE_ENV=development pnpm install --frozen-lockfile
 pnpm build
 
 PNPM_BIN="$(command -v pnpm)"
