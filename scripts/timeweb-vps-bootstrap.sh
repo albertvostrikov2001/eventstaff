@@ -15,6 +15,8 @@ set -euo pipefail
 APP_IP="${APP_IP:-147.45.235.70}"
 REPO_URL="${REPO_URL:-https://github.com/albertvostrikov2001/eventstaff.git}"
 APP_DIR="${APP_DIR:-/opt/app}"
+# На VPS :4000 часто занят (старый процесс, панель). Наружу — другой порт, внутри контейнера API всё ещё 4000.
+HOST_API_PORT="${HOST_API_PORT:-14000}"
 
 if [[ "${EUID:-0}" -ne 0 ]]; then
   echo "Запустите на сервере от root: sudo bash $0"
@@ -105,7 +107,7 @@ cat >docker-compose.override.yml <<EOF
 services:
   api:
     ports:
-      - "127.0.0.1:4000:4000"
+      - "127.0.0.1:${HOST_API_PORT}:4000"
     env_file:
       - .env
     environment:
@@ -120,7 +122,7 @@ docker compose -f docker-compose.yml -f docker-compose.override.yml up -d postgr
 
 echo "Ожидание health API..."
 for i in $(seq 1 60); do
-  if curl -sf "http://127.0.0.1:4000/api/v1/health" >/dev/null; then
+  if curl -sf "http://127.0.0.1:${HOST_API_PORT}/api/v1/health" >/dev/null; then
     echo "API OK"
     break
   fi
@@ -182,7 +184,7 @@ server {
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
 
     location /docs {
-        proxy_pass http://127.0.0.1:4000;
+        proxy_pass http://127.0.0.1:${HOST_API_PORT};
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
@@ -191,7 +193,7 @@ server {
     }
 
     location /api/ {
-        proxy_pass http://127.0.0.1:4000;
+        proxy_pass http://127.0.0.1:${HOST_API_PORT};
         proxy_http_version 1.1;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;

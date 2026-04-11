@@ -34,8 +34,6 @@ services:
       dockerfile: packages/api/Dockerfile
     container_name: unity-api
     restart: unless-stopped
-    ports:
-      - '4000:4000'
     environment:
       DATABASE_URL: postgresql://unity:unity_secret@postgres:5432/unity_db?schema=public
       REDIS_URL: redis://redis:6379

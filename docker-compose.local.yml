@@ -11,3 +11,6 @@ services:
   redis:
     ports:
       - '6379:6379'
+  api:
+    ports:
+      - '4000:4000'
