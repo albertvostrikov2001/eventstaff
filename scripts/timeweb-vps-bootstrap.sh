@@ -139,9 +139,10 @@ set -a
 # shellcheck disable=SC1091
 source .env
 set +a
-# turbo в devDependencies — при NODE_ENV=production pnpm их не ставит, root build падает с «turbo: not found»
+# turbo только в корневых devDependencies — на VPS не вызываем «pnpm build» (turbo), собираем только Next.
+export CI=1
 NODE_ENV=development pnpm install --frozen-lockfile
-pnpm build
+pnpm run build:web
 
 PNPM_BIN="$(command -v pnpm)"
 cat >/etc/systemd/system/unity-web.service <<EOF
