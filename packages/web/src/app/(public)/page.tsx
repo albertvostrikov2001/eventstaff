@@ -202,7 +202,7 @@ export default function HomePage() {
 
       {/* ── Benefits grid ── */}
       <section
-        className="section-taper-into-cta py-20"
+        className="py-20"
         style={{ background: '#ffffff' }}
         aria-labelledby="benefits-heading"
       >
