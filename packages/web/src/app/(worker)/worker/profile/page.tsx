@@ -24,6 +24,8 @@ interface WorkerProfile {
   hasMedicalBook: boolean;
   willingToTravel: boolean;
   overtimeReady: boolean;
+  readyForTrips: boolean;
+  readyForOvertime: boolean;
   desiredRate: string | null;
   rateType: string | null;
   visibility: string;
@@ -70,6 +72,8 @@ export default function WorkerProfilePage() {
           hasMedicalBook: p.hasMedicalBook,
           willingToTravel: p.willingToTravel,
           overtimeReady: p.overtimeReady,
+          readyForTrips: p.readyForTrips,
+          readyForOvertime: p.readyForOvertime,
           desiredRate: p.desiredRate ? Number(p.desiredRate) : undefined,
           rateType: (p.rateType as WorkerProfileUpdateInput['rateType']) ?? 'hourly',
           visibility: (p.visibility as WorkerProfileUpdateInput['visibility']) ?? 'hidden',
@@ -129,8 +133,8 @@ export default function WorkerProfilePage() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Мой профиль</h1>
-          <p className="mt-1 text-sm text-gray-500">Заполните анкету для поиска работы</p>
+          <h1 className="text-2xl font-bold text-white">Мой профиль</h1>
+          <p className="mt-1 text-sm text-white/50">Заполните анкету для поиска работы</p>
         </div>
         <button
           onClick={toggleVisibility}
@@ -166,8 +170,8 @@ export default function WorkerProfilePage() {
       )}
 
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <div className="rounded-card border border-gray-200 bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-base font-semibold text-gray-900">Основная информация</h2>
+        <div className="rounded-[12px] border border-white/[0.08] bg-white/[0.04] p-6">
+          <h2 className="mb-4 text-base font-semibold text-white">Основная информация</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <FormField
               label="Имя"
@@ -239,6 +243,14 @@ export default function WorkerProfilePage() {
             <FormCheckbox
               label="Готов к сверхурочной работе"
               {...form.register('overtimeReady')}
+            />
+            <FormCheckbox
+              label="Готов к выездам (мероприятия вне города)"
+              {...form.register('readyForTrips')}
+            />
+            <FormCheckbox
+              label="Готов к овертаймам (доп. часы в день смены)"
+              {...form.register('readyForOvertime')}
             />
           </div>
         </div>

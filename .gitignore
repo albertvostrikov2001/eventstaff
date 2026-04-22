@@ -31,6 +31,10 @@ pnpm-debug.log*
 # Prisma
 packages/api/prisma/*.db
 
+# Local media (see UPLOADS_ROOT)
+uploads/
+packages/api/uploads/
+
 # Redis
 dump.rdb
 *.rdb

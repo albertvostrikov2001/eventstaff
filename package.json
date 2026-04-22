@@ -18,6 +18,7 @@
     "db:seed": "pnpm --filter @unity/api prisma db seed",
     "clean": "turbo clean && rimraf node_modules",
     "docker:up": "docker compose -f docker-compose.yml -f docker-compose.local.yml up -d",
+    "docker:db": "docker compose -f docker-compose.yml -f docker-compose.local.yml up -d postgres redis",
     "docker:down": "docker compose -f docker-compose.yml -f docker-compose.local.yml down"
   },
   "devDependencies": {

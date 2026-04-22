@@ -102,6 +102,10 @@ unity/
 - Биллинг (ЮKassa)
 - Админ-панель с CMS
 
+## Публикация на GitHub Pages
+
+Сайт и личный кабинет со статического хостинга работают только вместе с **отдельно развёрнутым API** (Postgres, Redis, HTTPS). Пошагово: [docs/deploy-github-pages.md](docs/deploy-github-pages.md).
+
 ## Лицензия
 
 Proprietary. Все права защищены.

@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { Prisma, StaffCategory, EventType, EmploymentType, BusinessType } from '@prisma/client';
 
 export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /cities
@@ -23,6 +24,8 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
         isAvailable: z.coerce.boolean().optional(),
         hasMedicalBook: z.coerce.boolean().optional(),
         willingToTravel: z.coerce.boolean().optional(),
+        readyForTrips: z.coerce.boolean().optional(),
+        readyForOvertime: z.coerce.boolean().optional(),
         sortBy: z.enum(['rating', 'rate', 'experience', 'createdAt']).default('rating'),
         sortOrder: z.enum(['asc', 'desc']).default('desc'),
         page: z.coerce.number().default(1),
@@ -36,7 +39,7 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
         : [query.category]
       : undefined;
 
-    const where: Parameters<typeof fastify.prisma.workerProfile.findMany>[0]['where'] = {
+    const where: Prisma.WorkerProfileWhereInput = {
       visibility: 'public',
       ...(query.cityId ? { cityId: query.cityId } : {}),
       ...(query.rateMin !== undefined || query.rateMax !== undefined
@@ -50,12 +53,14 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
       ...(query.experience !== undefined ? { experienceYears: { gte: query.experience } } : {}),
       ...(query.hasMedicalBook !== undefined ? { hasMedicalBook: query.hasMedicalBook } : {}),
       ...(query.willingToTravel !== undefined ? { willingToTravel: query.willingToTravel } : {}),
+      ...(query.readyForTrips === true ? { readyForTrips: true } : {}),
+      ...(query.readyForOvertime === true ? { readyForOvertime: true } : {}),
       ...(categories?.length
-        ? { categories: { some: { category: { in: categories as Parameters<typeof fastify.prisma.workerCategory.findMany>[0]['where']['category'][] } } } }
+        ? { categories: { some: { category: { in: categories as StaffCategory[] } } } }
         : {}),
     };
 
-    const orderBy: Parameters<typeof fastify.prisma.workerProfile.findMany>[0]['orderBy'] =
+    const orderBy: Prisma.WorkerProfileOrderByWithRelationInput =
       query.sortBy === 'rating'
         ? { ratingScore: query.sortOrder }
         : query.sortBy === 'rate'
@@ -68,7 +73,11 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.prisma.workerProfile.count({ where }),
       fastify.prisma.workerProfile.findMany({
         where,
-        include: { city: true, categories: true },
+        include: {
+          city: true,
+          categories: true,
+          user: { select: { userReliabilityScore: { select: { level: true, score: true } } } },
+        },
         orderBy,
         skip: (query.page - 1) * query.limit,
         take: query.limit,
@@ -103,7 +112,12 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Worker not found' } });
     }
 
-    return reply.send({ data: worker });
+    return reply.send({
+      data: {
+        ...worker,
+        userId: worker.userId,
+      },
+    });
   });
 
   // GET /vacancies
@@ -136,11 +150,11 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
         : [query.eventType]
       : undefined;
 
-    const where: Parameters<typeof fastify.prisma.vacancy.findMany>[0]['where'] = {
+    const where: Prisma.VacancyWhereInput = {
       status: 'active',
       ...(query.cityId ? { cityId: query.cityId } : {}),
       ...(categories?.length
-        ? { category: { in: categories as Parameters<typeof fastify.prisma.vacancy.findMany>[0]['where']['category'][] } }
+        ? { category: { in: categories as StaffCategory[] } }
         : {}),
       ...(query.rateMin !== undefined || query.rateMax !== undefined
         ? {
@@ -151,16 +165,16 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
           }
         : {}),
       ...(eventTypes?.length
-        ? { eventType: { in: eventTypes as Parameters<typeof fastify.prisma.vacancy.findMany>[0]['where']['eventType'][] } }
+        ? { eventType: { in: eventTypes as EventType[] } }
         : {}),
       ...(query.employmentType
-        ? { employmentType: query.employmentType as Parameters<typeof fastify.prisma.vacancy.findMany>[0]['where']['employmentType'] }
+        ? { employmentType: query.employmentType as EmploymentType }
         : {}),
       ...(query.dateFrom ? { dateStart: { gte: new Date(query.dateFrom) } } : {}),
       ...(query.dateTo ? { dateStart: { lte: new Date(query.dateTo) } } : {}),
     };
 
-    const orderBy: Parameters<typeof fastify.prisma.vacancy.findMany>[0]['orderBy'] =
+    const orderBy: Prisma.VacancyOrderByWithRelationInput =
       query.sortBy === 'rate'
         ? { rate: query.sortOrder }
         : query.sortBy === 'date'
@@ -240,10 +254,8 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
       })
       .parse(request.query);
 
-    const where: Parameters<typeof fastify.prisma.employerProfile.findMany>[0]['where'] = {
-      ...(query.businessType
-        ? { businessType: query.businessType as Parameters<typeof fastify.prisma.employerProfile.findMany>[0]['where']['businessType'] }
-        : {}),
+    const where: Prisma.EmployerProfileWhereInput = {
+      ...(query.businessType ? { businessType: query.businessType as BusinessType } : {}),
       ...(query.cityId ? { cityId: query.cityId } : {}),
       ...(query.isVerified !== undefined ? { isVerified: query.isVerified } : {}),
     };
@@ -292,6 +304,17 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Employer not found' } });
     }
 
-    return reply.send({ data: employer });
+    const gallery = await fastify.prisma.media.findMany({
+      where: {
+        userId: employer.userId,
+        type: 'COMPANY_GALLERY',
+        isApproved: true,
+        isRejected: false,
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, url: true },
+    });
+
+    return reply.send({ data: { ...employer, gallery } });
   });
 };

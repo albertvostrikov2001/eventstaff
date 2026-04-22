@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+import { getPublicApiBase } from '@/lib/api/publicApiBase';
 
 interface FetchOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
@@ -19,7 +19,7 @@ export class ApiError extends Error {
 async function request<T>(endpoint: string, options: FetchOptions = {}): Promise<T> {
   const { params, ...init } = options;
 
-  let url = `${API_BASE}${endpoint}`;
+  let url = `${getPublicApiBase()}${endpoint}`;
   if (params) {
     const searchParams = new URLSearchParams();
     for (const [key, value] of Object.entries(params)) {
@@ -44,11 +44,14 @@ async function request<T>(endpoint: string, options: FetchOptions = {}): Promise
   const json = await res.json().catch(() => ({}));
 
   if (!res.ok) {
+    const errObj = json.error as Record<string, unknown> | undefined;
     throw new ApiError(
       res.status,
-      json.error?.message ?? `HTTP ${res.status}`,
-      json.error?.code,
-      json.error?.details,
+      (typeof errObj?.message === 'string' ? errObj.message : null) ??
+        (json as { message?: string }).message ??
+        `HTTP ${res.status}`,
+      typeof errObj?.code === 'string' ? errObj.code : undefined,
+      errObj ?? json,
     );
   }
 
@@ -58,6 +61,24 @@ async function request<T>(endpoint: string, options: FetchOptions = {}): Promise
 export const apiClient = {
   get: <T>(endpoint: string, params?: FetchOptions['params']) =>
     request<T>(endpoint, { method: 'GET', params }),
+  postMultipart: async <T>(endpoint: string, formData: FormData): Promise<T> => {
+    const url = `${getPublicApiBase()}${endpoint}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      body: formData,
+      credentials: 'include',
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new ApiError(
+        res.status,
+        json.error?.message ?? `HTTP ${res.status}`,
+        json.error?.code,
+        json.error?.details,
+      );
+    }
+    return json as T;
+  },
   post: <T>(endpoint: string, body?: unknown) =>
     request<T>(endpoint, { method: 'POST', body: JSON.stringify(body) }),
   put: <T>(endpoint: string, body?: unknown) =>

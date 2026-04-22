@@ -18,6 +18,16 @@ import { catalogRoutes } from './routes/catalog';
 import { messagesRoutes } from './routes/messages';
 import { adminRoutes } from './routes/admin';
 import { foundationRoutes } from './routes/foundation';
+import { notificationRoutes } from './routes/notifications';
+import notificationsPlugin from './plugins/notifications';
+import { startEmailWorkers } from './queues/email-queue';
+import mediaPlugin from './plugins/media';
+import { mediaRoutes } from './routes/media';
+import { chatRoutes } from './routes/chat';
+import { shiftActionRoutes } from './routes/shifts';
+import { paymentRoutes } from './routes/payments';
+import { attachChatSocket } from './socket/chat-socket';
+import { processStaleShiftConfirmations } from './lib/shift-escalation';
 
 const PORT = Number(process.env.API_PORT) || 4000;
 const HOST = process.env.API_HOST || '0.0.0.0';
@@ -126,6 +136,8 @@ async function buildApp() {
   await app.register(prismaPlugin);
   await app.register(redisPlugin);
   await app.register(authPlugin);
+  await app.register(notificationsPlugin);
+  await app.register(mediaPlugin);
 
   await app.register(healthRoutes, { prefix: '/api/v1' });
   await app.register(authRoutes, { prefix: '/api/v1/auth' });
@@ -134,18 +146,31 @@ async function buildApp() {
   await app.register(catalogRoutes, { prefix: '/api/v1/catalog' });
   await app.register(messagesRoutes, { prefix: '/api/v1/messages' });
   await app.register(adminRoutes, { prefix: '/api/v1/admin' });
+  await app.register(shiftActionRoutes, { prefix: '/api/v1' });
   await app.register(foundationRoutes, { prefix: '/api/v1' });
+  await app.register(notificationRoutes, { prefix: '/api/v1' });
+  await app.register(mediaRoutes, { prefix: '/api/v1/media' });
+  await app.register(chatRoutes, { prefix: '/api/v1/chat' });
+  await app.register(paymentRoutes, { prefix: '/api/v1/payments' });
 
   return app;
 }
 
 async function start() {
   const app = await buildApp();
+  await app.ready();
+  attachChatSocket(app);
+  await startEmailWorkers(app);
 
   try {
     await app.listen({ port: PORT, host: HOST });
     app.log.info(`Unity API running on http://${HOST}:${PORT}`);
     app.log.info(`Swagger docs: http://localhost:${PORT}/docs`);
+    setInterval(() => {
+      void processStaleShiftConfirmations(app.prisma, app.notificationService).then((n) => {
+        if (n > 0) app.log.info({ msg: 'shift_stale_escalations', n });
+      });
+    }, 60 * 60 * 1000);
   } catch (err) {
     app.log.error(err);
     process.exit(1);

@@ -1,6 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { Prisma, StaffCategory } from '@prisma/client';
 import { workerProfileUpdateSchema } from '@unity/shared';
+import { getUserRestriction, restrictedReply } from '@/lib/restriction';
 
 export const workerRoutes: FastifyPluginAsync = async (fastify) => {
   const workerAuth = [
@@ -74,6 +76,8 @@ export const workerRoutes: FastifyPluginAsync = async (fastify) => {
         ...(body.cityId !== undefined && { cityId: body.cityId }),
         ...(body.languages !== undefined && { languages: body.languages }),
         ...(body.dressSizes !== undefined && { dressSizes: body.dressSizes }),
+        ...(body.readyForTrips !== undefined && { readyForTrips: body.readyForTrips }),
+        ...(body.readyForOvertime !== undefined && { readyForOvertime: body.readyForOvertime }),
       },
       include: { city: true, categories: true },
     });
@@ -102,7 +106,7 @@ export const workerRoutes: FastifyPluginAsync = async (fastify) => {
       where: {
         workerId_category: {
           workerId: profile.id,
-          category: body.category as Parameters<typeof fastify.prisma.workerCategory.upsert>[0]['where']['workerId_category']['category'],
+          category: body.category as StaffCategory,
         },
       },
       create: {
@@ -133,9 +137,9 @@ export const workerRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
     }
 
-    const where = {
+    const where: Prisma.ApplicationWhereInput = {
       workerId: profile.id,
-      ...(query.status ? { status: query.status as Parameters<typeof fastify.prisma.application.findMany>[0]['where']['status'] } : {}),
+      ...(query.status ? { status: query.status as Prisma.ApplicationWhereInput['status'] } : {}),
     };
 
     const [total, applications] = await fastify.prisma.$transaction([
@@ -167,6 +171,11 @@ export const workerRoutes: FastifyPluginAsync = async (fastify) => {
     const body = z
       .object({ vacancyId: z.string(), coverMessage: z.string().optional() })
       .parse(request.body);
+
+    const rest = await getUserRestriction(fastify.prisma, request.jwtUser.sub);
+    if (rest.restricted) {
+      return reply.status(restrictedReply().status).send(restrictedReply().body);
+    }
 
     const profile = await fastify.prisma.workerProfile.findUnique({
       where: { userId: request.jwtUser.sub },
@@ -202,6 +211,43 @@ export const workerRoutes: FastifyPluginAsync = async (fastify) => {
         status: 'pending',
       },
     });
+
+    const vacancyFull = await fastify.prisma.vacancy.findUnique({
+      where: { id: body.vacancyId },
+      include: { employer: { include: { user: { select: { id: true, email: true } } } } },
+    });
+    if (vacancyFull?.employer.user) {
+      const employerUser = vacancyFull.employer.user;
+      const site =
+        process.env.PUBLIC_SITE_URL?.replace(/\/$/, '') ||
+        process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ||
+        'http://localhost:3000';
+      const workerName = `${profile.firstName} ${profile.lastName}`.trim();
+      const workerProfileBits =
+        profile.bio?.trim().slice(0, 220) || 'Откройте кабинет, чтобы увидеть профиль исполнителя.';
+
+      await fastify.notificationService.create({
+        userId: employerUser.id,
+        type: 'APPLICATION_RECEIVED',
+        title: 'Новый отклик',
+        body: `${workerName} откликнулся на «${vacancyFull.title}»`,
+        data: { applicationId: application.id, workerId: profile.id },
+      });
+
+      if (employerUser.email) {
+        await fastify.emailService.queue({
+          userId: employerUser.id,
+          to: employerUser.email,
+          type: 'APPLICATION_RECEIVED',
+          templateData: {
+            workerName,
+            vacancyTitle: vacancyFull.title,
+            workerProfile: workerProfileBits || 'Откройте кабинет, чтобы увидеть профиль.',
+            ctaUrl: `${site}/employer/vacancies/${vacancyFull.id}/applications`,
+          },
+        });
+      }
+    }
 
     return reply.status(201).send({ data: application });
   });
@@ -266,7 +312,7 @@ export const workerRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
     }
 
-    let where: Parameters<typeof fastify.prisma.workerAvailability.findMany>[0]['where'] = {
+    let where: Prisma.WorkerAvailabilityWhereInput = {
       workerId: profile.id,
     };
 

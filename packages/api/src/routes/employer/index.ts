@@ -1,6 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { Prisma, ShiftStatus } from '@prisma/client';
 import { employerProfileUpdateSchema, vacancyCreateSchema } from '@unity/shared';
+import { getUserRestriction, restrictedReply } from '@/lib/restriction';
 
 export const employerRoutes: FastifyPluginAsync = async (fastify) => {
   const employerAuth = [
@@ -57,9 +59,9 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
     }
 
-    const where = {
+    const where: Prisma.VacancyWhereInput = {
       employerId: profile.id,
-      ...(query.status ? { status: query.status as Parameters<typeof fastify.prisma.vacancy.findMany>[0]['where']['status'] } : {}),
+      ...(query.status ? { status: query.status as Prisma.VacancyWhereInput['status'] } : {}),
     };
 
     const [total, vacancies] = await fastify.prisma.$transaction([
@@ -85,6 +87,11 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /vacancies
   fastify.post('/vacancies', { preHandler: employerAuth }, async (request, reply) => {
     const body = vacancyCreateSchema.parse(request.body);
+
+    const rest = await getUserRestriction(fastify.prisma, request.jwtUser.sub);
+    if (rest.restricted) {
+      return reply.status(restrictedReply().status).send(restrictedReply().body);
+    }
 
     const profile = await fastify.prisma.employerProfile.findUnique({
       where: { userId: request.jwtUser.sub },
@@ -296,6 +303,64 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       data: { status: body.status as Parameters<typeof fastify.prisma.application.update>[0]['data']['status'] },
     });
 
+    const worker = await fastify.prisma.workerProfile.findUnique({
+      where: { id: application.workerId },
+      include: { user: { select: { id: true, email: true } } },
+    });
+    const site =
+      process.env.PUBLIC_SITE_URL?.replace(/\/$/, '') ||
+      process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ||
+      'http://localhost:3000';
+    const employerName =
+      profile.companyName || profile.contactName || 'Работодатель';
+
+    if (worker?.user) {
+      if (body.status === 'cancelled') {
+        await fastify.notificationService.create({
+          userId: worker.user.id,
+          type: 'CANCELLATION',
+          title: 'Отклик отменён',
+          body: `Работодатель отменил сотрудничество по «${application.vacancy.title}»`,
+          data: { applicationId: id, vacancyId: application.vacancyId },
+        });
+        if (worker.user.email) {
+          await fastify.emailService.queue({
+            userId: worker.user.id,
+            to: worker.user.email,
+            type: 'CANCELLATION',
+            templateData: {
+              vacancyTitle: application.vacancy.title,
+              cancelledByRole: 'Работодатель',
+              cancellationReason: 'Статус отклика изменён на «отменён»',
+              ctaUrl: `${site}/worker/applications`,
+            },
+          });
+        }
+      } else if (body.status === 'confirmed' || body.status === 'rejected') {
+        const statusLabel = body.status === 'confirmed' ? 'принят' : 'отклонён';
+        await fastify.notificationService.create({
+          userId: worker.user.id,
+          type: 'APPLICATION_RESPONSE',
+          title: 'Ответ по отклику',
+          body: `Ваш отклик на «${application.vacancy.title}» ${statusLabel}`,
+          data: { applicationId: id, vacancyId: application.vacancyId, status: body.status },
+        });
+        if (worker.user.email) {
+          await fastify.emailService.queue({
+            userId: worker.user.id,
+            to: worker.user.email,
+            type: 'APPLICATION_RESPONSE',
+            templateData: {
+              vacancyTitle: application.vacancy.title,
+              employerName,
+              status: statusLabel,
+              ctaUrl: `${site}/worker/applications`,
+            },
+          });
+        }
+      }
+    }
+
     return reply.send({ data: updated });
   });
 
@@ -314,6 +379,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
 
     const vacancy = await fastify.prisma.vacancy.findFirst({
       where: { id: body.vacancyId, employerId: profile.id },
+      include: { city: true },
     });
     if (!vacancy) {
       return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Vacancy not found' } });
@@ -337,6 +403,47 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
         status: 'invited',
       },
     });
+
+    const worker = await fastify.prisma.workerProfile.findUnique({
+      where: { id: body.workerId },
+      include: { user: { select: { id: true, email: true } } },
+    });
+    if (worker?.user) {
+      const site =
+        process.env.PUBLIC_SITE_URL?.replace(/\/$/, '') ||
+        process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ||
+        'http://localhost:3000';
+      const employerName =
+        profile.companyName || profile.contactName || 'Работодатель';
+      const eventDate = vacancy.dateStart.toLocaleDateString('ru-RU', {
+        dateStyle: 'long',
+      });
+      const eventLocation =
+        [vacancy.address, vacancy.city?.name].filter(Boolean).join(', ') || 'Уточняется';
+
+      await fastify.notificationService.create({
+        userId: worker.user.id,
+        type: 'INVITATION',
+        title: 'Вас пригласили',
+        body: `${employerName} приглашает вас на «${vacancy.title}»`,
+        data: { applicationId: application.id, vacancyId: vacancy.id },
+      });
+
+      if (worker.user.email) {
+        await fastify.emailService.queue({
+          userId: worker.user.id,
+          to: worker.user.email,
+          type: 'INVITATION',
+          templateData: {
+            vacancyTitle: vacancy.title,
+            employerName,
+            eventDate,
+            eventLocation,
+            ctaUrl: `${site}/worker/applications`,
+          },
+        });
+      }
+    }
 
     return reply.status(201).send({ data: application });
   });
@@ -385,5 +492,27 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     return reply.send({ data: { success: true } });
+  });
+
+  // GET /shifts-for-payment
+  fastify.get('/shifts-for-payment', { preHandler: employerAuth }, async (request, reply) => {
+    const uid = request.jwtUser.sub;
+    const shifts = await fastify.prisma.shift.findMany({
+      where: {
+        employerId: uid,
+        status: ShiftStatus.COMPLETED,
+      },
+      orderBy: { completedAt: 'desc' },
+      include: {
+        booking: {
+          include: {
+            worker: { select: { firstName: true, lastName: true, id: true } },
+          },
+        },
+        payments: true,
+      },
+      take: 200,
+    });
+    return reply.send({ data: shifts });
   });
 };

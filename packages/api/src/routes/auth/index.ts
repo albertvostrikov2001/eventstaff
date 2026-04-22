@@ -14,7 +14,7 @@ function makeCookieOpts(maxAge: number) {
   return {
     httpOnly: true,
     secure: prod,
-    sameSite: (crossSite ? 'none' : 'lax') as const,
+    sameSite: (crossSite ? 'none' : 'lax') as 'lax' | 'none',
     path: '/',
     maxAge,
   };
@@ -81,6 +81,10 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
       }
+
+      await tx.notificationPreferences.create({
+        data: { userId: newUser.id },
+      });
 
       return newUser;
     });

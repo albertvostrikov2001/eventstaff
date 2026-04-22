@@ -11,7 +11,7 @@ import { useToast } from '@/components/ui/toast-context';
 import { FormField } from '@/components/forms/FormField';
 import { FormCheckbox } from '@/components/forms/FormField';
 import { Users, Briefcase } from 'lucide-react';
-import { getPublicApiBase } from '@/lib/api/publicApiBase';
+import { API_UNREACHABLE_HINT, getPublicApiBase } from '@/lib/api/publicApiBase';
 
 const registerFormSchema = z
   .object({
@@ -106,9 +106,7 @@ export default function RegisterPage() {
       router.push(redirect);
     } catch (e) {
       const net =
-        e instanceof TypeError
-          ? 'Не удалось связаться с API. Запустите сервер (например pnpm dev:all) и откройте сайт с того же хоста, что в CORS (localhost или 127.0.0.1).'
-          : 'Ошибка подключения к серверу';
+        e instanceof TypeError ? API_UNREACHABLE_HINT : 'Ошибка подключения к серверу';
       toast(net, 'error');
     }
   };

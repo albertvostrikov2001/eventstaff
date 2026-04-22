@@ -40,10 +40,10 @@ jobs:
       - name: Check public API URL (required for login from GitHub Pages)
         run: |
           if [ -z "$NEXT_PUBLIC_API_URL" ]; then
-            echo "::warning title=NEXT_PUBLIC_API_URL::GitHub Pages cannot reach localhost. Add a Repository variable NEXT_PUBLIC_API_URL (e.g. https://your-api.example.com/api/v1), then re-run this workflow."
-          else
-            echo "NEXT_PUBLIC_API_URL is set for this build."
+            echo "::error title=NEXT_PUBLIC_API_URL::Задайте в репозитории Settings → Variables → NEXT_PUBLIC_API_URL (например https://api.example.com/api/v1). Без этого вход в ЛК с Pages не работает. См. docs/deploy-github-pages.md"
+            exit 1
           fi
+          echo "NEXT_PUBLIC_API_URL is set for this build."
         env:
           NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
 

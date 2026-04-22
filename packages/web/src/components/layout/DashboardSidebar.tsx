@@ -8,6 +8,8 @@ interface SidebarItem {
   href: string;
   label: string;
   icon: LucideIcon;
+  /** Непрочитанные (например, в чате) */
+  badge?: number;
 }
 
 interface DashboardSidebarProps {
@@ -22,12 +24,14 @@ export function DashboardSidebar({ items, logoHref, dark = false }: DashboardSid
   return (
     <aside
       className={`hidden w-64 shrink-0 border-r lg:block ${
-        dark ? 'border-gray-700 bg-gray-900' : 'border-gray-200 bg-white'
+        dark
+          ? 'border-white/[0.08] bg-white/[0.04]'
+          : 'border-gray-200 bg-white'
       }`}
     >
       <div
         className={`flex h-16 items-center gap-2 border-b px-6 ${
-          dark ? 'border-gray-700' : 'border-gray-200'
+          dark ? 'border-white/[0.08]' : 'border-gray-200'
         }`}
       >
         <Link href={logoHref} className="flex items-center gap-2">
@@ -49,15 +53,20 @@ export function DashboardSidebar({ items, logoHref, dark = false }: DashboardSid
               className={`flex items-center gap-3 rounded-input px-3 py-2 text-sm font-medium transition ${
                 isActive
                   ? dark
-                    ? 'bg-gray-800 text-white'
+                    ? 'border-l-[3px] border-primary-500 bg-white/[0.08] pl-[9px] text-white'
                     : 'bg-primary-50 text-primary-700'
                   : dark
-                  ? 'text-gray-300 hover:bg-gray-800 hover:text-white'
+                  ? 'border-l-[3px] border-transparent pl-[9px] text-white/60 hover:bg-white/[0.05] hover:text-white/90'
                   : 'text-gray-600 hover:bg-gray-50 hover:text-primary-600'
               }`}
             >
               <item.icon className="h-4 w-4" />
-              {item.label}
+              <span className="min-w-0 flex-1 truncate">{item.label}</span>
+              {item.badge != null && item.badge > 0 && (
+                <span className="shrink-0 rounded-full bg-primary-500 px-1.5 py-0.5 text-xs font-bold leading-none text-white">
+                  {item.badge > 99 ? '99+' : item.badge}
+                </span>
+              )}
             </Link>
           );
         })}

@@ -27,6 +27,8 @@ interface EmployerDetail {
   companyName: string | null;
   contactName: string | null;
   logoUrl: string | null;
+  bannerUrl?: string | null;
+  gallery?: { id: string; url: string }[];
   description: string | null;
   businessType: string | null;
   website: string | null;
@@ -105,6 +107,16 @@ export function EmployerDetailPageClient() {
         Назад к работодателям
       </Link>
 
+      {employer.bannerUrl ? (
+        <div className="mt-6 h-44 w-full overflow-hidden rounded-card border border-gray-200 bg-gray-100 shadow-sm sm:h-52">
+          <img
+            src={employer.bannerUrl}
+            alt=""
+            className="h-full w-full object-cover"
+          />
+        </div>
+      ) : null}
+
       <div className="mt-6 rounded-card border border-gray-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
           <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-primary-100">
@@ -179,6 +191,22 @@ export function EmployerDetailPageClient() {
           </div>
         )}
       </div>
+
+      {employer.gallery && employer.gallery.length > 0 ? (
+        <div className="mt-6">
+          <h2 className="text-lg font-bold text-gray-900">Фото с мероприятий</h2>
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+            {employer.gallery.map((g) => (
+              <div
+                key={g.id}
+                className="aspect-square overflow-hidden rounded-lg border border-gray-200 bg-gray-100"
+              >
+                <img src={g.url} alt="" className="h-full w-full object-cover" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {employer.vacancies.length > 0 && (
         <div className="mt-6">

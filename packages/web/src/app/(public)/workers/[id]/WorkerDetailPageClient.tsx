@@ -25,6 +25,7 @@ const RATE_SUFFIXES: Record<string, string> = {
 
 interface WorkerDetail {
   id: string;
+  userId: string;
   slug: string;
   firstName: string;
   lastName: string;
@@ -72,6 +73,19 @@ export function WorkerDetailPageClient() {
   const [notFound, setNotFound] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
   const [favLoading, setFavLoading] = useState(false);
+  type RevRow = {
+    id: string;
+    overallScore: number;
+    comment: string | null;
+    reviewer: {
+      id: string;
+      workerProfile?: { firstName: string; lastName: string } | null;
+      employerProfile?: { companyName: string | null } | null;
+    };
+  };
+  const [reviews, setReviews] = useState<RevRow[] | null>(null);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewBlock, setReviewBlock] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`${API}/catalog/workers/${id}`, { credentials: 'include' })
@@ -91,6 +105,37 @@ export function WorkerDetailPageClient() {
       .then((res) => setIsFavorite(res.data.some((w) => w.id === worker.id)))
       .catch(() => {});
   }, [isAuthenticated, user?.activeRole, worker]);
+
+  useEffect(() => {
+    if (!worker?.userId) return;
+    setReviewsLoading(true);
+    setReviewBlock(null);
+    setReviews(null);
+    const headers: HeadersInit = { 'Content-Type': 'application/json' };
+    const req = isAuthenticated
+      ? fetch(`${API}/users/${worker.userId}/reviews?limit=20&page=1`, { credentials: 'include', headers })
+      : fetch(`${API}/users/${worker.userId}/reviews?limit=20&page=1`);
+    void req
+      .then(async (r) => {
+        const j = (await r.json().catch(() => ({}))) as {
+          data?: unknown[];
+          error?: { code?: string; message?: string; upgradeTo?: string };
+        };
+        if (r.status === 403 && j.error?.code === 'LIMIT_EXCEEDED') {
+          setReviewBlock(
+            'Вы просмотрели максимальное число профилей по текущему плану. Расширьте доступ для просмотра отзывов.',
+          );
+          return;
+        }
+        if (!r.ok) {
+          setReviewBlock(null);
+          return;
+        }
+        setReviews((j.data as RevRow[]) ?? []);
+      })
+      .catch(() => setReviews(null))
+      .finally(() => setReviewsLoading(false));
+  }, [worker?.userId, isAuthenticated, worker]);
 
   const toggleFavorite = async () => {
     if (!worker) return;
@@ -275,6 +320,46 @@ export function WorkerDetailPageClient() {
               </div>
             </div>
           )}
+
+          <div className="rounded-card border border-gray-200 bg-white p-6 shadow-sm">
+            <h2 className="mb-4 text-base font-semibold text-gray-900">Отзывы смен</h2>
+            {reviewBlock && user?.activeRole === 'employer' && (
+              <div className="rounded-input border border-amber-200/80 bg-amber-50/90 p-4 text-sm text-amber-950">
+                <p>{reviewBlock}</p>
+                <Link
+                  href="/request"
+                  className="mt-2 inline-block text-sm font-semibold text-primary-700 underline"
+                >
+                  Расширить доступ
+                </Link>
+              </div>
+            )}
+            {reviewsLoading && !reviewBlock && <div className="h-20 animate-pulse rounded bg-gray-100" />}
+            {!reviewsLoading && !reviewBlock && reviews && reviews.length === 0 && (
+              <p className="text-sm text-gray-500">Пока нет отзывов смен, видимых в каталоге</p>
+            )}
+            {!reviewBlock && reviews && reviews.length > 0 && (
+              <ul className="space-y-3">
+                {reviews.map((rev) => {
+                  const name =
+                    rev.reviewer.workerProfile
+                      ? `${rev.reviewer.workerProfile.firstName} ${rev.reviewer.workerProfile.lastName}`.trim()
+                      : rev.reviewer.employerProfile?.companyName || 'Участник';
+                  return (
+                    <li key={rev.id} className="border-b border-gray-100 pb-3 last:border-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-800">{name}</span>
+                        <span className="text-sm font-semibold text-amber-500">
+                          {Number(rev.overallScore).toFixed(1)}
+                        </span>
+                      </div>
+                      {rev.comment && <p className="mt-1 text-sm text-gray-600">{rev.comment}</p>}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
 
           {worker.workHistory.length > 0 && (
             <div className="rounded-card border border-gray-200 bg-white p-6 shadow-sm">

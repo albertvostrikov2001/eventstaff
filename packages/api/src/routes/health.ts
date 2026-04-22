@@ -20,6 +20,20 @@ export async function healthRoutes(fastify: FastifyInstance) {
             },
           },
         },
+        503: {
+          type: 'object',
+          properties: {
+            status: { type: 'string' },
+            timestamp: { type: 'string' },
+            services: {
+              type: 'object',
+              properties: {
+                database: { type: 'string' },
+                redis: { type: 'string' },
+              },
+            },
+          },
+        },
       },
     },
     handler: async (_request, reply) => {

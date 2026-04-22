@@ -84,6 +84,8 @@ export const workerProfileUpdateSchema = z.object({
   cityId: z.string().optional(),
   languages: z.array(z.string()).optional(),
   dressSizes: z.string().optional(),
+  readyForTrips: z.boolean().optional(),
+  readyForOvertime: z.boolean().optional(),
 });
 
 export const employerProfileUpdateSchema = z.object({
@@ -124,6 +126,8 @@ export const searchSchema = z.object({
   rateMax: z.coerce.number().optional(),
   sortBy: z.string().optional(),
   sortOrder: z.enum(['asc', 'desc']).optional(),
+  readyForTrips: z.coerce.boolean().optional(),
+  readyForOvertime: z.coerce.boolean().optional(),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;
