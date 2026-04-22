@@ -17,6 +17,7 @@ import { employerRoutes } from './routes/employer';
 import { catalogRoutes } from './routes/catalog';
 import { messagesRoutes } from './routes/messages';
 import { adminRoutes } from './routes/admin';
+import { foundationRoutes } from './routes/foundation';
 
 const PORT = Number(process.env.API_PORT) || 4000;
 const HOST = process.env.API_HOST || '0.0.0.0';
@@ -133,6 +134,7 @@ async function buildApp() {
   await app.register(catalogRoutes, { prefix: '/api/v1/catalog' });
   await app.register(messagesRoutes, { prefix: '/api/v1/messages' });
   await app.register(adminRoutes, { prefix: '/api/v1/admin' });
+  await app.register(foundationRoutes, { prefix: '/api/v1' });
 
   return app;
 }

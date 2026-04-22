@@ -13,6 +13,8 @@ import {
   Role,
   ReviewStatus,
   ReviewTargetType,
+  ReliabilityLevel,
+  UserReviewPlan,
 } from '@prisma/client';
 import bcrypt from 'bcrypt';
 
@@ -873,6 +875,85 @@ async function main() {
     }
   }
   console.log('✅ Availability created');
+
+  // ─── Stage 2: cancellation reasons ─────────────────────────────────────────
+  const workerCancel = [
+    { code: 'PERSONAL_EMERGENCY', label: 'Личные обстоятельства', sortOrder: 10 },
+    { code: 'HEALTH_ISSUE', label: 'Состояние здоровья', sortOrder: 20 },
+    { code: 'FOUND_OTHER_JOB', label: 'Нашёл другую работу', sortOrder: 30 },
+    { code: 'TRANSPORT_ISSUE', label: 'Проблемы с транспортом', sortOrder: 40 },
+    { code: 'SALARY_MISMATCH', label: 'Не устроила оплата', sortOrder: 50 },
+    { code: 'WORKER_OTHER', label: 'Другое (свободный ввод)', sortOrder: 90 },
+  ];
+  for (const r of workerCancel) {
+    await prisma.cancellationReason.upsert({
+      where: { code: r.code },
+      create: {
+        role: Role.worker,
+        code: r.code,
+        label: r.label,
+        sortOrder: r.sortOrder,
+        isSystem: true,
+        isActive: true,
+      },
+      update: { label: r.label, sortOrder: r.sortOrder, isActive: true },
+    });
+  }
+
+  const employerCancel = [
+    { code: 'EVENT_CANCELLED', label: 'Мероприятие отменено', sortOrder: 10 },
+    { code: 'STAFF_NOT_NEEDED', label: 'Персонал больше не нужен', sortOrder: 20 },
+    { code: 'WRONG_PROFILE', label: 'Профиль не подошёл', sortOrder: 30 },
+    { code: 'BUDGET_CHANGE', label: 'Изменение бюджета', sortOrder: 40 },
+    { code: 'DATE_CHANGED', label: 'Изменились даты', sortOrder: 50 },
+    { code: 'EMPLOYER_OTHER', label: 'Другое (свободный ввод)', sortOrder: 90 },
+  ];
+  for (const r of employerCancel) {
+    await prisma.cancellationReason.upsert({
+      where: { code: r.code },
+      create: {
+        role: Role.employer,
+        code: r.code,
+        label: r.label,
+        sortOrder: r.sortOrder,
+        isSystem: true,
+        isActive: true,
+      },
+      update: { label: r.label, sortOrder: r.sortOrder, isActive: true },
+    });
+  }
+  console.log('✅ Cancellation reasons (stage 2)');
+
+  // ─── Stage 2: reliability + review subscription for every user ──────────
+  const allUsers = await prisma.user.findMany({ select: { id: true } });
+  for (const { id } of allUsers) {
+    await prisma.userReliabilityScore.upsert({
+      where: { userId: id },
+      create: {
+        userId: id,
+        level: ReliabilityLevel.NEW,
+        score: 100,
+        totalShifts: 0,
+        successfulShifts: 0,
+        failedShifts: 0,
+        cancelledShifts: 0,
+        strikeCount: 0,
+        isRestricted: false,
+      },
+      update: {},
+    });
+    await prisma.userReviewSubscription.upsert({
+      where: { userId: id },
+      create: {
+        userId: id,
+        plan: UserReviewPlan.FREE,
+        reviewsLimit: 3,
+        reviewsUsed: 0,
+      },
+      update: {},
+    });
+  }
+  console.log('✅ UserReliabilityScore + UserReviewSubscription for all users');
 
   // ─── Summary ──────────────────────────────────────────────────────────────
   console.log('\n🎉 Seeding complete!\n');

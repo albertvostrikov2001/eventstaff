@@ -208,4 +208,19 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       data: { users, activeVacancies, applications, verifiedEmployers },
     });
   });
+
+  // Stage 2: GET-заглушки (без логики)
+  const stage2Stub = { success: true, data: null, message: 'Not implemented' as const };
+  fastify.get('/complaints', { preHandler: adminAuth }, async (_request, reply) =>
+    reply.status(200).send(stage2Stub),
+  );
+  fastify.get('/audit-log', { preHandler: adminAuth }, async (_request, reply) =>
+    reply.status(200).send(stage2Stub),
+  );
+  fastify.get('/email-logs', { preHandler: adminAuth }, async (_request, reply) =>
+    reply.status(200).send(stage2Stub),
+  );
+  fastify.get('/individual-requests', { preHandler: adminAuth }, async (_request, reply) =>
+    reply.status(200).send(stage2Stub),
+  );
 };

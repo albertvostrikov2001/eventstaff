@@ -216,6 +216,109 @@ enum SubscriptionStatus {
   past_due
 }
 
+// ─── Stage 2: complaints, notifications, shifts, review limits, etc. ───
+
+enum ComplaintType {
+  USER
+  MESSAGE
+  VACANCY
+  ORDER
+  CANCELLATION
+  NON_PAYMENT
+  NO_SHOW
+}
+
+enum ComplaintStatus {
+  NEW
+  IN_PROGRESS
+  RESOLVED
+  REJECTED
+  NEEDS_CLARIFICATION
+}
+
+enum ComplaintTargetType {
+  USER
+  MESSAGE
+  VACANCY
+  ORDER
+}
+
+enum InAppNotificationType {
+  INVITATION
+  APPLICATION_RECEIVED
+  APPLICATION_RESPONSE
+  CANCELLATION
+  REVIEW_RECEIVED
+  COMPLAINT_UPDATE
+  SHIFT_REMINDER
+  SHIFT_COMPLETED
+  PAYMENT_RECEIVED
+  PAYMENT_REQUIRED
+  INDIVIDUAL_REQUEST
+  SYSTEM
+}
+
+enum EmailLogStatus {
+  PENDING
+  SENT
+  FAILED
+  BOUNCED
+}
+
+enum ShiftStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  FAILED
+  CANCELLED
+  DISPUTED
+}
+
+enum ShiftFailedBy {
+  WORKER
+  EMPLOYER
+  BOTH
+}
+
+enum ShiftPayStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum UserReviewPlan {
+  FREE
+  BASIC
+  PRO
+}
+
+enum ReliabilityLevel {
+  NEW
+  BEGINNER
+  TRUSTED
+  VERIFIED
+  RESTRICTED
+}
+
+enum IndividualRequestStatus {
+  NEW
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+}
+
+enum MediaType {
+  AVATAR
+  PORTFOLIO_PHOTO
+  VIDEO_CARD
+  DOCUMENT
+  COMPANY_LOGO
+  COMPANY_BANNER
+  COMPANY_GALLERY
+}
+
 // ─────────────────────────────────────────────
 // MODELS
 // ─────────────────────────────────────────────
@@ -253,6 +356,24 @@ model User {
   contentUpdates  ContentPage[]
   favorites       Favorite[]
 
+  inAppNotifications      InAppNotification[]
+  notificationPreferences NotificationPreferences?
+  complaintsAuthored      Complaint[]          @relation("ComplaintAuthor")
+  complaintsResolved      Complaint[]          @relation("ComplaintResolver")
+  complaintAdminActions   ComplaintHistory[]   @relation("ComplaintHistoryAdmin")
+  userReliabilityScore    UserReliabilityScore?
+  userReviewSubscription  UserReviewSubscription?
+  mediaFiles              Media[]              @relation("MediaOwner")
+  shiftsAsWorker          Shift[]              @relation("ShiftWorker")
+  shiftsAsEmployer        Shift[]              @relation("ShiftEmployer")
+  shiftsCancelled         Shift[]              @relation("ShiftCancelledBy")
+  shiftReviewsGiven       ShiftReview[]        @relation("ShiftReviewReviewer")
+  shiftReviewsReceived    ShiftReview[]        @relation("ShiftReviewee")
+  shiftPaymentsAsPayer    ShiftPayment[]       @relation("ShiftPaymentPayer")
+  shiftPaymentsAsPayee    ShiftPayment[]       @relation("ShiftPaymentPayee")
+  adminAuditLogs          AdminAuditLog[]      @relation("AdminAuditActor")
+  emailLogEntries         EmailLog[]
+
   @@index([email])
   @@index([phone])
   @@index([status])
@@ -287,6 +408,8 @@ model WorkerProfile {
   rateType        RateType?  @map("rate_type")
   willingToTravel Boolean    @default(false) @map("willing_to_travel")
   overtimeReady   Boolean    @default(false) @map("overtime_ready")
+  readyForTrips   Boolean    @default(false) @map("ready_for_trips")
+  readyForOvertime Boolean   @default(false) @map("ready_for_overtime")
   visibility      Visibility @default(public)
   isVerified      Boolean    @default(false) @map("is_verified")
   verifiedAt      DateTime?  @map("verified_at")
@@ -543,6 +666,7 @@ model Booking {
   linkedVacancy Vacancy?        @relation(fields: [linkedVacancyId], references: [id])
   reviews       Review[]
   conversation  Conversation?
+  shifts        Shift[]
 
   @@index([employerId])
   @@index([workerId])
@@ -764,4 +888,299 @@ model Favorite {
   @@unique([userId, targetId, type])
   @@index([userId, type])
   @@map("favorites")
+}
+
+// ═════════════════════════════════════════════
+// Stage 2 — additive domain (see docs/roadmap)
+// Legacy models Notification, Payment, Subscription (employer) kept unchanged;
+// new in-app + shift payments use separate tables.
+// ═════════════════════════════════════════════
+
+model Complaint {
+  id          String              @id @default(cuid())
+  type        ComplaintType
+  status      ComplaintStatus     @default(NEW)
+  authorId    String              @map("author_id")
+  targetId    String              @map("target_id")
+  targetType  ComplaintTargetType @map("target_type")
+  description String              @db.Text
+  adminNotes  String?             @map("admin_notes") @db.Text
+  resolvedBy  String?             @map("resolved_by")
+  resolvedAt  DateTime?           @map("resolved_at")
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+
+  author  User  @relation("ComplaintAuthor", fields: [authorId], references: [id])
+  resolver User? @relation("ComplaintResolver", fields: [resolvedBy], references: [id])
+  history ComplaintHistory[]
+
+  @@index([status, createdAt])
+  @@index([authorId])
+  @@index([targetId, targetType])
+  @@map("complaints")
+}
+
+model ComplaintHistory {
+  id          String           @id @default(cuid())
+  complaintId String           @map("complaint_id")
+  adminId     String           @map("admin_id")
+  action      String
+  comment     String?          @db.Text
+  oldStatus   ComplaintStatus? @map("old_status")
+  newStatus   ComplaintStatus? @map("new_status")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  admin     User      @relation("ComplaintHistoryAdmin", fields: [adminId], references: [id])
+
+  @@index([complaintId, createdAt])
+  @@map("complaint_history")
+}
+
+model InAppNotification {
+  id        String                 @id @default(cuid())
+  userId    String                 @map("user_id")
+  type      InAppNotificationType
+  title     String
+  body      String                 @db.Text
+  data      Json?                  @db.JsonB
+  isRead    Boolean                @default(false) @map("is_read")
+  readAt    DateTime?              @map("read_at")
+  createdAt DateTime               @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@index([type])
+  @@map("in_app_notifications")
+}
+
+model NotificationPreferences {
+  id                    String   @id @default(cuid())
+  userId                String   @unique @map("user_id")
+  emailInvitation       Boolean  @default(true) @map("email_invitation")
+  emailCancellation     Boolean  @default(true) @map("email_cancellation")
+  emailReview           Boolean  @default(true) @map("email_review")
+  emailComplaint        Boolean  @default(true) @map("email_complaint")
+  emailNewApplication   Boolean  @default(true) @map("email_new_application")
+  emailApplicationReply Boolean  @default(true) @map("email_application_reply")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+model EmailLog {
+  id                 String                 @id @default(cuid())
+  userId             String?                @map("user_id")
+  to                 String
+  type               InAppNotificationType
+  subject            String
+  status             EmailLogStatus         @default(PENDING)
+  providerMessageId  String?                @map("provider_message_id")
+  errorText          String?                @map("error")
+  sentAt             DateTime?              @map("sent_at")
+  createdAt          DateTime               @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@map("email_logs")
+}
+
+model Shift {
+  id                  String         @id @default(cuid())
+  bookingId           String         @map("booking_id")
+  workerId            String         @map("worker_id")
+  employerId          String         @map("employer_id")
+  status              ShiftStatus    @default(PENDING)
+  workerConfirmed     Boolean        @default(false) @map("worker_confirmed")
+  employerConfirmed   Boolean        @default(false) @map("employer_confirmed")
+  workerConfirmedAt   DateTime?      @map("worker_confirmed_at")
+  employerConfirmedAt DateTime?      @map("employer_confirmed_at")
+  failureReason       String?        @map("failure_reason")
+  failedBy            ShiftFailedBy? @map("failed_by")
+  cancellationReason  String?        @map("cancellation_reason") @db.Text
+  cancelledBy         String?        @map("cancelled_by")
+  cancelledAt         DateTime?      @map("cancelled_at")
+  adminNotified       Boolean        @default(false) @map("admin_notified")
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+
+  booking          Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  workerUser       User            @relation("ShiftWorker", fields: [workerId], references: [id])
+  employerUser     User            @relation("ShiftEmployer", fields: [employerId], references: [id])
+  cancelledByUser    User?           @relation("ShiftCancelledBy", fields: [cancelledBy], references: [id])
+  reviews            ShiftReview[]
+  payments           ShiftPayment[]
+
+  @@unique([bookingId, workerId])
+  @@index([bookingId])
+  @@index([status, createdAt])
+  @@index([workerId, status])
+  @@index([employerId, status])
+  @@index([createdAt])
+  @@map("shifts")
+}
+
+model ShiftReview {
+  id              String   @id @default(cuid())
+  shiftId         String   @map("shift_id")
+  reviewerId      String   @map("reviewer_id")
+  revieweeId      String   @map("reviewee_id")
+  punctuality     Int
+  jobMatch        Int      @map("job_match")
+  communication   Int
+  workQuality     Int      @map("work_quality")
+  termsCompliance Int      @map("terms_compliance")
+  overallScore    Float    @map("overall_score")
+  comment         String?  @db.Text
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  shift     Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  reviewer  User  @relation("ShiftReviewReviewer", fields: [reviewerId], references: [id])
+  reviewee  User  @relation("ShiftReviewee", fields: [revieweeId], references: [id])
+
+  @@index([shiftId])
+  @@index([reviewerId])
+  @@index([revieweeId, createdAt])
+  @@map("shift_reviews")
+}
+
+model UserReliabilityScore {
+  id                 String            @id @default(cuid())
+  userId             String            @unique @map("user_id")
+  totalShifts        Int               @default(0) @map("total_shifts")
+  successfulShifts   Int               @default(0) @map("successful_shifts")
+  failedShifts       Int               @default(0) @map("failed_shifts")
+  cancelledShifts    Int               @default(0) @map("cancelled_shifts")
+  score              Float             @default(100)
+  level              ReliabilityLevel  @default(NEW)
+  strikeCount        Int               @default(0) @map("strike_count")
+  isRestricted       Boolean           @default(false) @map("is_restricted")
+  restrictedAt       DateTime?         @map("restricted_at")
+  restrictedReason   String?           @map("restricted_reason")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([level])
+  @@index([score])
+  @@map("user_reliability_scores")
+}
+
+model CancellationReason {
+  id        String  @id @default(cuid())
+  role      Role
+  code      String  @unique
+  label     String
+  isSystem  Boolean @default(true) @map("is_system")
+  isActive  Boolean @default(true) @map("is_active")
+  sortOrder Int     @default(0) @map("sort_order")
+
+  @@index([role, isActive, sortOrder])
+  @@map("cancellation_reasons")
+}
+
+model IndividualRequest {
+  id           String                  @id @default(cuid())
+  role         Role
+  name         String
+  phone        String
+  email        String
+  company      String?
+  eventType    String?                 @map("event_type")
+  staffNeeded  String?                 @map("staff_needed")
+  position     String?
+  experience   String?                 @db.Text
+  message      String                  @db.Text
+  status       IndividualRequestStatus @default(NEW)
+  adminComment String?                 @map("admin_comment") @db.Text
+  createdAt    DateTime                @default(now()) @map("created_at")
+  updatedAt    DateTime                @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@index([role, status])
+  @@map("individual_requests")
+}
+
+model Media {
+  id          String     @id @default(cuid())
+  userId      String     @map("user_id")
+  type        MediaType
+  url         String
+  filename    String
+  mimeType    String     @map("mime_type")
+  size        Int
+  isApproved  Boolean    @default(false) @map("is_approved")
+  isRejected  Boolean    @default(false) @map("is_rejected")
+  moderatedBy String?   @map("moderated_by")
+  moderatedAt DateTime?  @map("moderated_at")
+  createdAt   DateTime   @default(now()) @map("created_at")
+
+  user User @relation("MediaOwner", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type, createdAt])
+  @@index([isApproved, createdAt])
+  @@map("media_assets")
+}
+
+model UserReviewSubscription {
+  id            String         @id @default(cuid())
+  userId        String         @unique @map("user_id")
+  plan          UserReviewPlan @default(FREE)
+  reviewsLimit  Int            @default(3) @map("reviews_limit")
+  reviewsUsed   Int            @default(0) @map("reviews_used")
+  expiresAt     DateTime?      @map("expires_at")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_review_subscriptions")
+}
+
+model ShiftPayment {
+  id                String         @id @default(cuid())
+  shiftId           String         @map("shift_id")
+  payerId           String         @map("payer_id")
+  payeeId           String         @map("payee_id")
+  amount            Int
+  currency          String         @default("RUB")
+  status            ShiftPayStatus @default(PENDING)
+  providerPaymentId String?        @map("provider_payment_id")
+  providerData      Json?          @map("provider_data") @db.JsonB
+  paidAt            DateTime?      @map("paid_at")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+
+  shift Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  payer User  @relation("ShiftPaymentPayer", fields: [payerId], references: [id])
+  payee User  @relation("ShiftPaymentPayee", fields: [payeeId], references: [id])
+
+  @@index([shiftId])
+  @@index([payerId, status])
+  @@index([payeeId, status])
+  @@index([status, createdAt])
+  @@map("shift_payments")
+}
+
+model AdminAuditLog {
+  id         String   @id @default(cuid())
+  adminId    String   @map("admin_id")
+  action     String
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  details    Json?    @db.JsonB
+  ip         String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  admin User @relation("AdminAuditActor", fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([adminId, createdAt])
+  @@index([entityType, entityId])
+  @@index([action, createdAt])
+  @@map("admin_audit_logs")
 }
