@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, Phone } from 'lucide-react';
+import { SITE_PHONE_DISPLAY, SITE_PHONE_TEL } from '@/content/siteContact';
 import { useState, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 
@@ -84,7 +85,22 @@ export function Header() {
           </nav>
         </div>
 
-        {/* Desktop auth buttons */}
+        {/* Phone + Desktop auth */}
+        <div className="flex min-w-0 items-center justify-end gap-2 sm:gap-3">
+          <a
+            href={SITE_PHONE_TEL}
+            className={cn(
+              'flex shrink-0 items-center gap-1.5 rounded-[var(--u-radius-md)] p-1.5 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--u-emerald)] sm:px-0 sm:py-0',
+              isDarkRoute && !scrolled
+                ? 'text-[color:var(--u-text-secondary)] hover:text-white'
+                : 'text-gray-600 hover:text-gray-900',
+            )}
+            aria-label={`Позвонить: ${SITE_PHONE_DISPLAY}`}
+          >
+            <Phone className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span className="hidden lg:inline">{SITE_PHONE_DISPLAY}</span>
+          </a>
+
         <div className="hidden lg:flex items-center gap-3">
           <Link
             href="/auth/login"
@@ -103,6 +119,7 @@ export function Header() {
           >
             Регистрация
           </Link>
+        </div>
         </div>
 
         {/* Mobile burger */}
@@ -159,7 +176,7 @@ export function Header() {
               <Link
                 href="/auth/register"
                 className="flex-1 text-center rounded-[var(--u-radius-md)] px-4 py-2.5 text-sm font-semibold text-white transition-colors"
-                style={{ background: 'var(--u-emerald)' }}
+                style={{ background: 'var(--u-gradient-primary)' }}
               >
                 Регистрация
               </Link>

@@ -1,5 +1,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
+import { Phone } from 'lucide-react';
+import { SITE_PHONE_DISPLAY, SITE_PHONE_TEL, SITE_PHONE_HOURS } from '@/content/siteContact';
 
 const FOOTER_LINKS = {
   platform: {
@@ -59,6 +61,17 @@ export function Footer() {
               Специализированная биржа труда для event-персонала в&nbsp;ресторанном бизнесе
               и&nbsp;сфере гостеприимства.
             </p>
+            <div className="mt-5 flex items-start gap-2 text-sm" style={{ color: 'var(--u-text-secondary)' }}>
+              <Phone className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+              <div>
+                <a href={SITE_PHONE_TEL} className="font-medium text-white hover:underline">
+                  {SITE_PHONE_DISPLAY}
+                </a>
+                <p className="mt-1 text-xs" style={{ color: 'var(--u-text-muted)' }}>
+                  {SITE_PHONE_HOURS}
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Link columns */}

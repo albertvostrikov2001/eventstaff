@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Mail, Phone, MapPin, Clock } from 'lucide-react';
+import { SITE_PHONE_DISPLAY, SITE_PHONE_TEL, SITE_PHONE_HOURS } from '@/content/siteContact';
 
 export const metadata: Metadata = {
   title: 'Контакты',
@@ -36,8 +37,13 @@ export default function ContactsPage() {
             </div>
             <div>
               <p className="text-sm font-medium text-gray-500">Телефон</p>
-              <p className="mt-1 text-base font-semibold text-gray-900">+7 (000) 000-00-00</p>
-              <p className="mt-1 text-xs text-gray-400">Номер будет указан после запуска линии поддержки</p>
+              <a
+                href={SITE_PHONE_TEL}
+                className="mt-1 block text-base font-semibold text-primary-600 hover:text-primary-700"
+              >
+                {SITE_PHONE_DISPLAY}
+              </a>
+              <p className="mt-1 text-xs text-gray-500">{SITE_PHONE_HOURS}</p>
             </div>
           </div>
           <div className="flex gap-4 rounded-card border border-gray-200 bg-white p-5 shadow-sm">

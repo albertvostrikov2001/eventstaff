@@ -55,9 +55,13 @@
   --u-bg-light:      #f2ede8;
   --u-bg-card:       #ffffff;
 
-  --u-emerald:       #2d6a4a;
-  --u-emerald-light: #3d8a62;
-  --u-emerald-glow:  rgba(45, 106, 74, 0.35);
+  --u-emerald:         #2d6a4a;
+  --u-emerald-light:   #3d8a62;
+  --u-emerald-bright:  #4a9e72;
+  --u-emerald-glow:    rgba(45, 106, 74, 0.35);
+  --u-gradient-primary: linear-gradient(135deg, var(--u-emerald) 0%, var(--u-emerald-light) 100%);
+  --u-gradient-primary-hover: linear-gradient(135deg, var(--u-emerald-light) 0%, var(--u-emerald-bright) 100%);
+  --u-shadow-primary-hover: 0 4px 20px var(--u-emerald-glow);
   --u-mocha:         #8b5a3a;
   --u-mocha-glow:    rgba(139, 90, 58, 0.25);
 
@@ -145,6 +149,13 @@
    ================================================================ */
 
 @layer utilities {
+  .bg-unity-gradient-primary {
+    background-image: var(--u-gradient-primary);
+  }
+  .bg-unity-gradient-primary-hover {
+    background-image: var(--u-gradient-primary-hover);
+  }
+
   .container-page {
     @apply mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-10;
   }
@@ -197,6 +208,18 @@
     align-items: center;
     overflow: hidden;
     background: radial-gradient(ellipse at 30% 50%, var(--u-bg-muted) 0%, var(--u-bg-dark) 60%);
+  }
+
+  .hero-section::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 100px;
+    z-index: 1;
+    pointer-events: none;
+    background: linear-gradient(to bottom, rgba(13, 31, 23, 0), #ffffff);
   }
 
   .hero-glow {
@@ -275,8 +298,9 @@
   .btn-hero-primary {
     display: inline-flex;
     align-items: center;
+    justify-content: center;
     gap: 10px;
-    background: var(--u-emerald);
+    background: var(--u-gradient-primary);
     color: #fff;
     border: none;
     padding: 14px 28px;
@@ -290,8 +314,8 @@
   }
 
   .btn-hero-primary:hover {
-    background: var(--u-emerald-light);
-    box-shadow: 0 4px 20px var(--u-emerald-glow);
+    background: var(--u-gradient-primary-hover);
+    box-shadow: var(--u-shadow-primary-hover);
     transform: translateY(-1px);
   }
 
@@ -499,6 +523,21 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     min-height: 520px;
+    position: relative;
+  }
+
+  .audience-funnel::after {
+    content: '';
+    display: block;
+    width: 100%;
+    height: 100px;
+    grid-column: 1 / -1;
+    order: 99;
+    background: linear-gradient(
+      to bottom,
+      var(--u-bg-dark),
+      var(--u-bg-light)
+    );
   }
 
   .funnel-panel {
@@ -597,10 +636,25 @@
 
   /* ── Stats banner ── */
   .stats-banner {
+    position: relative;
     background: #ffffff;
-    border-top: 1px solid rgba(0, 0, 0, 0.06);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-    padding: var(--u-space-xl) 0;
+    border-top: none;
+    border-bottom: none;
+    padding: 3rem 0;
+  }
+
+  @media (min-width: 768px) {
+    .stats-banner {
+      padding: 5rem 0;
+    }
+  }
+
+  .stats-banner::after {
+    content: '';
+    display: block;
+    width: 100%;
+    height: 100px;
+    background: linear-gradient(to bottom, #ffffff, var(--u-bg-dark));
   }
 
   .stats-grid {
@@ -625,13 +679,14 @@
     top: 20%;
     height: 60%;
     width: 1px;
-    background: rgba(0, 0, 0, 0.1);
+    background: var(--u-text-dark);
+    opacity: 0.15;
   }
 
   .stats-value {
     font-size: clamp(1.75rem, 3vw, 2.5rem);
     font-weight: 600;
-    color: var(--u-text-dark);
+    color: var(--u-emerald);
     line-height: 1;
     font-family: var(--font-playfair, 'Playfair Display', Georgia, serif);
   }
@@ -640,6 +695,80 @@
     font-size: var(--u-text-small);
     color: var(--u-text-dark-sub);
     text-align: center;
+    font-family: var(--font-body);
+  }
+
+  /* Плавный переход из светлого блока к финальному CTA */
+  .section-taper-into-cta {
+    position: relative;
+  }
+
+  .section-taper-into-cta::after {
+    content: '';
+    display: block;
+    width: 100%;
+    height: 100px;
+    background: linear-gradient(to bottom, #ffffff, var(--u-bg-dark));
+  }
+
+  /* Error pages (404 + 500) */
+  .error-page {
+    position: relative;
+    overflow: hidden;
+    min-height: calc(100vh - 4rem);
+    background: var(--u-bg-dark);
+  }
+
+  .error-page__bg {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 30% 50%, var(--u-bg-muted) 0%, var(--u-bg-dark) 60%);
+    pointer-events: none;
+  }
+
+  .error-page__code {
+    margin: 0;
+    font-family: var(--font-playfair, 'Playfair Display', Georgia, serif);
+    font-size: clamp(3.5rem, 16vw, 7.5rem);
+    font-weight: 500;
+    line-height: 1;
+    color: var(--u-emerald-light);
+  }
+
+  .error-page__heading {
+    margin-top: 1.5rem;
+    font-size: clamp(1.25rem, 4vw, 1.75rem);
+    font-weight: 600;
+    color: var(--u-text-primary);
+  }
+
+  .error-page__desc {
+    margin-top: 0.75rem;
+    max-width: 24rem;
+    margin-left: auto;
+    margin-right: auto;
+    font-size: 1rem;
+    line-height: 1.6;
+    color: var(--u-text-secondary);
+  }
+
+  .error-page__secondary-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--u-text-primary);
+    text-decoration: none;
+    border: 1px solid var(--u-border-hover);
+    border-radius: var(--u-radius-md);
+    transition: var(--u-transition);
+  }
+
+  .error-page__secondary-link:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.35);
   }
 
   /* ── How it works step number badge ── */
@@ -708,7 +837,7 @@
     font-size: 0.875rem;
     font-weight: 600;
     color: #ffffff;
-    background: var(--u-emerald);
+    background: var(--u-gradient-primary);
     text-decoration: none;
     transition: var(--u-transition);
     display: inline-flex;
@@ -716,7 +845,8 @@
   }
 
   .header-cta-btn:hover {
-    background: var(--u-emerald-light);
+    background: var(--u-gradient-primary-hover);
+    box-shadow: var(--u-shadow-primary-hover);
     transform: translateY(-1px);
   }
 
@@ -833,6 +963,10 @@
 
 /* Stats banner responsive */
 @media (max-width: 767px) {
+  .stats-value {
+    font-size: clamp(1.75rem, 6vw, 2.5rem);
+  }
+
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -843,7 +977,7 @@
 
   .stats-item:nth-child(1),
   .stats-item:nth-child(2) {
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    border-bottom: 1px solid color-mix(in srgb, var(--u-text-dark) 12%, transparent);
   }
 }
 

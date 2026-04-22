@@ -8,9 +8,9 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        /* Primary — emerald filled */
+        /* Primary — emerald gradient (через токены) */
         primary:
-          'bg-[#2d6a4a] text-white hover:bg-[#3d8a62] active:bg-[#2d6a4a] hover:-translate-y-px active:translate-y-0 hover:shadow-[0_4px_20px_rgba(45,106,74,0.35)] focus-visible:ring-[#2d6a4a]',
+          'bg-unity-gradient-primary text-white hover:bg-unity-gradient-primary-hover active:translate-y-0 active:shadow-none hover:shadow-[var(--u-shadow-primary-hover)] hover:-translate-y-px focus-visible:ring-[color:var(--u-emerald)]',
         /* Secondary — outlined white (for dark backgrounds) */
         secondary:
           'border border-white/20 bg-transparent text-white hover:border-white/40 hover:bg-white/06 focus-visible:ring-white',
@@ -25,7 +25,7 @@ const buttonVariants = cva(
           'bg-error text-white hover:bg-red-600 active:bg-red-700 focus-visible:ring-red-500',
         /* Link */
         link:
-          'text-[#2d6a4a] underline-offset-4 hover:underline p-0 h-auto font-medium focus-visible:ring-[#2d6a4a]',
+          'text-[color:var(--u-emerald)] underline-offset-4 hover:underline p-0 h-auto font-medium focus-visible:ring-[color:var(--u-emerald)]',
       },
       size: {
         sm: 'h-8 rounded-[6px] px-3 text-xs',
