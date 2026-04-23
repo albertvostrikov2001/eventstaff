@@ -60,6 +60,8 @@ git push -u origin main
 5. **Install Command** и **Build Command** должны совпасть с `vercel.json` (проверьте, что Vercel их не перезаписал пустыми значениями)
 6. **Node.js Version** в *Settings → General*: **22.x** (или опирайтесь на `.node-version` в корне репозитория, если платформа подхватывает его)
 
+**Проверка:** в логе сборки после установки зависимостей Turbo должен писать что-то вроде `Running build in 1 packages` и **`@unity/web`**, а не `@unity/api`. Если видите только **API** или путь `src/queues/email-queue.ts`, значит **Root Directory** выставлен не на `packages/web` (или в настройках проекта переопределён **Build Command**). Исправьте и передеплойте.
+
 ---
 
 ## 3. Переменные окружения на Vercel
