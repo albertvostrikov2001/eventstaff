@@ -2,6 +2,12 @@
 
 На Vercel выкладывается только **`packages/web`**. API (`packages/api`), Postgres и Redis должны работать **на отдельном хостинге** (VPS, Railway, Fly.io, Render и т.д.) — иначе вход в личный кабинет и API-запросы работать не будут.
 
+### Почему нельзя просто выложить API на Vercel
+
+Текущий **`packages/api`** — это **обычный Fastify-сервер**: `app.listen()`, **Socket.io**, **BullMQ**-воркеры, фоновые задачи. Платформа Vercel в стандартном режиме рассчитана на **короткоживущие serverless-функции**, а не на такой процесс. Если создать отдельный проект Vercel с корнем `packages/api`, при открытии URL вы часто увидите **500 `FUNCTION_INVOCATION_FAILED` / «Serverless Function has crashed»** — это ожидаемо, а не «случайный баг» в коде.
+
+Поднять этот API имеет смысл на **VPS + Docker** (образ из GHCR), **Railway**, **Fly.io**, **Render** и т.п., с Postgres и Redis. На Vercel держите **только фронт** (`packages/web`).
+
 Файлы в репозитории:
 
 - `packages/web/vercel.json` — установка зависимостей из **корня** монорепы и сборка через **Turbo**
@@ -126,3 +132,4 @@ API должен быть доступен по **HTTPS**.
 | Логин не держит сессию | На API: `AUTH_CROSS_SITE_COOKIES`, CORS, совпадение `NEXT_PUBLIC_SITE_URL` / `CORS_ORIGINS` |
 | GitHub Pages workflow падает | Для Vercel он не обязателен; для Pages нужна переменная `NEXT_PUBLIC_API_URL` в GitHub — см. `docs/deploy-github-pages.md` |
 | Клонирование: HTTP 500 | См. подраздел выше — инфраструктура GitHub/Vercel, доступ приложения к репо |
+| **API на Vercel:** 500, Serverless Function crashed | Не используйте Vercel для `packages/api` в текущем виде. Хостите API на VPS/Railway/Fly/Render + Docker; на Vercel — только `packages/web`. См. блок «Почему нельзя просто выложить API на Vercel» выше. |

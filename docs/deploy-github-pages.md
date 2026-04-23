@@ -1,6 +1,6 @@
 # Деплой фронта на GitHub Pages и вход в личный кабинет
 
-GitHub Pages отдаёт только **статический** Next.js (сборка `STATIC_EXPORT`). **API и база** должны работать на отдельном сервере (VPS, Railway, Fly.io, Render и т.п.).
+GitHub Pages отдаёт только **статический** Next.js (сборка `STATIC_EXPORT`). **API и база** должны работать на отдельном сервере (VPS, Railway, Fly.io, Render и т.п.). **Не пытайтесь хостить текущий Fastify API (`packages/api`) на Vercel serverless** — это другая модель выполнения; см. [docs/deploy-vercel.md](deploy-vercel.md).
 
 ## 1. Поднять API в интернете
 
