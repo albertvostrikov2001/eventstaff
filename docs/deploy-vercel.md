@@ -103,9 +103,24 @@ API должен быть доступен по **HTTPS**.
 
 ## 6. Частые проблемы
 
+### Ошибка «There was a permanent problem cloning the repo» / HTTP 500 от git provider
+
+Сообщение появляется **до** установки зависимостей и сборки: Vercel не смог склонировать репозиторий с GitHub. Это **не ошибка** в `vercel.json` или в коде проекта.
+
+**Что сделать по порядку:**
+
+1. **Повторить деплой** — чаще всего это временный сбой GitHub или маршрута GitHub ↔ Vercel (**Deployments → … → Redeploy**).
+2. Проверить [статус GitHub](https://www.githubstatus.com/) и при необходимости подождать.
+3. **Приватный репозиторий:** GitHub → **Settings → Applications → Installed GitHub Apps → Vercel** — убедиться, что приложению разрешён доступ к репозиторию `eventstaff` (или ко всем репозиториям организации).
+4. **Переподключить интеграцию:** Vercel → **Settings → Git** — отвязать и снова подключить GitHub, либо удалить проект на Vercel и импортировать репозиторий заново.
+5. Если ошибка **стабильно** повторяется — написать в [поддержку Vercel](https://vercel.com/help) с указанием времени деплоя и коммита: с их стороны видно точный ответ GitHub API.
+
+Обходной путь без клонирования через GitHub App: установить [Vercel CLI](https://vercel.com/docs/cli), выполнить `vercel link` в каталоге `packages/web` и деплоить из CI или вручную (`vercel --prod`) — но для постоянной связи с репозиторием всё равно удобнее починить доступ GitHub.
+
 | Симптом | Что проверить |
 |--------|----------------|
 | Сборка: workspace / `pnpm` | Root Directory = `packages/web`, в логе есть переход в корень и `pnpm install` |
 | «API недоступен» | Задан `NEXT_PUBLIC_API_URL`, API запущен и доступен с интернета по HTTPS |
 | Логин не держит сессию | На API: `AUTH_CROSS_SITE_COOKIES`, CORS, совпадение `NEXT_PUBLIC_SITE_URL` / `CORS_ORIGINS` |
 | GitHub Pages workflow падает | Для Vercel он не обязателен; для Pages нужна переменная `NEXT_PUBLIC_API_URL` в GitHub — см. `docs/deploy-github-pages.md` |
+| Клонирование: HTTP 500 | См. подраздел выше — инфраструктура GitHub/Vercel, доступ приложения к репо |
