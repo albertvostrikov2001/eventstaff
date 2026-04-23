@@ -106,6 +106,10 @@ unity/
 
 Сайт и личный кабинет со статического хостинга работают только вместе с **отдельно развёрнутым API** (Postgres, Redis, HTTPS). Пошагово: [docs/deploy-github-pages.md](docs/deploy-github-pages.md).
 
+## Деплой фронтенда на Vercel
+
+Монорепозиторий: корень проекта на Vercel — `packages/web`, команды в `packages/web/vercel.json`. Инструкция и команды для Git: [docs/deploy-vercel.md](docs/deploy-vercel.md).
+
 ## Лицензия
 
 Proprietary. Все права защищены.
