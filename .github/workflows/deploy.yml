@@ -37,13 +37,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Check public API URL (required for login from GitHub Pages)
+      - name: Check public API URL (login on Pages needs a real API)
         run: |
           if [ -z "$NEXT_PUBLIC_API_URL" ]; then
-            echo "::error title=NEXT_PUBLIC_API_URL::Задайте в репозитории Settings → Variables → NEXT_PUBLIC_API_URL (например https://api.example.com/api/v1). Без этого вход в ЛК с Pages не работает. См. docs/deploy-github-pages.md"
-            exit 1
+            echo "::warning title=NEXT_PUBLIC_API_URL::Сайт соберётся и задеплоится, но вход в личный кабинет с GitHub Pages не будет работать, пока не задана переменная репозитория NEXT_PUBLIC_API_URL (Settings → Secrets and variables → Actions → Variables). Пример: https://api.example.com/api/v1. См. docs/deploy-github-pages.md"
+          else
+            echo "NEXT_PUBLIC_API_URL задан — сборка с публичным API."
           fi
-          echo "NEXT_PUBLIC_API_URL is set for this build."
         env:
           NEXT_PUBLIC_API_URL: ${{ vars.NEXT_PUBLIC_API_URL }}
 
