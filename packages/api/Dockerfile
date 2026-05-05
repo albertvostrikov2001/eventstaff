@@ -10,8 +10,11 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/api/package.json ./packages/api/
+# prisma generate runs in package postinstall — schema must exist before install
+COPY packages/api/prisma ./packages/api/prisma
 
-RUN pnpm install --frozen-lockfile
+# Only API + shared (not web); matches lockfile subgraph for Docker image size
+RUN pnpm install --frozen-lockfile --filter "@unity/api..."
 
 COPY packages/shared ./packages/shared
 COPY packages/api ./packages/api
