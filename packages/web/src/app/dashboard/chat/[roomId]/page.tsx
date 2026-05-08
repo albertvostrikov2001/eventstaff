@@ -1,19 +1,10 @@
-'use client';
+import { LegacyChatRoomRedirectClient } from './LegacyChatRoomRedirectClient';
 
-import { useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
-import { useAuthStore } from '@/stores/authStore';
+/** Placeholder for static export (GitHub Pages); real rooms load client-side after redirect. */
+export function generateStaticParams() {
+  return [{ roomId: 'placeholder' }];
+}
 
-export default function LegacyChatRoomRedirect() {
-  const router = useRouter();
-  const params = useParams<{ roomId: string }>();
-  const { user, isInitialized } = useAuthStore();
-
-  useEffect(() => {
-    if (!isInitialized) return;
-    const base = user?.activeRole === 'employer' ? '/employer/messages' : '/worker/messages';
-    router.replace(`${base}/${params.roomId}`);
-  }, [user, isInitialized, router, params.roomId]);
-
-  return null;
+export default function LegacyChatRoomRedirectPage() {
+  return <LegacyChatRoomRedirectClient />;
 }
