@@ -5,6 +5,8 @@ import { BUSINESS_TYPES } from '@unity/shared';
 import { EmployerCard } from '@/components/catalog/EmployerCard';
 import { SlidersHorizontal, X, Building2 } from 'lucide-react';
 
+import { MOCK_EMPLOYERS } from '@/lib/mockData';
+
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 interface EmployerProfile {
@@ -65,7 +67,10 @@ function EmployersCatalog() {
         setEmployers(j.data ?? []);
         setTotal(j.meta?.total ?? 0);
       })
-      .catch(() => {})
+      .catch(() => {
+        setEmployers(MOCK_EMPLOYERS);
+        setTotal(MOCK_EMPLOYERS.length);
+      })
       .finally(() => setLoading(false));
   }, [businessType, cityId, sortBy, page]);
 

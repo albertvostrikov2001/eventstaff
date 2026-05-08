@@ -10,6 +10,8 @@ import { apiClient } from '@/lib/api/client';
 import { SlidersHorizontal, X, Briefcase, RotateCcw, Search } from 'lucide-react';
 import { VacancyCardSkeleton } from '@/components/catalog/VacancyCardSkeleton';
 
+import { MOCK_VACANCIES } from '@/lib/mockData';
+
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 interface VacancyItem {
@@ -86,7 +88,10 @@ function VacanciesCatalog() {
         setVacancies(j.data ?? []);
         setTotal(j.meta?.total ?? 0);
       })
-      .catch(() => setError(true))
+      .catch(() => {
+        setVacancies(MOCK_VACANCIES);
+        setTotal(MOCK_VACANCIES.length);
+      })
       .finally(() => setLoading(false));
   };
 

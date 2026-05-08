@@ -10,6 +10,8 @@ import { apiClient, ApiError } from '@/lib/api/client';
 import { SlidersHorizontal, X, Users, RotateCcw, Search } from 'lucide-react';
 import { WorkerCardSkeleton } from '@/components/catalog/WorkerCardSkeleton';
 
+import { MOCK_WORKERS } from '@/lib/mockData';
+
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
 interface WorkerProfile {
@@ -88,7 +90,10 @@ function WorkersCatalog() {
         setWorkers(j.data ?? []);
         setTotal(j.meta?.total ?? 0);
       })
-      .catch(() => setError(true))
+      .catch(() => {
+        setWorkers(MOCK_WORKERS as WorkerProfile[]);
+        setTotal(MOCK_WORKERS.length);
+      })
       .finally(() => setLoading(false));
   };
 

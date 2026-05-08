@@ -45,20 +45,26 @@ export function Footer() {
 
           {/* Brand column */}
           <div>
-            <Link href="/" aria-label="Юнити — главная">
+            <Link href="/" className="flex items-center gap-2.5" aria-label="Юнити — главная">
               <Image
-                src="/logo.svg"
-                alt="Юнити"
-                width={130}
-                height={44}
-                className="object-contain"
+                src="/logo.png"
+                alt="Юнити — платформа event-персонала"
+                width={40}
+                height={40}
+                className="block shrink-0 object-contain"
               />
+              <span
+                className="text-lg font-semibold text-white"
+                style={{ fontFamily: 'var(--font-playfair, "Playfair Display", serif)' }}
+              >
+                Юнити
+              </span>
             </Link>
             <p
               className="mt-4 text-sm leading-relaxed max-w-[220px]"
               style={{ color: 'var(--u-text-secondary)' }}
             >
-              Специализированная биржа труда для event-персонала в&nbsp;ресторанном бизнесе
+              Платформа для подбора event-персонала в&nbsp;ресторанном бизнесе
               и&nbsp;сфере гостеприимства.
             </p>
             <div className="mt-5 flex items-start gap-2 text-sm" style={{ color: 'var(--u-text-secondary)' }}>

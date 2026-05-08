@@ -4,84 +4,182 @@ import { UserPlus, FileText, Search, MessageSquare, CalendarCheck, Star, ArrowRi
 
 export const metadata: Metadata = {
   title: 'Как это работает',
-  description: 'Узнайте, как работает платформа Юнити для поиска event-персонала',
+  description: 'Узнайте, как работает платформа Юнити для подбора event-персонала',
 };
 
 const EMPLOYER_STEPS = [
-  { icon: UserPlus, title: 'Зарегистрируйтесь', desc: 'Создайте аккаунт работодателя и заполните профиль компании' },
-  { icon: FileText, title: 'Опубликуйте вакансию', desc: 'Заполните форму или используйте готовый шаблон — это займёт 5 минут' },
-  { icon: Search, title: 'Получите отклики', desc: 'Просматривайте анкеты кандидатов, изучайте портфолио и отзывы' },
-  { icon: MessageSquare, title: 'Обсудите детали', desc: 'Свяжитесь с кандидатом через встроенный чат платформы' },
-  { icon: CalendarCheck, title: 'Подтвердите смену', desc: 'Забронируйте специалиста на нужную дату и время' },
-  { icon: Star, title: 'Оцените работу', desc: 'После завершения оставьте отзыв — это поможет другим работодателям' },
+  {
+    icon: UserPlus,
+    title: 'Зарегистрируйтесь',
+    desc: 'Создайте аккаунт компании за минуту.',
+  },
+  {
+    icon: FileText,
+    title: 'Опубликуйте вакансию',
+    desc: 'Заполните форму или используйте готовый шаблон — это займёт 5 минут.',
+  },
+  {
+    icon: Search,
+    title: 'Получите отклики',
+    desc: 'Просматривайте профили кандидатов, изучайте опыт и отзывы.',
+  },
+  {
+    icon: MessageSquare,
+    title: 'Обсудите детали',
+    desc: 'Свяжитесь с кандидатом через встроенный чат платформы.',
+  },
+  {
+    icon: CalendarCheck,
+    title: 'Подтвердите смену',
+    desc: 'Забронируйте специалиста на нужную дату и время.',
+  },
+  {
+    icon: Star,
+    title: 'Оцените работу',
+    desc: 'После завершения оставьте отзыв — это поможет другим работодателям.',
+  },
 ];
 
 const WORKER_STEPS = [
-  { icon: UserPlus, title: 'Создайте профиль', desc: 'Укажите специализацию, опыт, загрузите фото и портфолио' },
-  { icon: Search, title: 'Ищите вакансии', desc: 'Просматривайте каталог или получайте персональные рекомендации' },
-  { icon: MessageSquare, title: 'Откликнитесь', desc: 'Одним кликом или с сопроводительным сообщением' },
-  { icon: CalendarCheck, title: 'Выходите на смену', desc: 'Подтвердите участие и выполните работу' },
-  { icon: Star, title: 'Развивайте репутацию', desc: 'Получайте отзывы и повышайте свой рейтинг' },
+  {
+    icon: UserPlus,
+    title: 'Создайте профиль',
+    desc: 'Укажите специализацию, опыт, загрузите фото.',
+  },
+  {
+    icon: Search,
+    title: 'Найдите вакансии',
+    desc: 'Просматривайте каталог или получайте персональные рекомендации.',
+  },
+  {
+    icon: MessageSquare,
+    title: 'Откликнитесь',
+    desc: 'Одним кликом или с сопроводительным сообщением.',
+  },
+  {
+    icon: CalendarCheck,
+    title: 'Выйдите на смену',
+    desc: 'Подтвердите участие и выполните работу профессионально.',
+  },
+  {
+    icon: Star,
+    title: 'Развивайте репутацию',
+    desc: 'Получайте отзывы и повышайте свой рейтинг в каталоге.',
+  },
 ];
+
+function StepCard({ step, index }: { step: typeof EMPLOYER_STEPS[0]; index: number }) {
+  const Icon = step.icon;
+  return (
+    <div className="how-step-card group">
+      {/* Number badge */}
+      <div className="how-step-badge">
+        {index + 1}
+      </div>
+
+      {/* Title */}
+      <h3
+        className="how-step-title"
+      >
+        {step.title}
+      </h3>
+
+      {/* Description */}
+      <p className="how-step-desc">
+        {step.desc}
+      </p>
+
+      {/* Icon (decorative) */}
+      <div className="mt-4 flex justify-end opacity-10 group-hover:opacity-20 transition-opacity">
+        <Icon className="h-8 w-8 text-white" aria-hidden="true" />
+      </div>
+    </div>
+  );
+}
 
 export default function HowItWorksPage() {
   return (
-    <div className="container-page py-16">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold text-gray-900">Как работает Юнити</h1>
-        <p className="mx-auto mt-3 max-w-2xl text-lg text-gray-500">
-          Простой и прозрачный процесс для работодателей и специалистов
-        </p>
-      </div>
+    <div
+      className="min-h-screen"
+      style={{ background: 'var(--u-bg-dark)' }}
+    >
+      <div className="container-page py-16 lg:py-24">
 
-      {/* Employer flow */}
-      <div className="mt-16">
-        <h2 className="text-center text-2xl font-bold text-gray-900">Для работодателей</h2>
-        <div className="mt-10 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-          {EMPLOYER_STEPS.map((step, i) => (
-            <div key={step.title} className="relative">
-              <div className="flex items-start gap-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-sm font-bold text-primary-600">
-                  {i + 1}
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">{step.title}</h3>
-                  <p className="mt-1 text-sm text-gray-500">{step.desc}</p>
-                </div>
-              </div>
-            </div>
-          ))}
+        {/* Page header */}
+        <div className="text-center mb-16">
+          <h1
+            className="text-white"
+            style={{
+              fontFamily: 'var(--font-playfair, "Playfair Display", serif)',
+              fontSize: 'clamp(2rem, 4vw, 3rem)',
+              fontWeight: 600,
+              lineHeight: 1.2,
+            }}
+          >
+            Как работает Юнити
+          </h1>
+          <p
+            className="mx-auto mt-3 max-w-2xl text-[1.0625rem]"
+            style={{ color: 'rgba(255,255,255,0.6)' }}
+          >
+            Простой и прозрачный процесс для работодателей и специалистов
+          </p>
         </div>
-      </div>
 
-      {/* Worker flow */}
-      <div className="mt-20">
-        <h2 className="text-center text-2xl font-bold text-gray-900">Для специалистов</h2>
-        <div className="mt-10 grid grid-cols-1 gap-8 sm:grid-cols-2 lg:grid-cols-3">
-          {WORKER_STEPS.map((step, i) => (
-            <div key={step.title} className="relative">
-              <div className="flex items-start gap-4">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-secondary-100 text-sm font-bold text-secondary-600">
-                  {i + 1}
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">{step.title}</h3>
-                  <p className="mt-1 text-sm text-gray-500">{step.desc}</p>
-                </div>
-              </div>
-            </div>
-          ))}
+        {/* Employer flow */}
+        <section aria-labelledby="employers-heading">
+          <h2
+            id="employers-heading"
+            className="text-center mb-8 text-white"
+            style={{
+              fontFamily: 'var(--font-playfair, "Playfair Display", serif)',
+              fontSize: 'clamp(1.375rem, 2.5vw, 1.75rem)',
+              fontWeight: 600,
+            }}
+          >
+            Для работодателей
+          </h2>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {EMPLOYER_STEPS.map((step, i) => (
+              <StepCard key={step.title} step={step} index={i} />
+            ))}
+          </div>
+        </section>
+
+        {/* Worker flow */}
+        <section className="mt-20" aria-labelledby="workers-heading">
+          <h2
+            id="workers-heading"
+            className="text-center mb-8 text-white"
+            style={{
+              fontFamily: 'var(--font-playfair, "Playfair Display", serif)',
+              fontSize: 'clamp(1.375rem, 2.5vw, 1.75rem)',
+              fontWeight: 600,
+            }}
+          >
+            Для специалистов
+          </h2>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {WORKER_STEPS.map((step, i) => (
+              <StepCard key={step.title} step={step} index={i} />
+            ))}
+          </div>
+        </section>
+
+        {/* CTA */}
+        <div className="mt-16 text-center">
+          <Link
+            href="/auth/register"
+            className="inline-flex items-center gap-2 rounded-[12px] px-8 py-3.5 text-base font-semibold text-white transition-all hover:-translate-y-0.5"
+            style={{
+              background: 'var(--u-gradient-primary)',
+              boxShadow: '0 4px 16px rgba(45,106,74,0.3)',
+            }}
+          >
+            Начать сейчас
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </Link>
         </div>
-      </div>
-
-      <div className="mt-16 text-center">
-        <Link
-          href="/auth/register"
-          className="inline-flex items-center gap-2 rounded-card bg-primary-500 px-8 py-3 text-base font-semibold text-white transition hover:bg-primary-600"
-        >
-          Начать сейчас
-          <ArrowRight className="h-4 w-4" />
-        </Link>
       </div>
     </div>
   );

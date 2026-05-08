@@ -786,27 +786,31 @@
   }
 
   /* ── Header (dark premium) ── */
+  :root {
+    --header-h: 72px;
+  }
+  @media (max-width: 1023px) { :root { --header-h: 64px; } }
+  @media (max-width: 767px)  { :root { --header-h: 56px; } }
+
   .header-unity {
     position: sticky;
     top: 0;
     z-index: 50;
     width: 100%;
-    transition: background 0.3s var(--u-ease), box-shadow 0.3s var(--u-ease);
-    background: transparent;
+    height: var(--header-h, 72px);
+    background: rgba(13, 31, 23, 0.85);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    transition: box-shadow 0.3s var(--u-ease);
+    /* Firefox fallback — no backdrop-filter support */
+    @supports not (backdrop-filter: blur(1px)) {
+      background: rgba(13, 31, 23, 0.97);
+    }
   }
 
-  .header-unity.is-scrolled {
-    background: rgba(13, 31, 23, 0.92);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    box-shadow: 0 1px 0 var(--u-border);
-  }
-
-  .header-unity.is-light {
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08);
+  .header-unity.has-shadow {
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
   }
 
   /* ── Header CTA button ── */
@@ -832,6 +836,56 @@
   .header-cta-btn:focus-visible {
     outline: 2px solid var(--u-emerald);
     outline-offset: 3px;
+  }
+
+  /* ── How-it-works step cards ── */
+  .how-step-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 28px 24px;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    flex-direction: column;
+  }
+
+  .how-step-card:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(45, 106, 74, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  }
+
+  .how-step-badge {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(45, 106, 74, 0.15);
+    border: 1px solid rgba(45, 106, 74, 0.4);
+    color: var(--u-emerald-light);
+    font-weight: 600;
+    font-size: 0.9375rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-bottom: 16px;
+  }
+
+  .how-step-title {
+    font-family: var(--font-playfair, 'Playfair Display', serif);
+    font-size: 1.25rem;
+    color: #ffffff;
+    font-weight: 600;
+    margin-bottom: 8px;
+    line-height: 1.3;
+  }
+
+  .how-step-desc {
+    font-size: 0.9375rem;
+    color: rgba(255, 255, 255, 0.65);
+    line-height: 1.6;
+    flex: 1;
   }
 
   /* ── Footer links ── */

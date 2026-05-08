@@ -28,3 +28,4 @@ export {
 export { RatingStars } from './rating-stars';
 export { EmptyState } from './empty-state';
 export { ScrollReveal } from './ScrollReveal';
+export { Logo } from './Logo';
