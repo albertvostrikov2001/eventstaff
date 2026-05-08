@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import Link from 'next/link';
+import { publicAssetUrl } from '@/lib/public-asset-url';
 
 type LogoSize = 'sm' | 'md' | 'lg';
 
@@ -32,7 +33,7 @@ export function Logo({ size = 'md', showText = true, href = '/', className = '' 
       aria-label="Юнити — главная"
     >
       <Image
-        src="/logo.png"
+        src={publicAssetUrl('/logo.png')}
         alt="Юнити — платформа event-персонала"
         width={imgSize}
         height={imgSize}

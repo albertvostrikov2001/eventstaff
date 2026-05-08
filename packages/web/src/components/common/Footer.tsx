@@ -2,6 +2,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Phone } from 'lucide-react';
 import { SITE_PHONE_DISPLAY, SITE_PHONE_TEL, SITE_PHONE_HOURS } from '@/content/siteContact';
+import { publicAssetUrl } from '@/lib/public-asset-url';
 
 const FOOTER_LINKS = {
   platform: {
@@ -47,7 +48,7 @@ export function Footer() {
           <div>
             <Link href="/" className="flex items-center gap-2.5" aria-label="Юнити — главная">
               <Image
-                src="/logo.png"
+                src={publicAssetUrl('/logo.png')}
                 alt="Юнити — платформа event-персонала"
                 width={40}
                 height={40}
