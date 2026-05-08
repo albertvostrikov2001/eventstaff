@@ -10,7 +10,7 @@ import {
   invalidateAllUserTokens,
   removeRefreshToken,
 } from '@/lib/refresh-tokens';
-import { ok, fail } from '@/lib/response';
+import { ok } from '@/lib/response';
 import { publicSiteUrl } from '@/lib/public-site-url';
 
 const nanoidToken = customAlphabet(

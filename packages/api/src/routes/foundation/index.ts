@@ -14,8 +14,6 @@ import { paginationSchema } from '@unity/shared';
 import { ReviewAccessService } from '@/services/review-access-service';
 import { getOptionalUserId } from '@/lib/optional-jwt';
 
-const stub = () => ({ success: true, data: null, message: 'Not implemented' as const });
-
 function combineBookingDateTime(date: Date, timeStart: string | null): Date {
   const d = new Date(date);
   if (timeStart) {

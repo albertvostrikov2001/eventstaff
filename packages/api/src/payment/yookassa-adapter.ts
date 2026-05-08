@@ -53,7 +53,7 @@ export class YookassaAdapter implements PaymentAdapter {
     });
     if (!res.ok) {
       const t = await res.text();
-      throw new Error(`yookassa_create_${res.status}`);
+      throw new Error(`yookassa_create_${res.status}: ${t.slice(0, 200)}`);
     }
     const j = (await res.json()) as {
       id?: string;

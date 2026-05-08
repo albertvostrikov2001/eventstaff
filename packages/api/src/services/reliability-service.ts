@@ -110,7 +110,8 @@ export class ReliabilityService {
     }
   }
 
-  async addStrikeAndRecalculate(userId: string, _reason: string): Promise<void> {
+  async addStrikeAndRecalculate(userId: string, reason: string): Promise<void> {
+    void reason; // reserved for future audit / logging
     await this.prisma.userReliabilityScore.upsert({
       where: { userId },
       create: { userId, strikeCount: 1 },
