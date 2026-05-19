@@ -6,6 +6,7 @@ import {
   ShiftStatus,
   Role,
   type InAppNotificationType,
+  type Prisma,
 } from '@prisma/client';
 import { publicSiteUrl } from '@/lib/public-site-url';
 import { ReliabilityService } from '@/services/reliability-service';
@@ -307,7 +308,7 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { id: string } }>('/bookings/:id/cancel', { preHandler: auth }, cancelOrderHandler);
   fastify.post<{ Params: { id: string } }>('/orders/:id/cancel', { preHandler: auth }, cancelOrderHandler);
 
-  // POST /individual-requests — публичный, rate limit 3/сутки с IP
+  // POST /individual-requests — публичный; при Cookie с access_token связываем createdByUserId (работодатель)
   fastify.post('/individual-requests', async (request, reply) => {
       const dayKey = `individual_req:${request.ip}`;
       const n = await fastify.redis.incr(dayKey);
@@ -316,75 +317,166 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
       }
       if (n > 3) {
         return reply.status(429).send({
-          error: { code: 'RATE_LIMIT', message: 'Слишком много заявок. Попробуйте завтра.' },
+          error: {
+            code: 'RATE_LIMIT',
+            message: 'Вы уже отправляли запрос сегодня. Попробуйте завтра.',
+          },
         });
       }
+
+      const ruPhone = z
+        .string()
+        .trim()
+        .regex(/^\+7\d{10}$/, 'Укажите телефон в формате +7 и 10 цифр');
+
+      function eventDateOk(raw: string | undefined): boolean {
+        if (!raw?.trim()) return true;
+        const d = new Date(raw);
+        if (Number.isNaN(d.getTime())) return false;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const cmp = new Date(d);
+        cmp.setHours(0, 0, 0, 0);
+        return cmp >= today;
+      }
+
       const body = z
-        .discriminatedUnion('role', [
-          z.object({
-            role: z.literal('employer'),
-            name: z.string().min(2).max(200),
-            phone: z.string().min(5).max(40),
-            email: z.string().email().max(320),
-            company: z.string().min(1).max(500),
-            eventType: z.string().min(1).max(200),
-            eventDate: z.string().optional(),
-            staffNeeded: z.string().min(1).max(2000),
-            quantity: z.coerce.number().int().min(1).max(10_000).optional(),
-            message: z.string().min(1).max(8000),
-          }),
+        .union([
+          z
+            .object({
+              role: z.literal('employer'),
+              name: z.string().trim().min(2).max(200),
+              phone: ruPhone,
+              email: z.string().email().max(320),
+              company: z.string().trim().max(500).optional(),
+              companyName: z.string().trim().max(500).optional(),
+              eventType: z.string().trim().min(1).max(200),
+              eventDate: z.string().optional(),
+              staffNeeded: z.string().trim().min(1).max(2000),
+              quantity: z.coerce.number().int().min(1).max(10_000).optional(),
+              message: z.string().max(8000).optional().default(''),
+            })
+            .superRefine((val, ctx) => {
+              if (!(val.companyName?.trim() || val.company?.trim())) {
+                ctx.addIssue({
+                  code: z.ZodIssueCode.custom,
+                  message: 'Укажите название компании',
+                  path: ['companyName'],
+                });
+              }
+              if (!eventDateOk(val.eventDate)) {
+                ctx.addIssue({
+                  code: z.ZodIssueCode.custom,
+                  message: 'Дата мероприятия не может быть в прошлом',
+                  path: ['eventDate'],
+                });
+              }
+              const composed = [val.staffNeeded, val.message?.trim()].filter(Boolean).join('\n\n');
+              if (composed.length < 10) {
+                ctx.addIssue({
+                  code: z.ZodIssueCode.custom,
+                  message: 'Опишите запрос или комментарий (не менее 10 символов суммарно)',
+                  path: ['message'],
+                });
+              }
+            }),
           z.object({
             role: z.literal('worker'),
-            name: z.string().min(2).max(200),
-            phone: z.string().min(5).max(40),
+            name: z.string().trim().min(2).max(200),
+            phone: z.string().trim().min(5).max(40),
             email: z.string().email().max(320),
-            position: z.string().min(1).max(500),
-            experience: z.string().min(1).max(4000),
+            position: z.string().trim().min(1).max(500),
+            experience: z.string().trim().min(1).max(4000),
             availability: z.string().max(2000).optional(),
-            message: z.string().min(1).max(8000),
+            message: z.string().trim().min(10).max(8000),
           }),
         ])
         .parse(request.body);
+
       const adminEmail = process.env.ADMIN_EMAIL?.trim();
       if (!adminEmail) {
         fastify.log.error('ADMIN_EMAIL is not set');
         return reply.status(503).send({ error: { code: 'CONFIG', message: 'Сервис временно недоступен' } });
       }
+
+      const optionalUserId = await getOptionalUserId(request);
+      let createdByUserId: string | null = null;
+      if (optionalUserId && body.role === 'employer') {
+        const u = await fastify.prisma.user.findUnique({
+          where: { id: optionalUserId },
+          select: { id: true, roles: { select: { role: true } } },
+        });
+        const isEmployer = u?.roles.some((r) => r.role === Role.employer);
+        if (u && isEmployer) {
+          createdByUserId = u.id;
+        }
+      }
+
       const eventDate =
-        body.role === 'employer' && body.eventDate
+        body.role === 'employer' && body.eventDate?.trim()
           ? (() => {
               const d = new Date(body.eventDate);
               return Number.isNaN(d.getTime()) ? null : d;
             })()
           : null;
+
+      const companyStored =
+        body.role === 'employer'
+          ? (body.companyName?.trim() || body.company?.trim() || '')
+          : null;
+
+      const messageStored =
+        body.role === 'employer'
+          ? [body.staffNeeded.trim(), body.message?.trim()].filter(Boolean).join('\n\n')
+          : body.message.trim();
+
       const created = await fastify.prisma.individualRequest.create({
         data: {
           role: body.role as Role,
-          name: body.name,
-          phone: body.phone,
-          email: body.email,
-          company: body.role === 'employer' ? body.company : null,
-          eventType: body.role === 'employer' ? body.eventType : null,
+          createdByUserId,
+          name: body.name.trim(),
+          phone: body.phone.trim(),
+          email: body.email.trim().toLowerCase(),
+          company: body.role === 'employer' ? companyStored : null,
+          eventType: body.role === 'employer' ? body.eventType.trim() : null,
           eventDate: eventDate ?? undefined,
-          staffNeeded: body.role === 'employer' ? body.staffNeeded : null,
+          staffNeeded: body.role === 'employer' ? body.staffNeeded.trim() : null,
           quantity: body.role === 'employer' ? body.quantity : null,
-          position: body.role === 'worker' ? body.position : null,
-          experience: body.role === 'worker' ? body.experience : null,
-          availability: body.role === 'worker' ? body.availability : null,
-          message: body.message,
+          position: body.role === 'worker' ? body.position.trim() : null,
+          experience: body.role === 'worker' ? body.experience.trim() : null,
+          availability: body.role === 'worker' ? body.availability?.trim() : null,
+          message: messageStored,
         },
       });
+
+      await fastify.prisma.adminAuditLog.create({
+        data: {
+          adminId: null,
+          action: 'individual_request_created',
+          entityType: 'individual_request',
+          entityId: created.id,
+          details: {
+            role: body.role,
+            createdByUserId,
+            email: created.email,
+          } as Prisma.InputJsonValue,
+          ip: request.ip,
+        },
+      });
+
       const site = publicSiteUrl();
       const admins = await fastify.prisma.user.findMany({
         where: { roles: { some: { role: 'admin' } } },
         select: { id: true, email: true },
       });
+      const regLabel =
+        createdByUserId == null ? 'Гость / не авторизован' : `User ${createdByUserId}`;
       for (const a of admins) {
         await fastify.notificationService.create({
           userId: a.id,
           type: 'INDIVIDUAL_REQUEST',
           title: 'Персональная заявка',
-          body: `${body.role}: ${body.name} — ${body.phone}`,
+          body: `${body.role}: ${body.name} — ${body.phone} (${regLabel})`,
           data: { requestId: created.id },
         });
       }
@@ -396,12 +488,19 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
           id: created.id,
           body: `Роль: ${body.role}\nИмя: ${body.name}\nТелефон: ${body.phone}\nEmail: ${body.email}\n` +
             (body.role === 'employer'
-              ? `Компания: ${body.company}\nТип мероприятия: ${body.eventType}\n`
+              ? `Компания: ${companyStored}\nТип мероприятия: ${body.eventType}\n`
               : `Должность: ${body.position}\n`) +
-            `Комментарий: ${body.message}`,
+            `Комментарий: ${messageStored}`,
           ctaUrl: `${site}/admin/individual-requests/${created.id}`,
         },
       });
-      return reply.status(201).send({ data: { id: created.id } });
+      return reply.status(201).send({
+        success: true,
+        data: {
+          id: created.id,
+          status: created.status,
+          createdAt: created.createdAt.toISOString(),
+        },
+      });
   });
 };

@@ -9,7 +9,8 @@ declare module 'fastify' {
 import { z } from 'zod';
 import { getCookieValue, verifyAccessToken } from '@/lib/jwt-access';
 import { ChatService } from '@/services/chat-service';
-import { MessageType, type ChatMessage } from '@prisma/client';
+import type { ChatMessage } from '@prisma/client';
+import { serializeChatMessage } from '@/lib/chat-message-dto';
 
 function isLocalBrowserOrigin(origin: string | undefined): boolean {
   if (!origin) return false;
@@ -146,7 +147,7 @@ export function attachChatSocket(fastify: FastifyInstance) {
 
     socket.on('message:send', async (raw) => {
       const parsed = z
-        .object({ roomId: z.string(), text: z.string().max(8000), clientId: z.string().optional() })
+        .object({ roomId: z.string(), text: z.string().max(2000), clientId: z.string().optional() })
         .safeParse(raw);
       if (!parsed.success) {
         socket.emit('error', { code: 'INVALID', message: 'Проверьте данные сообщения' });
@@ -170,7 +171,7 @@ export function attachChatSocket(fastify: FastifyInstance) {
       }
       const payload = {
         roomId,
-        message: toMessageDto(msg) as object,
+        message: serializeChatMessage(msg) as object,
         clientId,
       };
       nsp.to(`room:${roomId}`).emit('message:new', payload);
@@ -229,28 +230,3 @@ export function attachChatSocket(fastify: FastifyInstance) {
   });
 }
 
-type ChatMsgDto = {
-  id: string;
-  roomId: string;
-  senderId: string;
-  type: MessageType;
-  text: string | null;
-  isRead: boolean;
-  readAt: string | null;
-  isSystem: boolean;
-  createdAt: string;
-};
-
-function toMessageDto(m: ChatMessage): ChatMsgDto {
-  return {
-    id: m.id,
-    roomId: m.roomId,
-    senderId: m.senderId,
-    type: m.type,
-    text: m.text,
-    isRead: m.isRead,
-    readAt: m.readAt?.toISOString() ?? null,
-    isSystem: m.isSystem,
-    createdAt: m.createdAt.toISOString(),
-  };
-}

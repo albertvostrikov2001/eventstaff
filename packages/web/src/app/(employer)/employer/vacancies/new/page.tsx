@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { type VacancyCreateInput } from '@unity/shared';
 import { VacancyForm } from '@/components/forms/VacancyForm';
 import { useToast } from '@/components/ui/toast-context';
-import { apiClient } from '@/lib/api/client';
+import { ApiError, apiClient } from '@/lib/api/client';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
@@ -20,28 +20,33 @@ export default function NewVacancyPage() {
     apiClient.get<{ data: City[] }>('/catalog/cities').then((res) => setCities(res.data)).catch(() => {});
   }, []);
 
-  const onSubmit = async (data: VacancyCreateInput & { status: string }) => {
+  const onSubmit = async (data: VacancyCreateInput) => {
     try {
-      await apiClient.post('/employer/vacancies', data);
+      const res = await apiClient.post<{ data: { id: string } }>('/employer/vacancies', data);
       toast('Вакансия создана', 'success');
-      router.push('/employer/vacancies');
+      router.push(`/employer/vacancies/${res.data.id}`);
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : 'Ошибка создания', 'error');
+      toast(err instanceof ApiError ? err.message : 'Ошибка создания', 'error');
     }
   };
 
   return (
     <div>
-      <div className="mb-6 flex items-center gap-3">
-        <Link href="/employer/vacancies" className="rounded-full p-1.5 hover:bg-gray-100">
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Новая вакансия</h1>
-          <p className="mt-0.5 text-sm text-gray-500">Заполните данные для публикации</p>
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-3">
+          <Link
+            href="/employer/vacancies"
+            className="mt-1 rounded-full p-2 text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-white">Новая вакансия</h1>
+            <p className="mt-1 text-sm text-white/55">Заполните данные для публикации или черновика</p>
+          </div>
         </div>
       </div>
-      <VacancyForm cities={cities} onSubmit={onSubmit} submitLabel="Создать вакансию" />
+      <VacancyForm cities={cities} mode="create" onSubmit={onSubmit} />
     </div>
   );
 }

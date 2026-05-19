@@ -5,11 +5,20 @@ import { useRouter, useParams } from 'next/navigation';
 import { type VacancyCreateInput } from '@unity/shared';
 import { VacancyForm } from '@/components/forms/VacancyForm';
 import { useToast } from '@/components/ui/toast-context';
-import { apiClient } from '@/lib/api/client';
+import { ApiError, apiClient } from '@/lib/api/client';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
-interface City { id: string; name: string }
+interface City {
+  id: string;
+  name: string;
+}
+
+function parseTags(t: unknown): string[] {
+  if (!Array.isArray(t)) return [];
+  return t.filter((x): x is string => typeof x === 'string');
+}
+
 interface Vacancy {
   id: string;
   title: string;
@@ -30,6 +39,8 @@ interface Vacancy {
   isUrgent: boolean;
   cityId: string | null;
   status: string;
+  tags?: unknown;
+  coverImageUrl?: string | null;
 }
 
 export function EditVacancyPageClient() {
@@ -53,44 +64,50 @@ export function EditVacancyPageClient() {
       .finally(() => setLoading(false));
   }, [id, toast]);
 
-  const onSubmit = async (data: VacancyCreateInput & { status: string }) => {
+  const onSubmit = async (data: VacancyCreateInput) => {
     try {
-      await apiClient.put(`/employer/vacancies/${id}`, data);
+      const { status, ...body } = data;
+      void status;
+      await apiClient.put(`/employer/vacancies/${id}`, body);
       toast('Вакансия обновлена', 'success');
-      router.push('/employer/vacancies');
+      router.push(`/employer/vacancies/${id}`);
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : 'Ошибка обновления', 'error');
+      toast(err instanceof ApiError ? err.message : 'Ошибка обновления', 'error');
     }
   };
 
   if (loading) {
     return (
       <div className="space-y-4">
-        {[...Array(5)].map((_, i) => (
-          <div key={i} className="h-12 animate-pulse rounded-card bg-gray-200" />
+        {[...Array(8)].map((_, i) => (
+          <div
+            key={i}
+            className="h-14 animate-pulse rounded-[14px] border border-white/[0.06] bg-white/[0.06]"
+          />
         ))}
       </div>
     );
   }
 
-  const formatDate = (d: string) => {
-    const date = new Date(d);
-    return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}T${String(date.getHours()).padStart(2,'0')}:${String(date.getMinutes()).padStart(2,'0')}`;
-  };
-
   return (
     <div>
-      <div className="mb-6 flex items-center gap-3">
-        <Link href="/employer/vacancies" className="rounded-full p-1.5 hover:bg-gray-100">
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Редактировать вакансию</h1>
-          <p className="mt-0.5 text-sm text-gray-500">{vacancy?.title}</p>
+      <div className="mb-8 flex flex-col gap-4">
+        <div className="flex items-start gap-3">
+          <Link
+            href={`/employer/vacancies/${id}`}
+            className="mt-1 rounded-full p-2 text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-white">Редактировать вакансию</h1>
+            <p className="mt-1 text-sm text-white/55">{vacancy?.title}</p>
+          </div>
         </div>
       </div>
       {vacancy && (
         <VacancyForm
+          mode="edit"
           cities={cities}
           defaultValues={{
             title: vacancy.title,
@@ -100,8 +117,8 @@ export function EditVacancyPageClient() {
             rateType: vacancy.rateType as VacancyCreateInput['rateType'],
             employmentType: vacancy.employmentType as VacancyCreateInput['employmentType'],
             eventType: vacancy.eventType as VacancyCreateInput['eventType'],
-            dateStart: formatDate(vacancy.dateStart),
-            dateEnd: vacancy.dateEnd ? formatDate(vacancy.dateEnd) : undefined,
+            dateStart: new Date(vacancy.dateStart).toISOString(),
+            dateEnd: vacancy.dateEnd ? new Date(vacancy.dateEnd).toISOString() : '',
             workersNeeded: vacancy.workersNeeded,
             responsibilities: vacancy.responsibilities ?? undefined,
             requirements: vacancy.requirements ?? undefined,
@@ -110,7 +127,9 @@ export function EditVacancyPageClient() {
             transportProvided: vacancy.transportProvided,
             isUrgent: vacancy.isUrgent,
             cityId: vacancy.cityId ?? undefined,
-            status: vacancy.status,
+            status: vacancy.status as VacancyCreateInput['status'],
+            tags: parseTags(vacancy.tags),
+            coverImageUrl: vacancy.coverImageUrl?.trim() ? vacancy.coverImageUrl : '',
           }}
           onSubmit={onSubmit}
           submitLabel="Сохранить изменения"

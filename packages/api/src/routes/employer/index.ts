@@ -1,9 +1,81 @@
-import type { FastifyPluginAsync } from 'fastify';
+import { ApplicationStatus, BusinessType, type Vacancy, Prisma, ShiftStatus, ShiftPayStatus, ShiftFailedBy } from '@prisma/client';
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
+import {
+  employerProfileUpdateSchema,
+  employerVacancyPutBodySchema,
+  vacancyCreateSchema,
+  employerVacancyListQuerySchema,
+  type VacancyCreateInput,
+  type VacancyMutationPartialInput,
+} from '@unity/shared';
 import { z } from 'zod';
-import { Prisma, ShiftStatus } from '@prisma/client';
-import { employerProfileUpdateSchema, vacancyCreateSchema } from '@unity/shared';
 import { getUserRestriction, restrictedReply } from '@/lib/restriction';
 import { publicSiteUrl } from '@/lib/public-site-url';
+import {
+  ShiftConfirmationError,
+  confirmShiftParticipation,
+} from '@/lib/shift-confirmation';
+import { WORKER_FAILURE_CODES } from '@/lib/shift-codes';
+import { ReliabilityService } from '@/services/reliability-service';
+
+function vacancyTagsAsStrings(tags: unknown): string[] | undefined {
+  if (!Array.isArray(tags)) return undefined;
+  return tags.filter((t): t is string => typeof t === 'string');
+}
+
+/** Сложение сохранённой вакансии и PATCH для проверки публикации (status=active) */
+function vacancyMergedActivationPayload(v: Vacancy, patch: VacancyMutationPartialInput): VacancyCreateInput {
+  const dateEndMerged =
+    patch.dateEnd !== undefined
+      ? !patch.dateEnd || patch.dateEnd === ''
+        ? undefined
+        : patch.dateEnd
+      : v.dateEnd
+        ? v.dateEnd.toISOString()
+        : undefined;
+
+  return {
+    title: patch.title ?? v.title,
+    category: patch.category ?? (v.category as VacancyCreateInput['category']),
+    specialization: patch.specialization ?? v.specialization ?? undefined,
+    eventType: patch.eventType ?? (v.eventType as VacancyCreateInput['eventType']) ?? undefined,
+    venueLevel: patch.venueLevel ?? v.venueLevel ?? undefined,
+    rate: patch.rate ?? Number(v.rate),
+    rateType: patch.rateType ?? (v.rateType as VacancyCreateInput['rateType']),
+    employmentType:
+      patch.employmentType ?? (v.employmentType as VacancyCreateInput['employmentType']),
+    dateStart: patch.dateStart ? patch.dateStart : v.dateStart.toISOString(),
+    dateEnd: dateEndMerged,
+    timeStart: patch.timeStart ?? v.timeStart ?? undefined,
+    timeEnd: patch.timeEnd ?? v.timeEnd ?? undefined,
+    address: patch.address ?? v.address ?? undefined,
+    workersNeeded: patch.workersNeeded ?? v.workersNeeded,
+    dressCode: patch.dressCode ?? v.dressCode ?? undefined,
+    experienceRequired: patch.experienceRequired ?? v.experienceRequired ?? undefined,
+    responsibilities: patch.responsibilities ?? v.responsibilities ?? undefined,
+    requirements: patch.requirements ?? v.requirements ?? undefined,
+    conditions: patch.conditions ?? v.conditions ?? undefined,
+    description: patch.description ?? v.description ?? undefined,
+    foodProvided: patch.foodProvided ?? v.foodProvided,
+    transportProvided: patch.transportProvided ?? v.transportProvided,
+    tipsPossible: patch.tipsPossible ?? v.tipsPossible ?? undefined,
+    isUrgent: patch.isUrgent ?? v.isUrgent,
+    cityId:
+      patch.cityId !== undefined
+        ? patch.cityId === null
+          ? undefined
+          : patch.cityId
+        : v.cityId ?? undefined,
+    coverImageUrl:
+      patch.coverImageUrl !== undefined
+        ? patch.coverImageUrl === '' || !patch.coverImageUrl.trim()
+          ? ''
+          : patch.coverImageUrl
+        : (v.coverImageUrl ?? ''),
+    tags: patch.tags ?? vacancyTagsAsStrings(v.tags),
+    status: 'active',
+  };
+}
 
 export const employerRoutes: FastifyPluginAsync = async (fastify) => {
   const employerAuth = [
@@ -15,7 +87,12 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/profile', { preHandler: employerAuth }, async (request, reply) => {
     const profile = await fastify.prisma.employerProfile.findUnique({
       where: { userId: request.jwtUser.sub },
-      include: { city: true },
+      include: {
+        city: true,
+        user: {
+          select: { id: true, email: true, phone: true, emailVerified: true },
+        },
+      },
     });
     if (!profile) {
       return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
@@ -26,32 +103,256 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
   // PUT /profile
   fastify.put('/profile', { preHandler: employerAuth }, async (request, reply) => {
     const body = employerProfileUpdateSchema.parse(request.body);
+    const uid = request.jwtUser.sub;
 
-    const updated = await fastify.prisma.employerProfile.update({
-      where: { userId: request.jwtUser.sub },
-      data: {
-        ...(body.type !== undefined && { type: body.type }),
-        ...(body.companyName !== undefined && { companyName: body.companyName }),
-        ...(body.contactName !== undefined && { contactName: body.contactName }),
-        ...(body.description !== undefined && { description: body.description }),
-        ...(body.businessType !== undefined && { businessType: body.businessType }),
-        ...(body.website !== undefined && { website: body.website }),
-        ...(body.cityId !== undefined && { cityId: body.cityId }),
+    const userRow = await fastify.prisma.user.findUnique({
+      where: { id: uid },
+      select: { email: true, emailVerified: true },
+    });
+    if (!userRow) {
+      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'User not found' } });
+    }
+
+    const norm = (s: string) => s.trim().toLowerCase();
+    if (userRow.emailVerified) {
+      if (norm(body.email) !== norm(userRow.email ?? '')) {
+        return reply.status(403).send({
+          error: { code: 'FORBIDDEN', message: 'Email уже подтверждён и не может быть изменён' },
+        });
+      }
+    }
+
+    const innDigits = (body.inn ?? '').trim();
+    const contactNameMerged = `${body.contactFirstName.trim()} ${body.contactLastName.trim()}`.trim();
+    const jobTitleTrim = body.contactJobTitle?.trim();
+
+    await fastify.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: uid },
+        data: {
+          phone: body.phone.trim(),
+          ...(!userRow.emailVerified ? { email: norm(body.email) } : {}),
+        },
+      });
+
+      await tx.employerProfile.update({
+        where: { userId: uid },
+        data: {
+          ...(body.type !== undefined && { type: body.type }),
+          companyName: body.companyName.trim(),
+          ...(innDigits ? { inn: innDigits } : { inn: null }),
+          contactFirstName: body.contactFirstName.trim(),
+          contactLastName: body.contactLastName.trim(),
+          ...(jobTitleTrim ? { contactJobTitle: jobTitleTrim } : { contactJobTitle: null }),
+          contactName: contactNameMerged,
+          description:
+            (body.description ?? '').trim() === '' ? null : (body.description as string).trim(),
+          businessType: body.businessType as BusinessType,
+          website: body.website.trim() === '' ? null : body.website.trim(),
+          cityId: body.cityId,
+        },
+      });
+    });
+
+    const updated = await fastify.prisma.employerProfile.findUnique({
+      where: { userId: uid },
+      include: {
+        city: true,
+        user: {
+          select: { id: true, email: true, phone: true, emailVerified: true },
+        },
       },
-      include: { city: true },
     });
 
     return reply.send({ data: updated });
   });
 
-  // GET /vacancies
-  fastify.get('/vacancies', { preHandler: employerAuth }, async (request, reply) => {
-    const query = z
+  // GET /applications/recent — последние отклики по всем вакансиям работодателя
+  fastify.get('/applications/recent', { preHandler: employerAuth }, async (request, reply) => {
+    const q = z
+      .object({ limit: z.coerce.number().int().min(1).max(25).default(5) })
+      .parse(request.query);
+
+    const profile = await fastify.prisma.employerProfile.findUnique({
+      where: { userId: request.jwtUser.sub },
+      select: { id: true },
+    });
+    if (!profile) {
+      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
+    }
+
+    const vacancyRows = await fastify.prisma.vacancy.findMany({
+      where: { employerId: profile.id },
+      select: { id: true },
+    });
+    const vacancyIds = vacancyRows.map((v) => v.id);
+    if (vacancyIds.length === 0) {
+      return reply.send({ success: true, data: [], meta: { total: 0 } });
+    }
+
+    const whereApp: Prisma.ApplicationWhereInput = { vacancyId: { in: vacancyIds } };
+
+    const [total, applications] = await fastify.prisma.$transaction([
+      fastify.prisma.application.count({ where: whereApp }),
+      fastify.prisma.application.findMany({
+        where: whereApp,
+        orderBy: { createdAt: 'desc' },
+        take: q.limit,
+        include: {
+          worker: {
+            select: {
+              id: true,
+              userId: true,
+              firstName: true,
+              lastName: true,
+              photoUrl: true,
+              ratingScore: true,
+            },
+          },
+          vacancy: { select: { id: true, title: true, city: { select: { name: true } } } },
+        },
+      }),
+    ]);
+
+    return reply.send({ success: true, data: applications, meta: { total } });
+  });
+
+  // GET /applications — все отклики с фильтрами и пагинацией
+  fastify.get('/applications', { preHandler: employerAuth }, async (request, reply) => {
+    const q = z
       .object({
-        status: z.string().optional(),
-        page: z.coerce.number().default(1),
+        page: z.coerce.number().int().positive().default(1),
+        perPage: z.coerce.number().int().min(1).max(50).default(20),
+        status: z.nativeEnum(ApplicationStatus).optional(),
+        vacancyId: z.string().optional(),
+        search: z.string().optional(),
+        sort: z.enum(['newest', 'oldest', 'rating']).default('newest'),
       })
       .parse(request.query);
+
+    const profile = await fastify.prisma.employerProfile.findUnique({
+      where: { userId: request.jwtUser.sub },
+      select: { id: true },
+    });
+    if (!profile) {
+      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
+    }
+
+    const vacancyRows = await fastify.prisma.vacancy.findMany({
+      where: { employerId: profile.id },
+      select: { id: true },
+    });
+    const vacancyIds = vacancyRows.map((v) => v.id);
+    if (vacancyIds.length === 0) {
+      return reply.send({
+        success: true,
+        data: [],
+        meta: { total: 0, page: q.page, perPage: q.perPage, totalPages: 0 },
+      });
+    }
+
+    const vacancyScope =
+      q.vacancyId != null && q.vacancyId !== ''
+        ? vacancyIds.includes(q.vacancyId)
+          ? [q.vacancyId]
+          : ['__no_match__']
+        : vacancyIds;
+
+    const searchNorm = q.search?.trim();
+
+    const whereApp: Prisma.ApplicationWhereInput = {
+      vacancyId: { in: vacancyScope },
+      ...(q.status ? { status: q.status } : {}),
+      ...(searchNorm
+        ? {
+            worker: {
+              OR: [
+                { firstName: { contains: searchNorm, mode: 'insensitive' } },
+                { lastName: { contains: searchNorm, mode: 'insensitive' } },
+              ],
+            },
+          }
+        : {}),
+    };
+
+    let orderBy: Prisma.ApplicationOrderByWithRelationInput[] = [{ createdAt: 'desc' }];
+    if (q.sort === 'oldest') {
+      orderBy = [{ createdAt: 'asc' }];
+    } else if (q.sort === 'rating') {
+      orderBy = [{ worker: { ratingScore: 'desc' } }, { createdAt: 'desc' }];
+    }
+
+    const [total, applications] = await fastify.prisma.$transaction([
+      fastify.prisma.application.count({ where: whereApp }),
+      fastify.prisma.application.findMany({
+        where: whereApp,
+        orderBy,
+        skip: (q.page - 1) * q.perPage,
+        take: q.perPage,
+        include: {
+          worker: {
+            select: {
+              id: true,
+              userId: true,
+              firstName: true,
+              lastName: true,
+              photoUrl: true,
+              ratingScore: true,
+            },
+          },
+          vacancy: { select: { id: true, title: true, city: { select: { name: true } } } },
+        },
+      }),
+    ]);
+
+    return reply.send({
+      success: true,
+      data: applications,
+      meta: {
+        total,
+        page: q.page,
+        perPage: q.perPage,
+        totalPages: Math.ceil(total / q.perPage),
+      },
+    });
+  });
+
+  // GET /individual-requests — персональные заявки, созданные текущим пользователем (кабинет)
+  fastify.get('/individual-requests', { preHandler: employerAuth }, async (request, reply) => {
+    const q = z
+      .object({ page: z.coerce.number().int().positive().default(1) })
+      .parse(request.query);
+    const limit = 20;
+    const where: Prisma.IndividualRequestWhereInput = {
+      role: 'employer',
+      createdByUserId: request.jwtUser.sub,
+    };
+    const [total, rows] = await fastify.prisma.$transaction([
+      fastify.prisma.individualRequest.count({ where }),
+      fastify.prisma.individualRequest.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (q.page - 1) * limit,
+        take: limit,
+        select: {
+          id: true,
+          status: true,
+          quantity: true,
+          staffNeeded: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+    return reply.send({
+      success: true,
+      data: rows,
+      meta: { total, page: q.page, limit, totalPages: Math.ceil(total / limit) },
+    });
+  });
+
+  // GET /vacancies — списки работодателя: табы «живые / архив», поиск, сортировка
+  fastify.get('/vacancies', { preHandler: employerAuth }, async (request, reply) => {
+    const query = employerVacancyListQuerySchema.parse(request.query);
 
     const profile = await fastify.prisma.employerProfile.findUnique({
       where: { userId: request.jwtUser.sub },
@@ -60,10 +361,28 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
     }
 
+    const searchNorm = query.search?.trim();
+
     const where: Prisma.VacancyWhereInput = {
       employerId: profile.id,
-      ...(query.status ? { status: query.status as Prisma.VacancyWhereInput['status'] } : {}),
+      ...(query.tab === 'archived'
+        ? { status: 'archived' as const }
+        : {
+            ...(query.vacancyStatus && query.vacancyStatus !== 'all'
+              ? { status: query.vacancyStatus as Prisma.VacancyWhereInput['status'] }
+              : { status: { in: ['active', 'paused', 'draft'] } }),
+          }),
+      ...(searchNorm
+        ? { title: { contains: searchNorm, mode: 'insensitive' as const } }
+        : {}),
     };
+
+    const orderBy: Prisma.VacancyOrderByWithRelationInput =
+      query.sort === 'oldest'
+        ? { createdAt: 'asc' }
+        : query.sort === 'startAt'
+          ? { dateStart: 'asc' }
+          : { createdAt: 'desc' };
 
     const [total, vacancies] = await fastify.prisma.$transaction([
       fastify.prisma.vacancy.count({ where }),
@@ -73,15 +392,20 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
           city: true,
           _count: { select: { applications: true } },
         },
-        orderBy: { createdAt: 'desc' },
-        skip: (query.page - 1) * 20,
-        take: 20,
+        orderBy,
+        skip: (query.page - 1) * query.perPage,
+        take: query.perPage,
       }),
     ]);
 
     return reply.send({
       data: vacancies,
-      meta: { total, page: query.page, limit: 20, totalPages: Math.ceil(total / 20) },
+      meta: {
+        total,
+        page: query.page,
+        limit: query.perPage,
+        totalPages: Math.ceil(total / query.perPage),
+      },
     });
   });
 
@@ -101,7 +425,8 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
     }
 
-    const statusVal = (request.body as Record<string, unknown>).status as string | undefined;
+    const prismaStatus =
+      body.status === 'active' ? 'active' : body.status === 'paused' ? 'paused' : 'draft';
 
     const vacancy = await fastify.prisma.vacancy.create({
       data: {
@@ -113,9 +438,10 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
         venueLevel: body.venueLevel,
         rate: body.rate,
         rateType: body.rateType as Parameters<typeof fastify.prisma.vacancy.create>[0]['data']['rateType'],
-        employmentType: body.employmentType as Parameters<typeof fastify.prisma.vacancy.create>[0]['data']['employmentType'],
+        employmentType:
+          body.employmentType as Parameters<typeof fastify.prisma.vacancy.create>[0]['data']['employmentType'],
         dateStart: new Date(body.dateStart),
-        dateEnd: body.dateEnd ? new Date(body.dateEnd) : undefined,
+        dateEnd: body.dateEnd && body.dateEnd !== '' ? new Date(body.dateEnd) : undefined,
         timeStart: body.timeStart,
         timeEnd: body.timeEnd,
         address: body.address,
@@ -125,16 +451,18 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
         responsibilities: body.responsibilities,
         requirements: body.requirements,
         conditions: body.conditions,
-        description: body.description,
+        description: body.description || undefined,
         foodProvided: body.foodProvided,
         transportProvided: body.transportProvided,
         tipsPossible: body.tipsPossible,
         isUrgent: body.isUrgent,
-        cityId: body.cityId,
-        status: (statusVal === 'active' ? 'active' : 'draft') as Parameters<typeof fastify.prisma.vacancy.create>[0]['data']['status'],
-        ...(statusVal === 'active' ? { publishedAt: new Date() } : {}),
+        cityId: body.cityId || undefined,
+        coverImageUrl: body.coverImageUrl && body.coverImageUrl.trim() !== '' ? body.coverImageUrl.trim() : null,
+        tags: body.tags?.length ? (body.tags as Prisma.InputJsonValue) : undefined,
+        status: prismaStatus,
+        ...(prismaStatus === 'active' ? { publishedAt: new Date() } : {}),
       },
-      include: { city: true },
+      include: { city: true, _count: { select: { applications: true } } },
     });
 
     return reply.status(201).send({ data: vacancy });
@@ -166,7 +494,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
   // PUT /vacancies/:id
   fastify.put('/vacancies/:id', { preHandler: employerAuth }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const body = vacancyCreateSchema.partial().parse(request.body);
+    const { status: statusFromBody, ...patch } = employerVacancyPutBodySchema.parse(request.body);
 
     const profile = await fastify.prisma.employerProfile.findUnique({
       where: { userId: request.jwtUser.sub },
@@ -182,35 +510,85 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Vacancy not found' } });
     }
 
-    const statusVal = (request.body as Record<string, unknown>).status as string | undefined;
+    if (vacancy.status === 'archived') {
+      return reply.status(400).send({
+        error: {
+          code: 'ARCHIVED',
+          message:
+            'Архивную вакансию нужно вернуть из архива перед редактированием или используйте копирование.',
+        },
+      });
+    }
+
+    const resultingStatus = statusFromBody ?? vacancy.status;
+
+    const willBeActive = resultingStatus === 'active';
+
+    if (willBeActive) {
+      const candidate = vacancyMergedActivationPayload(vacancy, patch);
+      const chk = vacancyCreateSchema.safeParse({ ...candidate, status: 'active' });
+      if (!chk.success) {
+        return reply.status(422).send({
+          error: {
+            code: 'VALIDATION',
+            message: chk.error.flatten().fieldErrors.dateStart?.[0] ?? 'Не выполнены условия публикации',
+            details: chk.error.flatten(),
+          },
+        });
+      }
+    }
 
     const updated = await fastify.prisma.vacancy.update({
       where: { id },
       data: {
-        ...(body.title !== undefined && { title: body.title }),
-        ...(body.category !== undefined && { category: body.category as Parameters<typeof fastify.prisma.vacancy.update>[0]['data']['category'] }),
-        ...(body.description !== undefined && { description: body.description }),
-        ...(body.rate !== undefined && { rate: body.rate }),
-        ...(body.rateType !== undefined && { rateType: body.rateType as Parameters<typeof fastify.prisma.vacancy.update>[0]['data']['rateType'] }),
-        ...(body.employmentType !== undefined && { employmentType: body.employmentType as Parameters<typeof fastify.prisma.vacancy.update>[0]['data']['employmentType'] }),
-        ...(body.eventType !== undefined && { eventType: body.eventType as Parameters<typeof fastify.prisma.vacancy.update>[0]['data']['eventType'] }),
-        ...(body.dateStart !== undefined && { dateStart: new Date(body.dateStart) }),
-        ...(body.dateEnd !== undefined && { dateEnd: new Date(body.dateEnd) }),
-        ...(body.address !== undefined && { address: body.address }),
-        ...(body.workersNeeded !== undefined && { workersNeeded: body.workersNeeded }),
-        ...(body.responsibilities !== undefined && { responsibilities: body.responsibilities }),
-        ...(body.requirements !== undefined && { requirements: body.requirements }),
-        ...(body.conditions !== undefined && { conditions: body.conditions }),
-        ...(body.foodProvided !== undefined && { foodProvided: body.foodProvided }),
-        ...(body.transportProvided !== undefined && { transportProvided: body.transportProvided }),
-        ...(body.isUrgent !== undefined && { isUrgent: body.isUrgent }),
-        ...(body.cityId !== undefined && { cityId: body.cityId }),
-        ...(statusVal !== undefined && {
-          status: statusVal as Parameters<typeof fastify.prisma.vacancy.update>[0]['data']['status'],
-          ...(statusVal === 'active' && vacancy.status !== 'active' ? { publishedAt: new Date() } : {}),
+        ...(patch.title !== undefined && { title: patch.title }),
+        ...(patch.category !== undefined && {
+          category: patch.category as Parameters<typeof fastify.prisma.vacancy.update>[0]['data']['category'],
+        }),
+        ...(patch.description !== undefined && { description: patch.description }),
+        ...(patch.rate !== undefined && { rate: patch.rate }),
+        ...(patch.rateType !== undefined && {
+          rateType: patch.rateType as Parameters<typeof fastify.prisma.vacancy.update>[0]['data']['rateType'],
+        }),
+        ...(patch.employmentType !== undefined && {
+          employmentType:
+            patch.employmentType as Parameters<typeof fastify.prisma.vacancy.update>[0]['data']['employmentType'],
+        }),
+        ...(patch.eventType !== undefined && {
+          eventType: patch.eventType as Parameters<typeof fastify.prisma.vacancy.update>[0]['data']['eventType'],
+        }),
+        ...(patch.dateStart !== undefined && { dateStart: new Date(patch.dateStart) }),
+        ...(patch.dateEnd !== undefined && {
+          dateEnd: patch.dateEnd && patch.dateEnd !== '' ? new Date(patch.dateEnd) : null,
+        }),
+        ...(patch.specialization !== undefined && { specialization: patch.specialization }),
+        ...(patch.venueLevel !== undefined && { venueLevel: patch.venueLevel }),
+        ...(patch.timeStart !== undefined && { timeStart: patch.timeStart }),
+        ...(patch.timeEnd !== undefined && { timeEnd: patch.timeEnd }),
+        ...(patch.address !== undefined && { address: patch.address }),
+        ...(patch.workersNeeded !== undefined && { workersNeeded: patch.workersNeeded }),
+        ...(patch.dressCode !== undefined && { dressCode: patch.dressCode }),
+        ...(patch.experienceRequired !== undefined && { experienceRequired: patch.experienceRequired }),
+        ...(patch.responsibilities !== undefined && { responsibilities: patch.responsibilities }),
+        ...(patch.requirements !== undefined && { requirements: patch.requirements }),
+        ...(patch.conditions !== undefined && { conditions: patch.conditions }),
+        ...(patch.foodProvided !== undefined && { foodProvided: patch.foodProvided }),
+        ...(patch.transportProvided !== undefined && { transportProvided: patch.transportProvided }),
+        ...(patch.tipsPossible !== undefined && { tipsPossible: patch.tipsPossible }),
+        ...(patch.isUrgent !== undefined && { isUrgent: patch.isUrgent }),
+        ...(patch.cityId !== undefined && { cityId: patch.cityId || undefined }),
+        ...(patch.coverImageUrl !== undefined && {
+          coverImageUrl: patch.coverImageUrl.trim() !== '' ? patch.coverImageUrl.trim() : null,
+        }),
+        ...(patch.tags !== undefined && {
+          tags: patch.tags && patch.tags.length ? (patch.tags as Prisma.InputJsonValue) : undefined,
+        }),
+        ...(statusFromBody !== undefined && {
+          status: statusFromBody as Parameters<typeof fastify.prisma.vacancy.update>[0]['data']['status'],
+          ...(statusFromBody === 'active' && vacancy.status !== 'active' ? { publishedAt: new Date() } : {}),
         }),
       },
-      include: { city: true },
+      include: { city: true, _count: { select: { applications: true } } },
     });
 
     return reply.send({ data: updated });
@@ -234,12 +612,216 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Vacancy not found' } });
     }
 
+    if (vacancy.status === 'archived') {
+      return reply.status(400).send({
+        error: { code: 'INVALID_STATUS', message: 'Вакансия уже в архиве' },
+      });
+    }
+
+    const mayArchive =
+      vacancy.status === 'active' ||
+      vacancy.status === 'paused' ||
+      vacancy.status === 'draft' ||
+      vacancy.status === 'closed' ||
+      vacancy.status === 'pending_moderation';
+
+    if (!mayArchive) {
+      return reply.status(400).send({
+        error: { code: 'INVALID_TRANSITION', message: 'Нельзя отправить текущую вакансию в архив' },
+      });
+    }
+
     const updated = await fastify.prisma.vacancy.update({
       where: { id },
       data: { status: 'archived' },
     });
 
     return reply.send({ data: updated });
+  });
+
+  // PATCH /vacancies/:id/unarchive
+  fastify.patch('/vacancies/:id/unarchive', { preHandler: employerAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    const profile = await fastify.prisma.employerProfile.findUnique({
+      where: { userId: request.jwtUser.sub },
+    });
+    if (!profile) {
+      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
+    }
+
+    const vacancy = await fastify.prisma.vacancy.findFirst({
+      where: { id, employerId: profile.id },
+    });
+    if (!vacancy) {
+      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Vacancy not found' } });
+    }
+
+    if (vacancy.status !== 'archived') {
+      return reply.status(400).send({
+        error: { code: 'INVALID_STATUS', message: 'Из архива можно восстановить только архивированную вакансию' },
+      });
+    }
+
+    const startMs = vacancy.dateStart.getTime();
+    if (startMs <= Date.now()) {
+      return reply.status(409).send({
+        error: {
+          code: 'START_AT_PAST',
+          message: 'Дата начала вакансии в прошлом. Отредактируйте и перенесите дату перед публикацией.',
+        },
+      });
+    }
+
+    const updated = await fastify.prisma.vacancy.update({
+      where: { id },
+      data: {
+        status: 'active',
+        ...(vacancy.publishedAt == null ? { publishedAt: new Date() } : {}),
+      },
+    });
+
+    return reply.send({ data: updated });
+  });
+
+  // PATCH /vacancies/:id/pause — только из active
+  fastify.patch('/vacancies/:id/pause', { preHandler: employerAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const profile = await fastify.prisma.employerProfile.findUnique({
+      where: { userId: request.jwtUser.sub },
+    });
+    if (!profile) {
+      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
+    }
+
+    const vacancy = await fastify.prisma.vacancy.findFirst({ where: { id, employerId: profile.id } });
+    if (!vacancy) {
+      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Vacancy not found' } });
+    }
+    if (vacancy.status !== 'active') {
+      return reply
+        .status(400)
+        .send({ error: { code: 'INVALID_TRANSITION', message: 'Пауза доступна только для активной вакансии' } });
+    }
+
+    const updated = await fastify.prisma.vacancy.update({
+      where: { id },
+      data: { status: 'paused' },
+    });
+
+    return reply.send({ data: updated });
+  });
+
+  // PATCH /vacancies/:id/resume — из paused обратно в active (с теми же проверками, что PUT → active)
+  fastify.patch('/vacancies/:id/resume', { preHandler: employerAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const profile = await fastify.prisma.employerProfile.findUnique({
+      where: { userId: request.jwtUser.sub },
+    });
+    if (!profile) {
+      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
+    }
+
+    const vacancy = await fastify.prisma.vacancy.findFirst({ where: { id, employerId: profile.id } });
+    if (!vacancy) {
+      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Vacancy not found' } });
+    }
+
+    if (vacancy.status !== 'paused') {
+      return reply
+        .status(400)
+        .send({ error: { code: 'INVALID_TRANSITION', message: 'Возможно только для вакансии на паузе' } });
+    }
+
+    const candidate = vacancyMergedActivationPayload(vacancy, {});
+    const chk = vacancyCreateSchema.safeParse({ ...candidate, status: 'active' });
+    if (!chk.success) {
+      return reply.status(422).send({
+        error: {
+          code: 'VALIDATION',
+          message: chk.error.flatten().fieldErrors.dateStart?.[0] ?? 'Не выполнены условия активации',
+          details: chk.error.flatten(),
+        },
+      });
+    }
+
+    const updated = await fastify.prisma.vacancy.update({
+      where: { id },
+      data: {
+        status: 'active',
+        ...(vacancy.publishedAt == null ? { publishedAt: new Date() } : {}),
+      },
+      include: { city: true, _count: { select: { applications: true } } },
+    });
+
+    return reply.send({ data: updated });
+  });
+
+  // POST /vacancies/duplicate — копия (черновик)
+  fastify.post('/vacancies/duplicate', { preHandler: employerAuth }, async (request, reply) => {
+    const { sourceId } = z.object({ sourceId: z.string() }).parse(request.body);
+
+    const profile = await fastify.prisma.employerProfile.findUnique({
+      where: { userId: request.jwtUser.sub },
+    });
+    if (!profile) {
+      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
+    }
+
+    const src = await fastify.prisma.vacancy.findFirst({
+      where: { id: sourceId, employerId: profile.id },
+    });
+
+    if (!src) {
+      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Vacancy not found' } });
+    }
+
+    const title = `${src.title} (копия)`.slice(0, 100);
+
+    const duplicate = await fastify.prisma.vacancy.create({
+      data: {
+        employerId: profile.id,
+        title,
+        category: src.category,
+        specialization: src.specialization,
+        eventType: src.eventType,
+        venueLevel: src.venueLevel,
+        rate: src.rate,
+        rateType: src.rateType,
+        employmentType: src.employmentType,
+        dateStart: src.dateStart,
+        dateEnd: src.dateEnd,
+        timeStart: src.timeStart,
+        timeEnd: src.timeEnd,
+        address: src.address,
+        lat: src.lat,
+        lng: src.lng,
+        workersNeeded: src.workersNeeded,
+        workersConfirmed: 0,
+        dressCode: src.dressCode,
+        experienceRequired: src.experienceRequired,
+        responsibilities: src.responsibilities,
+        requirements: src.requirements,
+        conditions: src.conditions,
+        description: src.description,
+        foodProvided: src.foodProvided,
+        transportProvided: src.transportProvided,
+        tipsPossible: src.tipsPossible,
+        isUrgent: src.isUrgent,
+        cityId: src.cityId,
+        coverImageUrl: src.coverImageUrl,
+        tags: src.tags ? (src.tags as Prisma.InputJsonValue) : undefined,
+        status: 'draft',
+        publishedAt: null,
+        expiresAt: null,
+        moderatedBy: null,
+        moderationNote: null,
+        viewsCount: 0,
+      },
+      include: { city: true, _count: { select: { applications: true } } },
+    });
+
+    return reply.status(201).send({ data: duplicate });
   });
 
   // GET /vacancies/:id/applications
@@ -262,15 +844,15 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
 
     const applications = await fastify.prisma.application.findMany({
       where: { vacancyId: id },
-      include: {
-        worker: {
-          include: {
-            city: true,
-            categories: true,
-            user: { select: { email: true } },
+        include: {
+          worker: {
+            include: {
+              city: true,
+              categories: true,
+              user: { select: { id: true, email: true } },
+            },
           },
         },
-      },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -443,23 +1025,98 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.status(201).send({ data: application });
   });
 
-  // GET /favorites/workers
-  fastify.get('/favorites/workers', { preHandler: employerAuth }, async (request, reply) => {
-    const favorites = await fastify.prisma.favorite.findMany({
+  // GET /favorites/target-ids — лёгкий список id для синхронизации избранного на фронте
+  fastify.get('/favorites/target-ids', { preHandler: employerAuth }, async (request, reply) => {
+    const rows = await fastify.prisma.favorite.findMany({
       where: { userId: request.jwtUser.sub, type: 'worker' },
+      select: { targetId: true },
       orderBy: { createdAt: 'desc' },
     });
-
-    const workerIds = favorites.map((f) => f.targetId);
-    const workers = await fastify.prisma.workerProfile.findMany({
-      where: { id: { in: workerIds } },
-      include: { city: true, categories: true },
+    return reply.send({
+      success: true,
+      data: rows.map((r) => r.targetId),
+      meta: { total: rows.length },
     });
-
-    return reply.send({ data: workers });
   });
 
-  // POST /favorites/workers/:workerId
+  // GET /favorites + GET /favorites/workers — избранные работники с пагинацией
+  async function loadFavoriteWorkersPage(jwtSub: string, page: number, perPage: number) {
+    const whereFv = { userId: jwtSub, type: 'worker' as const };
+    const [total, favorites] = await fastify.prisma.$transaction([
+      fastify.prisma.favorite.count({ where: whereFv }),
+      fastify.prisma.favorite.findMany({
+        where: whereFv,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * perPage,
+        take: perPage,
+        select: { targetId: true },
+      }),
+    ]);
+    const workerIds = favorites.map((f) => f.targetId);
+    const workers = workerIds.length
+      ? await fastify.prisma.workerProfile.findMany({
+          where: { id: { in: workerIds } },
+          include: { city: true, categories: true },
+        })
+      : [];
+    const order = new Map(workerIds.map((id, i) => [id, i]));
+    workers.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+    return { workers, total, page, perPage };
+  }
+
+  const favoriteWorkersListHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+    const q = z
+      .object({
+        page: z.coerce.number().int().positive().default(1),
+        perPage: z.coerce.number().int().min(1).max(100).default(20),
+      })
+      .parse(request.query);
+    const { workers, total, page, perPage } = await loadFavoriteWorkersPage(
+      request.jwtUser.sub,
+      q.page,
+      q.perPage,
+    );
+    return reply.send({
+      success: true,
+      data: workers,
+      meta: { total, page, perPage, totalPages: Math.ceil(total / perPage) },
+    });
+  };
+
+  fastify.get('/favorites', { preHandler: employerAuth }, favoriteWorkersListHandler);
+  fastify.get('/favorites/workers', { preHandler: employerAuth }, favoriteWorkersListHandler);
+
+  // POST /favorites { workerId }
+  fastify.post('/favorites', { preHandler: employerAuth }, async (request, reply) => {
+    const { workerId } = z.object({ workerId: z.string() }).parse(request.body);
+
+    await fastify.prisma.favorite.upsert({
+      where: {
+        userId_targetId_type: {
+          userId: request.jwtUser.sub,
+          targetId: workerId,
+          type: 'worker',
+        },
+      },
+      create: { userId: request.jwtUser.sub, targetId: workerId, type: 'worker' },
+      update: {},
+    });
+
+    return reply.status(201).send({ success: true, data: { success: true } });
+  });
+
+  // DELETE /favorites/:workerId
+  fastify.delete('/favorites/:workerId', { preHandler: employerAuth }, async (request, reply) => {
+    const { workerId } = request.params as { workerId: string };
+
+    await fastify.prisma.favorite.deleteMany({
+      where: { userId: request.jwtUser.sub, targetId: workerId, type: 'worker' },
+    });
+
+    return reply.send({ success: true, data: { success: true } });
+  });
+
+  // POST /favorites/workers/:workerId (legacy alias)
   fastify.post('/favorites/workers/:workerId', { preHandler: employerAuth }, async (request, reply) => {
     const { workerId } = request.params as { workerId: string };
 
@@ -478,7 +1135,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.status(201).send({ data: { success: true } });
   });
 
-  // DELETE /favorites/workers/:workerId
+  // DELETE /favorites/workers/:workerId (legacy alias)
   fastify.delete('/favorites/workers/:workerId', { preHandler: employerAuth }, async (request, reply) => {
     const { workerId } = request.params as { workerId: string };
 
@@ -489,59 +1146,344 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({ data: { success: true } });
   });
 
-  // GET /shifts
+  // GET /shifts — вкладки, фильтры, счётчики по табам
   fastify.get('/shifts', { preHandler: employerAuth }, async (request, reply) => {
-    const query = z
+    const employerShiftTabs = [
+      'active',
+      'pending_confirm',
+      'completed',
+      'needs_payment',
+      'archive',
+      'disputed',
+      'all',
+    ] as const;
+
+    type EmployerShiftTab = (typeof employerShiftTabs)[number];
+
+    const q = z
       .object({
+        tab: z.enum(employerShiftTabs).optional(),
+        view: z.enum(['active', 'completed', 'needs_payment']).optional(),
+        /** Старый фронт: ?status= вместо tab/view */
         status: z.enum(['active', 'completed', 'needs_payment']).optional(),
         page: z.coerce.number().int().positive().default(1),
+        perPage: z.coerce.number().int().min(1).max(50).default(20),
+        vacancyId: z.string().optional(),
+        workerId: z.string().optional(),
+        workerSearch: z.string().optional(),
+        dateFrom: z.string().optional(),
+        dateTo: z.string().optional(),
       })
       .parse(request.query);
 
     const uid = request.jwtUser.sub;
-    const limit = 20;
 
-    const statusMap: Record<string, ShiftStatus[]> = {
-      active: [ShiftStatus.PENDING, ShiftStatus.ACTIVE, ShiftStatus.DISPUTED],
-      completed: [ShiftStatus.COMPLETED, ShiftStatus.FAILED],
-    };
+    const v = q.view ?? q.status;
+    let tab: EmployerShiftTab = q.tab ?? 'active';
+    if (!q.tab && v === 'completed') tab = 'completed';
+    else if (!q.tab && v === 'needs_payment') tab = 'needs_payment';
+    else if (!q.tab && v === 'active') tab = 'active';
 
-    let where: Prisma.ShiftWhereInput = { employerId: uid };
-
-    if (query.status === 'needs_payment') {
-      where = {
-        ...where,
-        status: ShiftStatus.COMPLETED,
-        payments: { none: { status: { in: ['COMPLETED' as const] } } },
-      };
-    } else if (query.status) {
-      where = { ...where, status: { in: statusMap[query.status] } };
+    let workerUserId: string | undefined;
+    if (q.workerId && q.workerId.trim() !== '') {
+      const wp = await fastify.prisma.workerProfile.findUnique({
+        where: { id: q.workerId },
+        select: { userId: true },
+      });
+      workerUserId = wp?.userId ?? '__none__';
     }
 
-    const [total, shifts] = await fastify.prisma.$transaction([
-      fastify.prisma.shift.count({ where }),
+    const workerSearchNorm = q.workerSearch?.trim();
+
+    const bookingDateRange: Prisma.DateTimeFilter = {};
+    const df = q.dateFrom?.trim();
+    const dt = q.dateTo?.trim();
+    if (df) bookingDateRange.gte = new Date(`${df}T00:00:00.000Z`);
+    if (dt) bookingDateRange.lte = new Date(`${dt}T23:59:59.999Z`);
+
+    const bookingParts: Prisma.BookingWhereInput[] = [];
+    if (q.vacancyId && q.vacancyId.trim() !== '') {
+      bookingParts.push({ linkedVacancyId: q.vacancyId });
+    }
+    if (Object.keys(bookingDateRange).length > 0) {
+      bookingParts.push({ date: bookingDateRange });
+    }
+    if (workerSearchNorm) {
+      bookingParts.push({
+        worker: {
+          OR: [
+            { firstName: { contains: workerSearchNorm, mode: 'insensitive' } },
+            { lastName: { contains: workerSearchNorm, mode: 'insensitive' } },
+          ],
+        },
+      });
+    }
+
+    const bookingFilter: Prisma.BookingWhereInput | undefined =
+      bookingParts.length === 1
+        ? bookingParts[0]
+        : bookingParts.length > 1
+          ? { AND: bookingParts }
+          : undefined;
+
+    const hasBookingConstraint =
+      bookingFilter !== undefined && Object.keys(bookingFilter).length > 0;
+
+    const shiftBase: Prisma.ShiftWhereInput = {
+      employerId: uid,
+      ...(workerUserId ? { workerId: workerUserId } : {}),
+      ...(hasBookingConstraint ? { booking: bookingFilter } : {}),
+    };
+
+    const paymentCompleted = { payments: { some: { status: ShiftPayStatus.COMPLETED } } };
+    const paymentNotCompleted = { payments: { none: { status: ShiftPayStatus.COMPLETED } } };
+
+    function tabWhere(t: EmployerShiftTab): Prisma.ShiftWhereInput {
+      switch (t) {
+        case 'pending_confirm':
+          return {
+            ...shiftBase,
+            status: ShiftStatus.ACTIVE,
+            workerConfirmed: true,
+            employerConfirmed: false,
+          };
+        case 'active':
+          return {
+            ...shiftBase,
+            status: { in: [ShiftStatus.PENDING, ShiftStatus.ACTIVE] },
+            NOT: {
+              status: ShiftStatus.ACTIVE,
+              workerConfirmed: true,
+              employerConfirmed: false,
+            },
+          };
+        case 'completed':
+          return {
+            ...shiftBase,
+            status: ShiftStatus.COMPLETED,
+            ...paymentCompleted,
+          };
+        case 'needs_payment':
+          return {
+            ...shiftBase,
+            status: ShiftStatus.COMPLETED,
+            ...paymentNotCompleted,
+          };
+        case 'archive':
+          return { ...shiftBase, status: { in: [ShiftStatus.CANCELLED, ShiftStatus.FAILED] } };
+        case 'disputed':
+          return { ...shiftBase, status: ShiftStatus.DISPUTED };
+        case 'all':
+        default:
+          return { ...shiftBase };
+      }
+    }
+
+    const listWhere = tabWhere(tab);
+
+    const countsWhereBase = shiftBase;
+
+    async function countWhere(extra: Prisma.ShiftWhereInput) {
+      return fastify.prisma.shift.count({
+        where: {
+          AND: [countsWhereBase, extra],
+        },
+      });
+    }
+
+    const [
+      total,
+      shifts,
+      cActive,
+      cPendingConfirm,
+      cCompleted,
+      cNeedsPay,
+      cArchive,
+      cDisputed,
+    ] = await Promise.all([
+      fastify.prisma.shift.count({ where: listWhere }),
       fastify.prisma.shift.findMany({
-        where,
-        orderBy: query.status === 'needs_payment' ? { completedAt: 'asc' } : { createdAt: 'desc' },
-        skip: (query.page - 1) * limit,
-        take: limit,
+        where: listWhere,
+        orderBy:
+          tab === 'needs_payment'
+            ? { completedAt: 'asc' }
+            : tab === 'completed'
+              ? { completedAt: 'desc' }
+              : { createdAt: 'desc' },
+        skip: (q.page - 1) * q.perPage,
+        take: q.perPage,
         include: {
           booking: {
-            include: {
+            select: {
+              date: true,
+              timeStart: true,
+              timeEnd: true,
               linkedVacancy: { select: { id: true, title: true, dateStart: true } },
-              worker: { select: { id: true, firstName: true, lastName: true, photoUrl: true } },
+              worker: {
+                select: {
+                  id: true,
+                  userId: true,
+                  firstName: true,
+                  lastName: true,
+                  photoUrl: true,
+                  ratingScore: true,
+                },
+              },
             },
           },
           reviews: { select: { id: true, reviewerId: true } },
           payments: { select: { id: true, status: true, amount: true } },
         },
       }),
+      countWhere({
+        status: { in: [ShiftStatus.PENDING, ShiftStatus.ACTIVE] },
+        NOT: { status: ShiftStatus.ACTIVE, workerConfirmed: true, employerConfirmed: false },
+      }),
+      countWhere({
+        status: ShiftStatus.ACTIVE,
+        workerConfirmed: true,
+        employerConfirmed: false,
+      }),
+      countWhere({
+        status: ShiftStatus.COMPLETED,
+        payments: { some: { status: ShiftPayStatus.COMPLETED } },
+      }),
+      countWhere({
+        status: ShiftStatus.COMPLETED,
+        payments: { none: { status: ShiftPayStatus.COMPLETED } },
+      }),
+      countWhere({
+        status: { in: [ShiftStatus.CANCELLED, ShiftStatus.FAILED] },
+      }),
+      countWhere({
+        status: ShiftStatus.DISPUTED,
+      }),
     ]);
 
     return reply.send({
+      success: true,
       data: shifts,
-      meta: { total, page: query.page, limit, totalPages: Math.ceil(total / limit) },
+      meta: {
+        total,
+        page: q.page,
+        perPage: q.perPage,
+        totalPages: Math.ceil(total / q.perPage),
+        tabCounts: {
+          active: cActive,
+          pending_confirm: cPendingConfirm,
+          completed: cCompleted,
+          needs_payment: cNeedsPay,
+          archive: cArchive,
+          disputed: cDisputed,
+        },
+      },
     });
+  });
+
+  // PATCH /shifts/:id/confirm — только работодатель-владелец
+  fastify.patch('/shifts/:id/confirm', { preHandler: employerAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const uid = request.jwtUser.sub;
+    const owned = await fastify.prisma.shift.findFirst({
+      where: { id, employerId: uid },
+      select: { id: true },
+    });
+    if (!owned) {
+      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Смена не найдена' } });
+    }
+    try {
+      const shift = await confirmShiftParticipation(
+        { prisma: fastify.prisma, notificationService: fastify.notificationService },
+        id,
+        uid,
+      );
+      return reply.send({ success: true, data: shift });
+    } catch (e) {
+      if (e instanceof ShiftConfirmationError) {
+        return reply.status(e.statusCode).send({ error: { code: e.code, message: e.messageRu } });
+      }
+      throw e;
+    }
+  });
+
+  // PATCH /shifts/:id/fail — отметить провал по вине работника (только работодатель)
+  fastify.patch('/shifts/:id/fail', { preHandler: employerAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const uid = request.jwtUser.sub;
+    const body = z
+      .object({
+        reason: z.string().min(1).max(64),
+        note: z.string().max(2000).optional(),
+      })
+      .parse(request.body);
+
+    const shift = await fastify.prisma.shift.findUnique({ where: { id } });
+    if (!shift || shift.employerId !== uid) {
+      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Смена не найдена' } });
+    }
+    if (shift.status === ShiftStatus.COMPLETED || shift.status === ShiftStatus.CANCELLED) {
+      return reply.status(400).send({ error: { code: 'INVALID', message: 'Смена уже закрыта' } });
+    }
+    if (!(WORKER_FAILURE_CODES as readonly string[]).includes(body.reason)) {
+      return reply.status(400).send({ error: { code: 'INVALID', message: 'Некорректная причина' } });
+    }
+
+    const failed = await fastify.prisma.shift.update({
+      where: { id },
+      data: {
+        status: ShiftStatus.FAILED,
+        failedBy: ShiftFailedBy.WORKER,
+        failureCode: body.reason,
+        failureNote: body.note,
+        failureReason: body.reason,
+      },
+    });
+    const rel = new ReliabilityService(fastify.prisma, fastify.notificationService);
+    await rel.recalculate(shift.workerId);
+    await rel.recalculate(shift.employerId);
+    return reply.send({ success: true, data: failed });
+  });
+
+  // PATCH /shifts/:id/cancel — только PENDING, работодатель
+  fastify.patch('/shifts/:id/cancel', { preHandler: employerAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const uid = request.jwtUser.sub;
+
+    const shift = await fastify.prisma.shift.findUnique({
+      where: { id },
+      include: {
+        booking: { include: { worker: { include: { user: { select: { id: true } } } } } },
+      },
+    });
+    if (!shift || shift.employerId !== uid) {
+      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Смена не найдена' } });
+    }
+    if (shift.status !== ShiftStatus.PENDING) {
+      return reply.status(400).send({
+        error: { code: 'INVALID_STATE', message: 'Отмена доступна только для смены в статусе «ожидание»' },
+      });
+    }
+
+    const updated = await fastify.prisma.shift.update({
+      where: { id },
+      data: {
+        status: ShiftStatus.CANCELLED,
+        cancellationReason: 'Отменено работодателем до начала',
+        cancelledBy: uid,
+        cancelledAt: new Date(),
+      },
+    });
+
+    const workerUserIdInner = shift.booking.worker?.user?.id ?? shift.workerId;
+    await fastify.notificationService.create({
+      userId: workerUserIdInner,
+      type: 'CANCELLATION',
+      title: 'Смена отменена',
+      body: 'Работодатель отменил смену до начала.',
+      data: { shiftId: id, bookingId: shift.bookingId },
+    });
+
+    return reply.send({ success: true, data: updated });
   });
 
   // GET /invitations — sent invitations history

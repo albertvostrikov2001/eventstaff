@@ -31,10 +31,10 @@ export const MOCK_WORKERS = [
 // ── Vacancies ────────────────────────────────────────────────────────────────
 
 const EMPLOYERS = {
-  prichal: { id: 'e1', companyName: 'Банкетный зал «Причал»', contactName: 'Ольга Романова', isVerified: true },
-  anchor:  { id: 'e3', companyName: 'Ресторан «Якорь»',        contactName: 'Дмитрий Морозов', isVerified: true },
-  catering:{ id: 'e4', companyName: 'Кейтеринг Новороссийск', contactName: 'Светлана Иванова', isVerified: true },
-  marina:  { id: 'e5', companyName: 'Marina Events',           contactName: 'Марина Соколова',  isVerified: true },
+  prichal: { id: 'e1', companyName: 'Банкетный зал «Причал»', contactName: 'Ольга Романова', isVerified: true, logoUrl: null as string | null },
+  anchor:  { id: 'e3', companyName: 'Ресторан «Якорь»',        contactName: 'Дмитрий Морозов', isVerified: true, logoUrl: null as string | null },
+  catering:{ id: 'e4', companyName: 'Кейтеринг Новороссийск', contactName: 'Светлана Иванова', isVerified: true, logoUrl: null as string | null },
+  marina:  { id: 'e5', companyName: 'Marina Events',           contactName: 'Марина Соколова',  isVerified: true, logoUrl: null as string | null },
 };
 
 const future = (days: number) =>

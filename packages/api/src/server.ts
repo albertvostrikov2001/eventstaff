@@ -5,6 +5,7 @@ import helmet from '@fastify/helmet';
 import sensible from '@fastify/sensible';
 import rateLimit from '@fastify/rate-limit';
 import cookie from '@fastify/cookie';
+import multipart from '@fastify/multipart';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import { prismaPlugin } from './plugins/prisma';
@@ -20,8 +21,9 @@ import { adminRoutes } from './routes/admin';
 import { foundationRoutes } from './routes/foundation';
 import { notificationRoutes } from './routes/notifications';
 import notificationsPlugin from './plugins/notifications';
-import { startEmailWorkers } from './queues/email-queue';
 import mediaPlugin from './plugins/media';
+import { startEmailWorkers } from './queues/email-queue';
+import { MAX_FILE_BYTES } from './services/media-service';
 import { mediaRoutes } from './routes/media';
 import { chatRoutes } from './routes/chat';
 import { shiftActionRoutes } from './routes/shifts';
@@ -112,6 +114,10 @@ async function buildApp() {
     secret: process.env.JWT_SECRET ?? 'cookie-secret',
   });
 
+  await app.register(multipart, {
+    limits: { fileSize: MAX_FILE_BYTES },
+  });
+
   await app.register(rateLimit, {
     max: 100,
     timeWindow: '1 minute',
@@ -150,6 +156,8 @@ async function buildApp() {
   await app.register(foundationRoutes, { prefix: '/api/v1' });
   await app.register(notificationRoutes, { prefix: '/api/v1' });
   await app.register(mediaRoutes, { prefix: '/api/v1/media' });
+  /** Спека: алиас `/api/v1/employer/media/*` (multipart зарегистрирован выше на корне). */
+  await app.register(mediaRoutes, { prefix: '/api/v1/employer/media' });
   await app.register(chatRoutes, { prefix: '/api/v1/chat' });
   await app.register(paymentRoutes, { prefix: '/api/v1/payments' });
 

@@ -1,144 +1,95 @@
 'use client';
 
-import type { InputHTMLAttributes, TextareaHTMLAttributes } from 'react';
+import { AlertCircle } from 'lucide-react';
+import type { InputHTMLAttributes } from 'react';
 import { forwardRef } from 'react';
+import type { EmployerFieldTone, EmployerFormVariant } from '@/components/forms/form-styles';
+import {
+  formControlCn,
+  formHelperRowCn,
+  formLabelCn,
+  formRequiredAsteriskCn,
+} from '@/components/forms/form-styles';
+import { cn } from '@/lib/utils';
 
-interface FormFieldProps extends InputHTMLAttributes<HTMLInputElement> {
+export interface FormFieldProps extends InputHTMLAttributes<HTMLInputElement> {
   label: string;
-  error?: string;
+  /** Текст подсказки под полем (не ошибка). */
+  helper?: string;
+  /** @deprecated используйте `helper` вместо `hint` */
   hint?: string;
+  error?: string;
+  variant?: EmployerFormVariant;
+  /** Визуальный success-бордер/кольцо (например, после успешного blur). */
+  visuallySuccess?: boolean;
 }
 
+/** Универсальное текстовое поле: label + input + ошибка/helper. Для работодателя: `variant="cabinet"` */
 export const FormField = forwardRef<HTMLInputElement, FormFieldProps>(
-  ({ label, error, hint, id, ...props }, ref) => {
-    const fieldId = id ?? label.toLowerCase().replace(/\s+/g, '-');
+  (
+    {
+      label,
+      error,
+      helper,
+      hint,
+      variant = 'default',
+      visuallySuccess,
+      required,
+      className,
+      id,
+      disabled,
+      readOnly,
+      ...props
+    },
+    ref,
+  ) => {
+    const fieldId = id ?? props.name ?? label.replace(/\s+/g, '-').toLowerCase();
+    const helperText = helper ?? hint;
+    const tone: EmployerFieldTone = error ? 'error' : visuallySuccess ? 'success' : 'default';
+    const isRequired = Boolean(required);
+
     return (
-      <div>
-        <label htmlFor={fieldId} className="block text-sm font-medium text-gray-700">
-          {label}
-          {props.required && <span className="ml-1 text-error">*</span>}
+      <div className={variant === 'cabinet' ? 'min-w-0' : ''}>
+        <label htmlFor={fieldId} className={formLabelCn(variant)}>
+          <span>{label}</span>
+          {isRequired && <span className={formRequiredAsteriskCn(variant)} aria-hidden>*</span>}
         </label>
         <input
           ref={ref}
           id={fieldId}
+          required={required}
+          disabled={disabled}
+          readOnly={readOnly}
           {...props}
-          className={`mt-1 block w-full rounded-input border px-3 py-2.5 text-sm shadow-sm transition focus:outline-none focus:ring-1 ${
-            error
-              ? 'border-error focus:border-error focus:ring-error'
-              : 'border-gray-300 focus:border-primary-500 focus:ring-primary-500'
-          } ${props.className ?? ''}`}
+          aria-invalid={error ? true : undefined}
+          className={cn(
+            formControlCn(variant, tone, { disabled }),
+            readOnly &&
+              variant === 'cabinet' &&
+              '!cursor-default border-white/[0.08] bg-white/[0.03] text-white/85 [&:hover]:border-white/[0.12] [&:hover]:bg-white/[0.04]',
+            readOnly &&
+              variant === 'default' &&
+              'cursor-default bg-gray-50 text-gray-700 [&:hover]:border-gray-300',
+            className,
+          )}
         />
-        {hint && !error && <p className="mt-1 text-xs text-gray-500">{hint}</p>}
-        {error && <p className="mt-1 text-xs text-error">{error}</p>}
+
+        {!error && helperText && <p className={formHelperRowCn(variant)}>{helperText}</p>}
+        {error && (
+          <p role="alert" className={formHelperRowCn(variant, true)}>
+            <AlertCircle className="mt-[2px] h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span>{error}</span>
+          </p>
+        )}
       </div>
     );
   },
 );
 FormField.displayName = 'FormField';
 
-interface FormTextareaProps extends TextareaHTMLAttributes<HTMLTextAreaElement> {
-  label: string;
-  error?: string;
-  hint?: string;
-}
-
-export const FormTextarea = forwardRef<HTMLTextAreaElement, FormTextareaProps>(
-  ({ label, error, hint, id, ...props }, ref) => {
-    const fieldId = id ?? label.toLowerCase().replace(/\s+/g, '-');
-    return (
-      <div>
-        <label htmlFor={fieldId} className="block text-sm font-medium text-gray-700">
-          {label}
-          {props.required && <span className="ml-1 text-error">*</span>}
-        </label>
-        <textarea
-          ref={ref}
-          id={fieldId}
-          {...props}
-          rows={props.rows ?? 4}
-          className={`mt-1 block w-full rounded-input border px-3 py-2.5 text-sm shadow-sm transition focus:outline-none focus:ring-1 ${
-            error
-              ? 'border-error focus:border-error focus:ring-error'
-              : 'border-gray-300 focus:border-primary-500 focus:ring-primary-500'
-          } ${props.className ?? ''}`}
-        />
-        {hint && !error && <p className="mt-1 text-xs text-gray-500">{hint}</p>}
-        {error && <p className="mt-1 text-xs text-error">{error}</p>}
-      </div>
-    );
-  },
-);
-FormTextarea.displayName = 'FormTextarea';
-
-interface FormSelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
-  label: string;
-  error?: string;
-  hint?: string;
-  options: { value: string; label: string }[];
-  placeholder?: string;
-}
-
-export const FormSelect = forwardRef<HTMLSelectElement, FormSelectProps>(
-  ({ label, error, hint, id, options, placeholder, ...props }, ref) => {
-    const fieldId = id ?? label.toLowerCase().replace(/\s+/g, '-');
-    return (
-      <div>
-        <label htmlFor={fieldId} className="block text-sm font-medium text-gray-700">
-          {label}
-          {props.required && <span className="ml-1 text-error">*</span>}
-        </label>
-        <select
-          ref={ref}
-          id={fieldId}
-          {...props}
-          className={`mt-1 block w-full rounded-input border px-3 py-2.5 text-sm shadow-sm transition focus:outline-none focus:ring-1 ${
-            error
-              ? 'border-error focus:border-error focus:ring-error'
-              : 'border-gray-300 focus:border-primary-500 focus:ring-primary-500'
-          } ${props.className ?? ''}`}
-        >
-          {placeholder && (
-            <option value="" disabled>
-              {placeholder}
-            </option>
-          )}
-          {options.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        {hint && !error && <p className="mt-1 text-xs text-gray-500">{hint}</p>}
-        {error && <p className="mt-1 text-xs text-error">{error}</p>}
-      </div>
-    );
-  },
-);
-FormSelect.displayName = 'FormSelect';
-
-interface FormCheckboxProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  label: React.ReactNode;
-  error?: string;
-}
-
-export const FormCheckbox = forwardRef<HTMLInputElement, FormCheckboxProps>(
-  ({ label, error, id, ...props }, ref) => {
-    const fieldId = id ?? String(label).toLowerCase().replace(/\s+/g, '-');
-    return (
-      <div>
-        <label htmlFor={fieldId} className="flex items-start gap-2 text-sm text-gray-600 cursor-pointer">
-          <input
-            ref={ref}
-            type="checkbox"
-            id={fieldId}
-            {...props}
-            className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary-500 focus:ring-primary-500"
-          />
-          <span>{label}</span>
-        </label>
-        {error && <p className="mt-1 text-xs text-error">{error}</p>}
-      </div>
-    );
-  },
-);
-FormCheckbox.displayName = 'FormCheckbox';
+export { FormTextarea } from './FormTextarea';
+export { FormSelect } from './FormSelect';
+export { FormCheckbox } from './FormCheckbox';
+export { FormRadio } from './FormRadio';
+export { FormDateTimePicker } from './FormDateTimePicker';
+export { FormFileUpload } from './FormFileUpload';

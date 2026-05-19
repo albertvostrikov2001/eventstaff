@@ -23,7 +23,7 @@ interface VacancyItem {
   eventType: string | null;
   employmentType: string;
   dateStart: string;
-  employer: { id: string; companyName: string | null; contactName: string | null; isVerified: boolean };
+  employer: { id: string; companyName: string | null; contactName: string | null; isVerified: boolean; logoUrl?: string | null };
   city: { id: string; name: string } | null;
 }
 

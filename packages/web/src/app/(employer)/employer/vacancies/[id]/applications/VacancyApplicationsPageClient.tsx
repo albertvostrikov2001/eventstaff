@@ -6,8 +6,9 @@ import { useParams } from 'next/navigation';
 import { apiClient } from '@/lib/api/client';
 import { useToast } from '@/components/ui/toast-context';
 import { APPLICATION_STATUSES, STAFF_CATEGORIES } from '@unity/shared';
-import { ArrowLeft, MapPin, Check, X, User, MessageSquare } from 'lucide-react';
+import { ArrowLeft, MapPin, Check, X, User } from 'lucide-react';
 import { Breadcrumbs } from '@/components/common/Breadcrumbs';
+import { OpenChatButton } from '@/components/chat/OpenChatButton';
 
 interface Application {
   id: string;
@@ -23,6 +24,7 @@ interface Application {
     experienceYears: number;
     city: { name: string } | null;
     categories: { category: string; level: string }[];
+    user: { id: string; email?: string };
   };
 }
 
@@ -32,7 +34,6 @@ export function VacancyApplicationsPageClient() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [vacancyTitle, setVacancyTitle] = useState('Вакансия');
-  const [openingChatId, setOpeningChatId] = useState<string | null>(null);
 
   useEffect(() => {
     apiClient
@@ -48,18 +49,6 @@ export function VacancyApplicationsPageClient() {
       .then((res) => setVacancyTitle(res.data.title))
       .catch(() => {});
   }, [id, toast]);
-
-  const openChat = async (workerId: string) => {
-    setOpeningChatId(workerId);
-    try {
-      const res = await apiClient.post<{ data: { id: string } }>('/chat/rooms', { recipientId: workerId });
-      window.location.href = `/employer/messages?roomId=${res.data.id}`;
-    } catch {
-      toast('Не удалось открыть чат', 'error');
-    } finally {
-      setOpeningChatId(null);
-    }
-  };
 
   const updateStatus = async (appId: string, status: 'confirmed' | 'rejected') => {
     try {
@@ -172,18 +161,14 @@ export function VacancyApplicationsPageClient() {
                       </button>
                     </div>
                   )}
-                  {app.status === 'confirmed' && (
-                    <div className="mt-3">
-                      <button
-                        onClick={() => openChat(app.worker.id)}
-                        disabled={openingChatId === app.worker.id}
-                        className="flex items-center gap-1.5 rounded-input border border-primary-400/40 bg-primary-500/10 px-3 py-1.5 text-xs font-medium text-primary-300 hover:bg-primary-500/20 disabled:opacity-60"
-                      >
-                        <MessageSquare className="h-3.5 w-3.5" />
-                        {openingChatId === app.worker.id ? 'Открываем...' : 'Открыть чат'}
-                      </button>
-                    </div>
-                  )}
+                  <div className="mt-3">
+                    <OpenChatButton
+                      recipientUserId={app.worker.user.id}
+                      context={{ type: 'APPLICATION', id: app.id }}
+                      label="Написать"
+                      className="flex w-fit items-center gap-1.5 rounded-input border border-primary-400/40 bg-primary-500/10 px-3 py-1.5 text-xs font-medium text-primary-300 hover:bg-primary-500/20 disabled:opacity-60"
+                    />
+                  </div>
                 </div>
               </div>
             </div>

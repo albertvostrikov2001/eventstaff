@@ -1,21 +1,4 @@
 import type { PrismaClient } from '@prisma/client';
-import { ApplicationStatus, BookingStatus, ShiftStatus } from '@prisma/client';
-
-const LINK_APPLICATION: ApplicationStatus[] = [
-  ApplicationStatus.invited,
-  ApplicationStatus.interview,
-  ApplicationStatus.confirmed,
-  ApplicationStatus.shift_started,
-  ApplicationStatus.completed,
-];
-
-const LINK_BOOKING: BookingStatus[] = [BookingStatus.pending, BookingStatus.confirmed];
-
-const LINK_SHIFT: ShiftStatus[] = [
-  ShiftStatus.PENDING,
-  ShiftStatus.ACTIVE,
-  ShiftStatus.DISPUTED,
-];
 
 export type WorkerEmployerIds = { workerId: string; employerId: string };
 
@@ -39,7 +22,6 @@ export async function hasLinkingContext(
   const appLink = await prisma.application.findFirst({
     where: {
       workerId: pair.workerId,
-      status: { in: LINK_APPLICATION },
       vacancy: { employerId: pair.employerId },
     },
   });
@@ -49,7 +31,6 @@ export async function hasLinkingContext(
     where: {
       workerId: pair.workerId,
       employerId: pair.employerId,
-      status: { in: LINK_BOOKING },
     },
   });
   if (bookingLink) return true;
@@ -70,7 +51,6 @@ export async function hasLinkingContext(
     where: {
       workerId: wp.userId,
       employerId: ep.userId,
-      status: { in: LINK_SHIFT },
     },
   });
   return !!shiftLink;

@@ -17,6 +17,7 @@ type Req = {
   company: string | null;
   eventType: string | null;
   createdAt: string;
+  createdBy: { id: string; email: string | null } | null;
 };
 
 const STATUSES = ['', 'NEW', 'IN_PROGRESS', 'COMPLETED', 'REJECTED'];
@@ -98,20 +99,21 @@ export default function AdminIndividualRequestsPage() {
               <th className="px-3 py-2">Имя</th>
               <th className="px-3 py-2">Телефон</th>
               <th className="px-3 py-2">Тип / компания</th>
+              <th className="px-3 py-2">Автор</th>
               <th className="px-3 py-2">Статус</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-white/50">
+                <td colSpan={7} className="px-3 py-6 text-center text-white/50">
                   Загрузка…
                 </td>
               </tr>
             )}
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-4">
+                <td colSpan={7} className="px-3 py-4">
                   <AdminEmptyState
                     icon={Inbox}
                     title="Персональных заявок нет"
@@ -138,6 +140,15 @@ export default function AdminIndividualRequestsPage() {
                   <td className="px-3 py-2 text-xs">{r.phone}</td>
                   <td className="px-3 py-2 text-xs text-white/70">
                     {r.eventType || r.company || '—'}
+                  </td>
+                  <td className="px-3 py-2 text-[11px]">
+                    {!r.createdBy ? (
+                      <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-amber-100">
+                        Незарегистрированный
+                      </span>
+                    ) : (
+                      <span className="text-white/65">{r.createdBy.email ?? r.createdBy.id}</span>
+                    )}
                   </td>
                   <td className="px-3 py-2">{r.status}</td>
                 </tr>

@@ -1,113 +1,183 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { Heart } from 'lucide-react';
+import {
+  EmployerCatalogWorkerCard,
+  type EmployerCatalogWorker,
+} from '@/components/employer/EmployerCatalogWorkerCard';
+import { EmployerInviteVacancyModal } from '@/components/employer/EmployerInviteVacancyModal';
+import {
+  useEmployerFavoriteWorkerIdsQuery,
+  useIsEmployerFavoritesLoaded,
+  useToggleEmployerFavorite,
+} from '@/hooks/useEmployerFavoriteWorkerIds';
 import { apiClient } from '@/lib/api/client';
 import { useToast } from '@/components/ui/toast-context';
-import { STAFF_CATEGORIES } from '@unity/shared';
-import { Heart, MapPin, User } from 'lucide-react';
 
-interface Worker {
-  id: string;
-  firstName: string;
-  lastName: string;
-  photoUrl: string | null;
-  desiredRate: string | null;
-  experienceYears: number;
-  city: { name: string } | null;
-  categories: { category: string }[];
-}
-
-export default function EmployerFavoritesPage() {
+function FavoritesInner() {
   const { toast } = useToast();
-  const [workers, setWorkers] = useState<Worker[]>([]);
+  const isEmployer = useIsEmployerFavoritesLoaded();
+  const [page, setPage] = useState(1);
+  const perPage = 12;
+
+  const { data: favIdsRaw = [] } = useEmployerFavoriteWorkerIdsQuery(isEmployer);
+  const [workers, setWorkers] = useState<EmployerCatalogWorker[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [invite, setInvite] = useState<{ id: string; name: string } | null>(null);
+  const [favBusy, setFavBusy] = useState<string | null>(null);
 
-  const load = () => {
+  const toggleFavorite = useToggleEmployerFavorite();
+
+  useEffect(() => {
+    let cancel = false;
     setLoading(true);
-    apiClient
-      .get<{ data: Worker[] }>('/employer/favorites/workers')
-      .then((res) => setWorkers(res.data))
-      .catch(() => toast('Ошибка загрузки', 'error'))
-      .finally(() => setLoading(false));
-  };
+    void apiClient
+      .get<{ success?: boolean; data: EmployerCatalogWorker[]; meta?: { total?: number } }>(
+        '/employer/favorites',
+        { page, perPage },
+      )
+      .then((res) => {
+        if (cancel) return;
+        setWorkers(res.data ?? []);
+        setTotal(res.meta?.total ?? (res.data?.length ?? 0));
+      })
+      .catch(() => {
+        if (cancel) return;
+        toast('Не удалось загрузить избранное', 'error');
+        setWorkers([]);
+      })
+      .finally(() => {
+        if (!cancel) setLoading(false);
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [page, perPage, toast]);
 
-  useEffect(load, []);
+  const favoriteSet = useMemo(() => new Set(favIdsRaw), [favIdsRaw]);
 
-  const remove = async (id: string) => {
-    setWorkers((prev) => prev.filter((w) => w.id !== id));
-    try {
-      await apiClient.delete(`/employer/favorites/workers/${id}`);
-    } catch {
-      toast('Ошибка удаления', 'error');
-      load();
-    }
-  };
+  const removeFavorite = useCallback(
+    async (workerId: string) => {
+      setFavBusy(workerId);
+      try {
+        await toggleFavorite.mutateAsync({ workerId, add: false });
+      } finally {
+        setFavBusy(null);
+      }
+    },
+    [toggleFavorite],
+  );
+
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold text-gray-900">Избранные специалисты</h1>
-      <p className="mt-1 text-sm text-gray-500">Сохранённые кандидаты</p>
+    <div className="min-w-0">
+      <h1 className="text-2xl font-bold tracking-tight text-white md:text-[28px]">Избранное</h1>
+      <p className="mt-2 text-sm text-white/55">Список сохранённых кандидатов</p>
 
-      <div className="mt-6">
+      <div className="mt-8">
         {loading ? (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-36 animate-pulse rounded-card bg-gray-200" />
+          <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-[280px] animate-pulse rounded-[16px] border border-white/[0.06] bg-white/[0.04]"
+              />
             ))}
           </div>
         ) : workers.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 rounded-card border border-gray-200 bg-white py-16 text-center">
-            <Heart className="h-10 w-10 text-gray-300" />
-            <h3 className="font-semibold text-gray-900">Нет избранных</h3>
-            <p className="text-sm text-gray-500">Добавляйте специалистов при просмотре каталога</p>
-            <Link
-              href="/employer/workers"
-              className="mt-2 rounded-input bg-primary-500 px-5 py-2 text-sm font-semibold text-white hover:bg-primary-600"
-            >
-              Найти специалистов
-            </Link>
-          </div>
+          total === 0 ? (
+            <div className="rounded-[18px] border border-dashed border-white/[0.12] bg-black/20 px-6 py-16 text-center">
+              <Heart className="mx-auto mb-4 h-10 w-10 text-white/35" aria-hidden />
+              <h3 className="font-semibold text-white">У вас пока нет избранных кандидатов</h3>
+              <p className="mx-auto mb-8 mt-3 max-w-md text-sm text-white/58">
+                Найдите специалистов в разделе «Поиск персонала» и сохраняйте подходящих исполнителей.
+              </p>
+              <Link
+                href="/employer/search"
+                className="inline-flex rounded-[12px] bg-gradient-to-r from-emerald-600 to-teal-500 px-6 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-900/35"
+              >
+                Найти персонал
+              </Link>
+            </div>
+          ) : (
+            <div className="rounded-[18px] border border-white/[0.08] bg-white/[0.04] px-6 py-12 text-center text-sm text-white/60">
+              На этой странице результатов пока нет — попробуйте другую страницу.
+            </div>
+          )
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2">
-            {workers.map((w) => (
-              <div key={w.id} className="rounded-card border border-gray-200 bg-white p-5 shadow-sm">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
-                      <User className="h-6 w-6 text-gray-400" />
-                    </div>
-                    <div>
-                      <Link href={`/workers/${w.id}`} className="font-semibold text-gray-900 hover:text-primary-600">
-                        {w.firstName} {w.lastName}
-                      </Link>
-                      <div className="mt-0.5 flex flex-wrap gap-2 text-xs text-gray-500">
-                        {w.categories[0] && (
-                          <span>{STAFF_CATEGORIES[w.categories[0].category as keyof typeof STAFF_CATEGORIES] ?? w.categories[0].category}</span>
-                        )}
-                        {w.city && (
-                          <span className="flex items-center gap-1">
-                            <MapPin className="h-3 w-3" />{w.city.name}
-                          </span>
-                        )}
-                        {w.desiredRate && (
-                          <span>{Number(w.desiredRate).toLocaleString('ru-RU')} ₽/ч</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+          <>
+            <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-2">
+              {workers.map((w) => (
+                <EmployerCatalogWorkerCard
+                  key={w.id}
+                  worker={w}
+                  isFavorite={favoriteSet.has(w.id)}
+                  favoriteBusy={favBusy === w.id || toggleFavorite.isPending}
+                  onFavoriteToggle={() => void removeFavorite(w.id)}
+                  onInvite={() =>
+                    setInvite({ id: w.id, name: `${w.firstName} ${w.lastName}`.trim() })
+                  }
+                  chatRecipientUserId={w.user?.id ?? undefined}
+                />
+              ))}
+            </div>
+
+            {totalPages > 1 ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-10 text-sm text-white/65">
+                <span>
+                  Страница {page} из {totalPages}
+                </span>
+                <div className="flex gap-2">
                   <button
-                    onClick={() => remove(w.id)}
-                    className="shrink-0 rounded-full p-1.5 text-error hover:bg-red-50"
+                    type="button"
+                    disabled={page <= 1}
+                    className="rounded-[12px] border border-white/[0.12] px-4 py-2 text-white/85 disabled:opacity-35"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
                   >
-                    <Heart className="h-4 w-4 fill-current" />
+                    Назад
+                  </button>
+                  <button
+                    type="button"
+                    disabled={page >= totalPages}
+                    className="rounded-[12px] border border-white/[0.12] px-4 py-2 text-white/85 disabled:opacity-35"
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  >
+                    Далее
                   </button>
                 </div>
               </div>
-            ))}
-          </div>
+            ) : null}
+          </>
         )}
       </div>
+
+      {invite ? (
+        <EmployerInviteVacancyModal
+          workerId={invite.id}
+          workerName={invite.name}
+          open
+          onClose={() => setInvite(null)}
+        />
+      ) : null}
     </div>
+  );
+}
+
+export default function EmployerFavoritesPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="animate-pulse space-y-4">
+          <div className="h-10 w-48 rounded-xl bg-white/[0.06]" />
+          <div className="h-[320px] rounded-[18px] border border-white/[0.06] bg-white/[0.04]" />
+        </div>
+      }
+    >
+      <FavoritesInner />
+    </Suspense>
   );
 }

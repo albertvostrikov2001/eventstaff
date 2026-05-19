@@ -21,6 +21,8 @@ const playfair = Playfair_Display({
   display: 'swap',
 });
 
+import { QueryProvider } from '@/providers/QueryProvider';
+
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
@@ -55,7 +57,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="min-h-screen bg-white font-sans text-gray-900 antialiased">
         <ToastProvider>
           <NetworkErrorBanner />
-          <AuthProvider>{children}</AuthProvider>
+          <QueryProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </QueryProvider>
         </ToastProvider>
       </body>
     </html>

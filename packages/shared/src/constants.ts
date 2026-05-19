@@ -61,6 +61,11 @@ export const BUSINESS_TYPES = {
   other: 'Другое',
 } as const;
 
+/** Сфера деятельности в форме «Профиль компании» работодателя */
+export const EMPLOYER_COMPANY_ACTIVITY_OPTIONS = (
+  ['restaurant', 'catering', 'event_agency', 'hotel', 'other'] as const
+).map((key) => ({ value: key, label: BUSINESS_TYPES[key] }));
+
 export const APPLICATION_STATUSES = {
   pending: 'Ожидает',
   viewed: 'Просмотрен',
@@ -77,10 +82,26 @@ export const VACANCY_STATUSES = {
   draft: 'Черновик',
   pending_moderation: 'На модерации',
   active: 'Активна',
+  paused: 'На паузе',
   closed: 'Закрыта',
   archived: 'В архиве',
   rejected: 'Отклонена',
 } as const;
+
+/** Быстрые теги для формы создания вакансии (мультивыбор) */
+export const VACANCY_QUICK_TAGS = [
+  'Свадьба',
+  'Кейтеринг',
+  'VIP',
+  'Корпоратив',
+  'Конференция',
+  'Банкет',
+  'Терраса',
+  'Бар',
+  'Ночная смена',
+  'Опыт 1 год+',
+  'СРОЧНО',
+] as const;
 
 export const SUBSCRIPTION_PLANS = {
   free: { name: 'Бесплатный', vacancyLimit: 3, contactsLimit: 5 },

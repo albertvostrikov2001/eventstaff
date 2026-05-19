@@ -7,6 +7,7 @@ import { SITE_PHONE_DISPLAY, SITE_PHONE_TEL } from '@/content/siteContact';
 import { useState, useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { Logo } from '@/components/ui/Logo';
+import { useAuthStore, type AuthUser } from '@/stores/authStore';
 
 const NAV_ITEMS = [
   { href: '/vacancies',     label: 'Вакансии' },
@@ -16,7 +17,16 @@ const NAV_ITEMS = [
   { href: '/how-it-works',  label: 'Как работает' },
 ];
 
+function resolveCabinetHref(user: AuthUser): string {
+  if (user.roles.includes('admin')) return '/admin/dashboard';
+  if (user.activeRole === 'employer' || user.roles.includes('employer')) {
+    return '/employer/dashboard';
+  }
+  return '/worker/dashboard';
+}
+
 export function Header() {
+  const { user, isAuthenticated } = useAuthStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [hasShadow, setHasShadow] = useState(false);
   const pathname = usePathname();
@@ -106,15 +116,23 @@ export function Header() {
             <span>{SITE_PHONE_DISPLAY}</span>
           </a>
 
-          <Link
-            href="/auth/login"
-            className="rounded-[var(--u-radius-md)] px-3.5 py-2 text-[0.875rem] font-medium transition-colors text-[rgba(255,255,255,0.85)] hover:bg-[rgba(255,255,255,0.06)]"
-          >
-            Войти
-          </Link>
-          <Link href="/auth/register" className="header-cta-btn">
-            Регистрация
-          </Link>
+          {isAuthenticated && user ? (
+            <Link href={resolveCabinetHref(user)} className="header-cta-btn">
+              Кабинет
+            </Link>
+          ) : (
+            <>
+              <Link
+                href="/auth/login"
+                className="rounded-[var(--u-radius-md)] px-3.5 py-2 text-[0.875rem] font-medium transition-colors text-[rgba(255,255,255,0.85)] hover:bg-[rgba(255,255,255,0.06)]"
+              >
+                Войти
+              </Link>
+              <Link href="/auth/register" className="header-cta-btn">
+                Регистрация
+              </Link>
+            </>
+          )}
         </div>
 
         {/* Mobile burger */}
@@ -199,22 +217,35 @@ export function Header() {
                 <Phone className="h-4 w-4 shrink-0" aria-hidden="true" />
                 {SITE_PHONE_DISPLAY}
               </a>
-              <Link
-                href="/auth/login"
-                onClick={() => setMobileMenuOpen(false)}
-                className="block w-full text-center rounded-[var(--u-radius-md)] px-4 py-3 text-[0.875rem] font-medium border transition-colors text-[rgba(255,255,255,0.85)] hover:text-white"
-                style={{ borderColor: 'var(--u-border-hover)' }}
-              >
-                Войти
-              </Link>
-              <Link
-                href="/auth/register"
-                onClick={() => setMobileMenuOpen(false)}
-                className="block w-full text-center rounded-[var(--u-radius-md)] px-4 py-3 text-[0.875rem] font-semibold text-white transition-colors"
-                style={{ background: 'var(--u-gradient-primary)' }}
-              >
-                Регистрация
-              </Link>
+              {isAuthenticated && user ? (
+                <Link
+                  href={resolveCabinetHref(user)}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block w-full text-center rounded-[var(--u-radius-md)] px-4 py-3 text-[0.875rem] font-semibold text-white transition-colors"
+                  style={{ background: 'var(--u-gradient-primary)' }}
+                >
+                  Кабинет
+                </Link>
+              ) : (
+                <>
+                  <Link
+                    href="/auth/login"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block w-full text-center rounded-[var(--u-radius-md)] px-4 py-3 text-[0.875rem] font-medium border transition-colors text-[rgba(255,255,255,0.85)] hover:text-white"
+                    style={{ borderColor: 'var(--u-border-hover)' }}
+                  >
+                    Войти
+                  </Link>
+                  <Link
+                    href="/auth/register"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="block w-full text-center rounded-[var(--u-radius-md)] px-4 py-3 text-[0.875rem] font-semibold text-white transition-colors"
+                    style={{ background: 'var(--u-gradient-primary)' }}
+                  >
+                    Регистрация
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>

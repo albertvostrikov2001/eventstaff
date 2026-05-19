@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { STAFF_CATEGORIES, EVENT_TYPES } from '@unity/shared';
 import { MapPin, Calendar, ShieldCheck, Heart } from 'lucide-react';
+import { formatDateTimeRu } from '@/lib/dates/formatDateTime';
+import { EmployerLogoMark } from '@/components/employer/EmployerLogoMark';
 
 interface VacancyCardProps {
   id: string;
@@ -12,6 +14,7 @@ interface VacancyCardProps {
     companyName: string | null;
     contactName: string | null;
     isVerified: boolean;
+    logoUrl?: string | null;
   };
   category: string;
   city: { name: string } | null;
@@ -50,6 +53,13 @@ export function VacancyCard({
   return (
     <div className="flex flex-col rounded-card border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-card-hover">
       <div className="flex items-start justify-between gap-3">
+        <EmployerLogoMark
+          size="md"
+          logoUrl={employer.logoUrl ?? null}
+          companyName={employer.companyName}
+          contactName={employer.contactName}
+          className="-mt-0.5"
+        />
         <div className="flex-1">
           <Link
             href={`/vacancies/${id}`}
@@ -94,7 +104,7 @@ export function VacancyCard({
         )}
         <span className="flex items-center gap-1">
           <Calendar className="h-3 w-3" />
-          {new Date(dateStart).toLocaleDateString('ru-RU')}
+          {formatDateTimeRu(dateStart, 'date')}
         </span>
       </div>
 

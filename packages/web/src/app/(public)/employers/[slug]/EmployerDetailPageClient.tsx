@@ -6,8 +6,9 @@ import Link from 'next/link';
 import { BUSINESS_TYPES } from '@unity/shared';
 import {
   MapPin, Star, ShieldCheck, Globe,
-  ArrowLeft, Calendar, Users,
+  ArrowLeft, Calendar, Users, X,
 } from 'lucide-react';
+import { EmployerLogoMark } from '@/components/employer/EmployerLogoMark';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -40,6 +41,7 @@ interface EmployerDetail {
   reliabilityScore: string | null;
   responseRate: string | null;
   vacancies: Vacancy[];
+  totalShifts?: number;
 }
 
 const RATE_SUFFIXES: Record<string, string> = {
@@ -56,6 +58,8 @@ export function EmployerDetailPageClient() {
   const [employer, setEmployer] = useState<EmployerDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [lightbox, setLightbox] = useState<number | null>(null);
+  const [bannerOk, setBannerOk] = useState(true);
 
   useEffect(() => {
     if (!slug) return;
@@ -68,6 +72,19 @@ export function EmployerDetailPageClient() {
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
   }, [slug]);
+
+  useEffect(() => {
+    setBannerOk(true);
+  }, [employer?.bannerUrl]);
+
+  useEffect(() => {
+    if (lightbox === null) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightbox(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [lightbox]);
 
   if (loading) {
     return (
@@ -90,15 +107,13 @@ export function EmployerDetailPageClient() {
   }
 
   const displayName = employer.companyName || employer.contactName || 'Работодатель';
-  const initials = displayName
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() ?? '')
-    .join('');
   const businessLabel =
     employer.businessType && employer.businessType in BUSINESS_TYPES
       ? BUSINESS_TYPES[employer.businessType as keyof typeof BUSINESS_TYPES]
       : null;
+
+  const gallery = employer.gallery ?? [];
+  const lightboxUrl = lightbox !== null ? gallery[lightbox]?.url : null;
 
   return (
     <div className="container-page py-8">
@@ -107,29 +122,36 @@ export function EmployerDetailPageClient() {
         Назад к работодателям
       </Link>
 
-      {employer.bannerUrl ? (
-        <div className="mt-6 h-44 w-full overflow-hidden rounded-card border border-gray-200 bg-gray-100 shadow-sm sm:h-52">
-          <img
-            src={employer.bannerUrl}
-            alt=""
-            className="h-full w-full object-cover"
-          />
-        </div>
-      ) : null}
-
-      <div className="mt-6 rounded-card border border-gray-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
-          <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-primary-100">
-            {employer.logoUrl ? (
-              <img src={employer.logoUrl} alt={displayName} className="h-20 w-20 rounded-xl object-cover" />
-            ) : (
-              <span className="text-2xl font-bold text-primary-600">{initials}</span>
-            )}
+      <div className="relative mt-6">
+        {employer.bannerUrl && bannerOk ? (
+          <div className="h-[320px] w-full overflow-hidden rounded-card border border-gray-200 bg-gray-100 shadow-sm">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={employer.bannerUrl}
+              alt=""
+              className="h-full w-full object-cover"
+              onError={() => setBannerOk(false)}
+            />
           </div>
+        ) : (
+          <div
+            className="h-[140px] w-full rounded-card border border-gray-200 bg-gradient-to-r from-gray-100 to-gray-50 sm:h-[180px]"
+            aria-hidden
+          />
+        )}
 
-          <div className="flex-1">
+        <div className="relative z-[1] -mt-12 flex flex-col gap-4 px-2 sm:-mt-14 sm:flex-row sm:items-end sm:gap-6 sm:px-4">
+          <EmployerLogoMark
+            size="xl"
+            logoUrl={employer.logoUrl}
+            companyName={employer.companyName}
+            contactName={employer.contactName}
+            alt={displayName}
+            className="ring-4 ring-white shadow-md"
+          />
+          <div className="min-w-0 flex-1 pb-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold text-gray-900">{displayName}</h1>
+              <h1 className="text-2xl font-bold text-gray-900 drop-shadow-sm">{displayName}</h1>
               {employer.isVerified && (
                 <span className="flex items-center gap-1 rounded-badge bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
                   <ShieldCheck className="h-3.5 w-3.5" />
@@ -137,14 +159,12 @@ export function EmployerDetailPageClient() {
                 </span>
               )}
             </div>
-
             {businessLabel && (
               <span className="mt-1 inline-block rounded-badge bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700">
                 {businessLabel}
               </span>
             )}
-
-            <div className="mt-3 flex flex-wrap gap-4 text-sm text-gray-500">
+            <div className="mt-2 flex flex-wrap gap-4 text-sm text-gray-600">
               {employer.city && (
                 <span className="flex items-center gap-1.5">
                   <MapPin className="h-4 w-4" />
@@ -155,6 +175,9 @@ export function EmployerDetailPageClient() {
                 <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
                 {Number(employer.ratingScore).toFixed(1)}
               </span>
+              {employer.totalShifts !== undefined && employer.totalShifts > 0 && (
+                <span className="text-gray-500">Смен завершено: {employer.totalShifts}</span>
+              )}
               {employer.reliabilityScore && (
                 <span className="flex items-center gap-1.5 text-green-600">
                   <ShieldCheck className="h-4 w-4" />
@@ -181,35 +204,40 @@ export function EmployerDetailPageClient() {
             </div>
           </div>
         </div>
+      </div>
 
-        {employer.description && (
-          <div className="mt-6">
-            <h2 className="text-sm font-semibold text-gray-700">О компании</h2>
-            <p className="mt-2 whitespace-pre-line text-sm text-gray-600 leading-relaxed">
-              {employer.description}
-            </p>
-          </div>
+      <div className="mt-8 rounded-card border border-gray-200 bg-white p-6 shadow-sm">
+        <h2 className="text-lg font-bold text-gray-900">О компании</h2>
+        {employer.description ? (
+          <p className="mt-3 whitespace-pre-line text-sm text-gray-600 leading-relaxed">
+            {employer.description}
+          </p>
+        ) : (
+          <p className="mt-3 text-sm text-gray-400">Описание скоро появится.</p>
         )}
       </div>
 
-      {employer.gallery && employer.gallery.length > 0 ? (
-        <div className="mt-6">
-          <h2 className="text-lg font-bold text-gray-900">Фото с мероприятий</h2>
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-            {employer.gallery.map((g) => (
-              <div
+      {gallery.length > 0 ? (
+        <div className="mt-8">
+          <h2 className="text-lg font-bold text-gray-900">Мероприятия</h2>
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {gallery.map((g, idx) => (
+              <button
                 key={g.id}
-                className="aspect-square overflow-hidden rounded-lg border border-gray-200 bg-gray-100"
+                type="button"
+                onClick={() => setLightbox(idx)}
+                className="aspect-square overflow-hidden rounded-lg border border-gray-200 bg-gray-100 text-left transition hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={g.url} alt="" className="h-full w-full object-cover" />
-              </div>
+              </button>
             ))}
           </div>
         </div>
       ) : null}
 
-      {employer.vacancies.length > 0 && (
-        <div className="mt-6">
+      {employer.vacancies.length > 0 ? (
+        <div className="mt-8" id="active-vacancies">
           <h2 className="text-lg font-bold text-gray-900">
             Активные вакансии ({employer.vacancies.length})
           </h2>
@@ -240,7 +268,45 @@ export function EmployerDetailPageClient() {
             ))}
           </div>
         </div>
-      )}
+      ) : null}
+
+      <div className="mt-8 flex flex-wrap justify-center gap-3">
+        <Link
+          href={employer.vacancies.length > 0 ? '#active-vacancies' : '/vacancies'}
+          className="inline-flex rounded-input bg-primary-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-700"
+        >
+          Откликнуться на вакансии
+        </Link>
+      </div>
+
+      {lightboxUrl ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Просмотр фото"
+          onClick={() => setLightbox(null)}
+        >
+          <button
+            type="button"
+            className="absolute right-4 top-4 z-[102] rounded-full bg-white/15 p-2 text-white backdrop-blur-sm hover:bg-white/25 sm:right-6 sm:top-6"
+            aria-label="Закрыть"
+            onClick={(e) => {
+              e.stopPropagation();
+              setLightbox(null);
+            }}
+          >
+            <X className="h-6 w-6" />
+          </button>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightboxUrl}
+            alt=""
+            className="max-h-[85vh] max-w-full object-contain relative z-[1]"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

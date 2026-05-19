@@ -5,7 +5,6 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { WorkerDashboardShell } from '@/components/layout/WorkerDashboardShell';
 import { EmployerDashboardShell } from '@/components/layout/EmployerDashboardShell';
-import { ChatInboxProvider } from '@/components/chat/ChatInboxProvider';
 import { useAuthStore } from '@/stores/authStore';
 
 export default function SharedDashboardLayout({ children }: { children: ReactNode }) {
@@ -27,16 +26,8 @@ export default function SharedDashboardLayout({ children }: { children: ReactNod
   }
 
   if (user.activeRole === 'employer') {
-    return (
-      <ChatInboxProvider>
-        <EmployerDashboardShell>{children}</EmployerDashboardShell>
-      </ChatInboxProvider>
-    );
+    return <EmployerDashboardShell>{children}</EmployerDashboardShell>;
   }
 
-  return (
-    <ChatInboxProvider>
-      <WorkerDashboardShell>{children}</WorkerDashboardShell>
-    </ChatInboxProvider>
-  );
+  return <WorkerDashboardShell>{children}</WorkerDashboardShell>;
 }

@@ -4,13 +4,19 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
-  MapPin, Star, Briefcase, BookOpen, Plane, MessageSquare,
+  MapPin, Star, Briefcase, BookOpen, Plane,
   Heart, ArrowLeft, CheckCircle, Calendar, Languages, Clock,
 } from 'lucide-react';
 import { STAFF_CATEGORIES, WORKER_LEVELS } from '@unity/shared';
 import { useAuthStore } from '@/stores/authStore';
 import { apiClient } from '@/lib/api/client';
+import { OpenChatButton } from '@/components/chat/OpenChatButton';
 import { useToast } from '@/components/ui/toast-context';
+import {
+  useEmployerFavoriteWorkerIdsQuery,
+  useIsEmployerFavoritesLoaded,
+  useToggleEmployerFavorite,
+} from '@/hooks/useEmployerFavoriteWorkerIds';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -71,8 +77,8 @@ export function WorkerDetailPageClient() {
   const [worker, setWorker] = useState<WorkerDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [isFavorite, setIsFavorite] = useState(false);
-  const [favLoading, setFavLoading] = useState(false);
+
+
   type RevRow = {
     id: string;
     overallScore: number;
@@ -98,13 +104,6 @@ export function WorkerDetailPageClient() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  useEffect(() => {
-    if (!isAuthenticated || user?.activeRole !== 'employer' || !worker) return;
-    apiClient
-      .get<{ data: { id: string }[] }>('/employer/favorites/workers')
-      .then((res) => setIsFavorite(res.data.some((w) => w.id === worker.id)))
-      .catch(() => {});
-  }, [isAuthenticated, user?.activeRole, worker]);
 
   useEffect(() => {
     if (!worker?.userId) return;
@@ -137,23 +136,19 @@ export function WorkerDetailPageClient() {
       .finally(() => setReviewsLoading(false));
   }, [worker?.userId, isAuthenticated, worker]);
 
+  const favEnabled = useIsEmployerFavoritesLoaded();
+  const { data: favIds = [] } = useEmployerFavoriteWorkerIdsQuery(favEnabled);
+  const favMutation = useToggleEmployerFavorite();
+  const isFavorite = worker ? favIds.includes(worker.id) : false;
+
   const toggleFavorite = async () => {
     if (!worker) return;
-    setFavLoading(true);
+    const nextAdd = !isFavorite;
     try {
-      if (isFavorite) {
-        await apiClient.delete(`/employer/favorites/workers/${worker.id}`);
-        setIsFavorite(false);
-        toast('Удалено из избранного', 'success');
-      } else {
-        await apiClient.post(`/employer/favorites/workers/${worker.id}`);
-        setIsFavorite(true);
-        toast('Добавлено в избранное', 'success');
-      }
+      await favMutation.mutateAsync({ workerId: worker.id, add: nextAdd });
+      toast(nextAdd ? 'Добавлено в избранное' : 'Удалено из избранного', 'success');
     } catch {
       toast('Ошибка обновления избранного', 'error');
-    } finally {
-      setFavLoading(false);
     }
   };
 
@@ -399,7 +394,7 @@ export function WorkerDetailPageClient() {
             <div className="rounded-card border border-gray-200 bg-white p-5 shadow-sm space-y-3">
               <button
                 onClick={toggleFavorite}
-                disabled={favLoading}
+                disabled={favMutation.isPending}
                 className={`flex w-full items-center justify-center gap-2 rounded-input border px-4 py-2.5 text-sm font-medium transition ${
                   isFavorite
                     ? 'border-red-200 bg-red-50 text-error hover:bg-red-100'
@@ -409,13 +404,10 @@ export function WorkerDetailPageClient() {
                 <Heart className={`h-4 w-4 ${isFavorite ? 'fill-current' : ''}`} />
                 {isFavorite ? 'В избранном' : 'В избранное'}
               </button>
-              <Link
-                href="/employer/messages"
-                className="flex w-full items-center justify-center gap-2 rounded-input bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-600"
-              >
-                <MessageSquare className="h-4 w-4" />
-                Написать
-              </Link>
+              <OpenChatButton
+                recipientUserId={worker.userId}
+                className="flex w-full items-center justify-center gap-2 rounded-input bg-primary-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-600 disabled:opacity-60"
+              />
             </div>
           )}
 

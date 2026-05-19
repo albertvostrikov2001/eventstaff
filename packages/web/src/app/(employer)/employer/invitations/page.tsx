@@ -49,7 +49,7 @@ export default function EmployerInvitationsPage() {
       })
       .catch(() => toast('Ошибка загрузки приглашений', 'error'))
       .finally(() => setLoading(false));
-  }, [page]);
+  }, [page, toast]);
 
   return (
     <div>

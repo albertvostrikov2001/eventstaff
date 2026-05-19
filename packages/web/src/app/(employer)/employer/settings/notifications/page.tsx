@@ -56,20 +56,31 @@ export default function EmployerNotificationSettingsPage() {
   };
 
   if (loading || !prefs) {
-    return <p className="text-sm text-gray-500">Загрузка настроек…</p>;
+    return (
+      <div className="space-y-4">
+        {[...Array(5)].map((_, i) => (
+          <div
+            key={i}
+            className="h-14 animate-pulse rounded-[14px] border border-white/[0.06] bg-white/[0.06]"
+          />
+        ))}
+      </div>
+    );
   }
 
   return (
-    <div className="max-w-xl">
-      <h1 className="font-display text-2xl font-semibold text-gray-900">Уведомления по email</h1>
-      <p className="mt-2 text-sm text-gray-600">
-        Выберите категории писем. In-app уведомления в кабинете остаются доступны.
-      </p>
+    <div className="mx-auto max-w-xl space-y-8 pb-10">
+      <header>
+        <h1 className="text-2xl font-bold text-white">Уведомления по email</h1>
+        <p className="mt-1 text-sm text-white/55">
+          Выберите категории писем. Уведомления в кабинете остаются без изменений.
+        </p>
+      </header>
 
-      <ul className="mt-8 divide-y divide-gray-200 rounded-card border border-gray-200 bg-white">
-        {ROWS.map((row) => (
+      <ul className="divide-y divide-white/[0.06] overflow-hidden rounded-[14px] border border-white/[0.08] bg-white/[0.04]">
+        {ROWS.map(row => (
           <li key={row.key} className="flex items-center justify-between gap-4 px-4 py-4">
-            <label htmlFor={row.key} className="cursor-pointer text-sm font-medium text-gray-800">
+            <label htmlFor={row.key} className="cursor-pointer text-sm font-medium text-white/85">
               {row.label}
             </label>
             <button
@@ -78,12 +89,12 @@ export default function EmployerNotificationSettingsPage() {
               role="switch"
               aria-checked={prefs[row.key]}
               onClick={() => toggle(row.key)}
-              className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
-                prefs[row.key] ? 'bg-emerald-600' : 'bg-gray-200'
+              className={`relative inline-flex h-7 w-12 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus-visible:shadow-[0_0_0_3px_rgba(45,106,74,0.35)] ${
+                prefs[row.key] ? 'bg-[color:var(--u-emerald,#2d6a4a)]' : 'bg-white/15'
               }`}
             >
               <span
-                className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow transition ${
+                className={`pointer-events-none ml-px mt-px inline-block h-6 w-6 transform rounded-full bg-white shadow transition ${
                   prefs[row.key] ? 'translate-x-5' : 'translate-x-0'
                 }`}
               />
@@ -92,8 +103,15 @@ export default function EmployerNotificationSettingsPage() {
         ))}
       </ul>
 
-      <div className="mt-6">
-        <Button type="button" onClick={() => void save()} disabled={saving}>
+      <div>
+        <Button
+          type="button"
+          onClick={() => void save()}
+          disabled={saving}
+          variant="primary"
+          size="lg"
+          className="rounded-[10px]"
+        >
           {saving ? 'Сохранение…' : 'Сохранить'}
         </Button>
       </div>

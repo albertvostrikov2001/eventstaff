@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { X } from 'lucide-react';
 
@@ -19,6 +19,8 @@ interface DashboardSidebarProps {
   dark?: boolean;
   mobileOpen?: boolean;
   onMobileClose?: () => void;
+  /** Содержимое фиксированного футера (например ссылка на публичный сайт) */
+  footer?: ReactNode;
 }
 
 function NavLinks({
@@ -70,6 +72,7 @@ export function DashboardSidebar({
   dark = false,
   mobileOpen = false,
   onMobileClose,
+  footer,
 }: DashboardSidebarProps) {
   // Close on Escape
   useEffect(() => {
@@ -93,20 +96,41 @@ export function DashboardSidebar({
     };
   }, [mobileOpen]);
 
-  const logoSection = (
+  const cabinetBrandLink = (
+    <Link href={logoHref} className="flex items-center gap-2" onClick={onMobileClose}>
+      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-500">
+        <span className="text-sm font-bold text-white">U</span>
+      </div>
+      <span className={`font-heading text-lg font-bold ${dark ? 'text-white' : 'text-gray-900'}`}>
+        Юнити
+      </span>
+    </Link>
+  );
+
+  const logoSectionDesktop = (
     <div
       className={`flex h-16 items-center gap-2 border-b px-6 ${
         dark ? 'border-white/[0.08]' : 'border-gray-200'
       }`}
     >
-      <Link href={logoHref} className="flex items-center gap-2" onClick={onMobileClose}>
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-500">
-          <span className="text-sm font-bold text-white">U</span>
-        </div>
-        <span className={`font-heading text-lg font-bold ${dark ? 'text-white' : 'text-gray-900'}`}>
-          Юнити
-        </span>
-      </Link>
+      {cabinetBrandLink}
+    </div>
+  );
+
+  const logoSectionMobile = (
+    <div
+      className={`flex h-16 items-center justify-between gap-2 border-b px-6 ${
+        dark ? 'border-white/[0.08]' : 'border-gray-200'
+      }`}
+    >
+      {cabinetBrandLink}
+      <button
+        onClick={onMobileClose}
+        aria-label="Закрыть меню"
+        className={`shrink-0 rounded-full p-1.5 ${dark ? 'text-white/60 hover:bg-white/10 hover:text-white' : 'text-gray-500 hover:bg-gray-100'}`}
+      >
+        <X className="h-5 w-5" />
+      </button>
     </div>
   );
 
@@ -114,12 +138,25 @@ export function DashboardSidebar({
     <>
       {/* Desktop sidebar */}
       <aside
-        className={`hidden w-64 shrink-0 border-r lg:block ${
+        className={`hidden w-64 shrink-0 flex-col border-r lg:flex ${
           dark ? 'border-white/[0.08] bg-white/[0.04]' : 'border-gray-200 bg-white'
         }`}
       >
-        {logoSection}
-        <NavLinks items={items} dark={dark} />
+        {logoSectionDesktop}
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="flex-1 overflow-y-auto">
+            <NavLinks items={items} dark={dark} />
+          </div>
+          {footer != null ? (
+            <div
+              className={`shrink-0 border-t p-4 ${
+                dark ? 'border-white/[0.08]' : 'border-gray-200'
+              }`}
+            >
+              {footer}
+            </div>
+          ) : null}
+        </div>
       </aside>
 
       {/* Mobile drawer backdrop */}
@@ -133,22 +170,26 @@ export function DashboardSidebar({
 
       {/* Mobile drawer panel */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 transform transition-transform duration-300 ease-in-out lg:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col transform transition-transform duration-300 ease-in-out lg:hidden ${
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         } ${dark ? 'border-r border-white/[0.08] bg-[#0d1f17]' : 'border-r border-gray-200 bg-white'}`}
         aria-label="Мобильная навигация"
       >
-        <div className="flex items-center justify-between pr-4">
-          {logoSection}
-          <button
-            onClick={onMobileClose}
-            aria-label="Закрыть меню"
-            className={`rounded-full p-1.5 ${dark ? 'text-white/60 hover:bg-white/10 hover:text-white' : 'text-gray-500 hover:bg-gray-100'}`}
-          >
-            <X className="h-5 w-5" />
-          </button>
+        {logoSectionMobile}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="flex-1 overflow-y-auto">
+            <NavLinks items={items} dark={dark} onLinkClick={onMobileClose} />
+          </div>
+          {footer != null ? (
+            <div
+              className={`shrink-0 border-t p-4 ${
+                dark ? 'border-white/[0.08]' : 'border-gray-200'
+              }`}
+            >
+              {footer}
+            </div>
+          ) : null}
         </div>
-        <NavLinks items={items} dark={dark} onLinkClick={onMobileClose} />
       </aside>
     </>
   );

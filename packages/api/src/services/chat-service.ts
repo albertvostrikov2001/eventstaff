@@ -1,14 +1,11 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { ApplicationStatus, BookingStatus, MessageType } from '@prisma/client';
+import { BookingStatus, type ChatRoomContextType, MessageType } from '@prisma/client';
+import { buildSystemOpeningText, suggestOpenContextForPair } from '@/lib/chat-open-context';
 import { hasLinkingContext, type WorkerEmployerIds } from '@/lib/can-chat';
 
-const APP_STATUSES_VACANCY: ApplicationStatus[] = [
-  ApplicationStatus.invited,
-  ApplicationStatus.interview,
-  ApplicationStatus.confirmed,
-  ApplicationStatus.shift_started,
-  ApplicationStatus.completed,
-];
+export type ChatRoomWithParticipants = Prisma.ChatRoomGetPayload<{
+  include: { worker: true; employer: true; order: { select: { id: true; date: true } } };
+}>;
 
 export class ChatService {
   constructor(private readonly prisma: PrismaClient) {}
@@ -38,39 +35,13 @@ export class ChatService {
     return b?.id ?? null;
   }
 
-  private async systemMessageForNewRoom(pair: WorkerEmployerIds): Promise<string> {
-    const application = await this.prisma.application.findFirst({
-      where: {
-        workerId: pair.workerId,
-        status: { in: APP_STATUSES_VACANCY },
-        vacancy: { employerId: pair.employerId },
-      },
-      orderBy: { updatedAt: 'desc' },
-      include: { vacancy: { select: { title: true } } },
-    });
-    if (application?.vacancy?.title) {
-      return `Чат открыт в рамках отклика на вакансию «${application.vacancy.title}».`;
-    }
-    const booking = await this.prisma.booking.findFirst({
-      where: { workerId: pair.workerId, employerId: pair.employerId },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true },
-    });
-    if (booking) {
-      return 'Чат открыт в рамках заказа между вами.';
-    }
-    return 'Чат открыт. Общайтесь в рамках вашей сделки на платформе.';
-  }
-
   /**
-   * @param pair worker/employer profile ids (one worker, one employer).
+   * One room per pair; opens with optional context or merges context onto existing row.
    */
-  async getOrCreateRoom(pair: WorkerEmployerIds): Promise<{
-    room: Prisma.ChatRoomGetPayload<{
-      include: { worker: true; employer: true; order: true };
-    }>;
-    created: boolean;
-  }> {
+  async openOrUpdateRoom(
+    pair: WorkerEmployerIds,
+    normalized: { contextType: ChatRoomContextType; contextId: string | null },
+  ): Promise<{ room: ChatRoomWithParticipants; created: boolean }> {
     if (!(await hasLinkingContext(this.prisma, pair))) {
       throw new Error('CHAT_NOT_ALLOWED');
     }
@@ -81,33 +52,48 @@ export class ChatService {
       where: {
         workerId_employerId: { workerId: pair.workerId, employerId: pair.employerId },
       },
-      include: { worker: true, employer: true, order: true },
+      include: { worker: true, employer: true, order: { select: { id: true, date: true } } },
     });
+
     if (existing) {
+      const data: Prisma.ChatRoomUpdateInput = {};
+      let changed = false;
+
+      if (existing.contextType !== normalized.contextType || existing.contextId !== normalized.contextId) {
+        data.contextType = normalized.contextType;
+        data.contextId = normalized.contextId;
+        changed = true;
+      }
       if (orderId && !existing.orderId) {
+        data.order = { connect: { id: orderId } };
+        changed = true;
+      }
+      if (changed) {
         const updated = await this.prisma.chatRoom.update({
           where: { id: existing.id },
-          data: { orderId },
-          include: { worker: true, employer: true, order: true },
+          data,
+          include: { worker: true, employer: true, order: { select: { id: true, date: true } } },
         });
         return { room: updated, created: false };
       }
       return { room: existing, created: false };
     }
 
-    const text = await this.systemMessageForNewRoom(pair);
+    const text = await buildSystemOpeningText(this.prisma, pair, normalized);
     const room = await this.prisma.$transaction(async (tx) => {
       const r = await tx.chatRoom.create({
         data: {
           workerId: pair.workerId,
           employerId: pair.employerId,
           orderId: orderId ?? undefined,
+          contextType: normalized.contextType,
+          contextId: normalized.contextId,
+          lastMessageAt: new Date(),
         },
-        include: { worker: true, employer: true, order: true },
+        include: { worker: true, employer: true, order: { select: { id: true, date: true } } },
       });
-      // System line: "от имени" платформы — sender = worker user, помечаем isSystem
       const senderId = r.worker.userId;
-      await tx.chatMessage.create({
+      const sys = await tx.chatMessage.create({
         data: {
           roomId: r.id,
           senderId,
@@ -118,9 +104,26 @@ export class ChatService {
           readAt: new Date(),
         },
       });
-      return r;
+      await tx.chatRoom.update({
+        where: { id: r.id },
+        data: { lastMessageAt: sys.createdAt },
+      });
+      const full = await tx.chatRoom.findUniqueOrThrow({
+        where: { id: r.id },
+        include: { worker: true, employer: true, order: { select: { id: true, date: true } } },
+      });
+      return full;
     });
     return { room, created: true };
+  }
+
+  /** @deprecated use openOrUpdateRoom + explicit context — kept for callers without context payload */
+  async getOrCreateRoom(pair: WorkerEmployerIds): Promise<{
+    room: ChatRoomWithParticipants;
+    created: boolean;
+  }> {
+    const normalized = await suggestOpenContextForPair(this.prisma, pair);
+    return this.openOrUpdateRoom(pair, normalized);
   }
 
   async sendMessage(roomId: string, senderId: string, text: string) {
@@ -130,16 +133,26 @@ export class ChatService {
     }
     const ok = await this.isRoomParticipant(roomId, senderId);
     if (!ok) throw new Error('FORBIDDEN');
-    return this.prisma.chatMessage.create({
-      data: {
-        roomId,
-        senderId,
-        type: MessageType.TEXT,
-        text: trimmed,
-        isRead: false,
-        isSystem: false,
-      },
+
+    const msg = await this.prisma.$transaction(async (tx) => {
+      const m = await tx.chatMessage.create({
+        data: {
+          roomId,
+          senderId,
+          type: MessageType.TEXT,
+          text: trimmed,
+          isRead: false,
+          isSystem: false,
+        },
+      });
+      await tx.chatRoom.update({
+        where: { id: roomId },
+        data: { lastMessageAt: m.createdAt },
+      });
+      return m;
     });
+
+    return msg;
   }
 
   async markRead(roomId: string, userId: string) {
@@ -193,10 +206,7 @@ export class ChatService {
         isSystem: false,
         senderId: { not: userId },
         room: {
-          OR: [
-            { worker: { userId } },
-            { employer: { userId } },
-          ],
+          OR: [{ worker: { userId } }, { employer: { userId } }],
         },
       },
     });
@@ -221,8 +231,9 @@ export class ChatService {
     }
     if (or.length === 0) return [];
 
-    const rooms = await this.prisma.chatRoom.findMany({
+    return this.prisma.chatRoom.findMany({
       where: { OR: or },
+      orderBy: { lastMessageAt: 'desc' },
       include: {
         worker: true,
         employer: true,
@@ -243,12 +254,6 @@ export class ChatService {
           },
         },
       },
-    });
-
-    return [...rooms].sort((a, b) => {
-      const ta = a.messages[0]?.createdAt.getTime() ?? a.createdAt.getTime();
-      const tb = b.messages[0]?.createdAt.getTime() ?? b.createdAt.getTime();
-      return tb - ta;
     });
   }
 }

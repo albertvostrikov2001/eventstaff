@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { apiClient } from '@/lib/api/client';
 import { useToast } from '@/components/ui/toast-context';
+import { EmployerLogoMark } from '@/components/employer/EmployerLogoMark';
 import {
   Mail,
-  Building2,
   Calendar,
   MapPin,
   Banknote,
@@ -128,18 +128,14 @@ function InvitationCard({
     <div className={`rounded-card border bg-white/[0.04] p-5 ${isPending ? 'border-primary-400/30' : 'border-white/[0.08]'}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          {employer?.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={employer.logoUrl}
-              alt=""
-              className="h-10 w-10 shrink-0 rounded-full object-cover"
-            />
-          ) : (
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10">
-              <Building2 className="h-5 w-5 text-white/40" />
-            </div>
-          )}
+          <EmployerLogoMark
+            size="sm"
+            className="shrink-0 rounded-full"
+            roundedClassName="rounded-full"
+            logoUrl={employer?.logoUrl ?? null}
+            companyName={employer?.companyName ?? null}
+            contactName={employer?.contactName ?? null}
+          />
           <div className="min-w-0">
             <h3 className="truncate text-base font-semibold text-white">{v.title}</h3>
             <p className="text-sm text-white/60">{companyName}</p>

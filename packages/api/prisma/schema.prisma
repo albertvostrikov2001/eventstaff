@@ -104,6 +104,7 @@ enum VacancyStatus {
   draft
   pending_moderation
   active
+  paused
   closed
   archived
   rejected
@@ -377,6 +378,7 @@ model User {
   chatMessages            ChatMessage[]   @relation("ChatMessageSender")
   reviewProfileViewsAsViewer ReviewProfileView[] @relation("ReviewProfileViewer")
   reviewProfileViewsAsTarget ReviewProfileView[] @relation("ReviewProfileTarget")
+  individualRequestsSubmitted IndividualRequest[] @relation("IndividualRequestCreator")
 
   @@index([email])
   @@index([phone])
@@ -513,6 +515,9 @@ model EmployerProfile {
   type                    EmployerType @default(company)
   companyName             String?      @map("company_name")
   contactName             String?      @map("contact_name")
+  contactFirstName        String?      @map("contact_first_name")
+  contactLastName         String?      @map("contact_last_name")
+  contactJobTitle         String?      @map("contact_job_title")
   description             String?      @db.Text
   logoUrl                 String?      @map("logo_url")
   bannerUrl               String?      @map("banner_url")
@@ -591,6 +596,8 @@ model Vacancy {
   transportProvided Boolean        @default(false) @map("transport_provided")
   tipsPossible      Boolean?       @map("tips_possible")
   isUrgent          Boolean        @default(false) @map("is_urgent")
+  coverImageUrl     String?        @map("cover_image_url")
+  tags              Json?
   isTemplate        Boolean        @default(false) @map("is_template")
   templateName      String?        @map("template_name")
   status            VacancyStatus  @default(draft)
@@ -1101,27 +1108,31 @@ model CancellationReason {
 }
 
 model IndividualRequest {
-  id           String                  @id @default(cuid())
-  role         Role
-  name         String
-  phone        String
-  email        String
-  company      String?
-  eventType    String?                 @map("event_type")
-  eventDate    DateTime?               @map("event_date") @db.Date
-  staffNeeded  String?                 @map("staff_needed")
-  quantity     Int?
-  position     String?
-  experience   String?                 @db.Text
-  availability String?                @map("availability") @db.Text
-  message      String                  @db.Text
-  status       IndividualRequestStatus @default(NEW)
-  adminComment String?                 @map("admin_comment") @db.Text
-  createdAt    DateTime                @default(now()) @map("created_at")
-  updatedAt    DateTime                @updatedAt @map("updated_at")
+  id              String                  @id @default(cuid())
+  role            Role
+  createdByUserId String?                 @map("created_by_user_id")
+  name            String
+  phone           String
+  email           String
+  company         String?
+  eventType       String?                 @map("event_type")
+  eventDate       DateTime?               @map("event_date") @db.Date
+  staffNeeded     String?                 @map("staff_needed")
+  quantity        Int?
+  position        String?
+  experience      String?                 @db.Text
+  availability    String?                @map("availability") @db.Text
+  message         String                  @db.Text
+  status          IndividualRequestStatus @default(NEW)
+  adminComment    String?                 @map("admin_comment") @db.Text
+  createdAt       DateTime                @default(now()) @map("created_at")
+  updatedAt       DateTime                @updatedAt @map("updated_at")
+
+  createdBy User? @relation("IndividualRequestCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
   @@index([role, status])
+  @@index([createdByUserId, createdAt])
   @@map("individual_requests")
 }
 
@@ -1205,7 +1216,7 @@ model ReviewProfileView {
 
 model AdminAuditLog {
   id         String   @id @default(cuid())
-  adminId    String   @map("admin_id")
+  adminId    String?  @map("admin_id")
   action     String
   entityType String   @map("entity_type")
   entityId   String   @map("entity_id")
@@ -1213,7 +1224,7 @@ model AdminAuditLog {
   ip         String?
   createdAt  DateTime @default(now()) @map("created_at")
 
-  admin User @relation("AdminAuditActor", fields: [adminId], references: [id], onDelete: Cascade)
+  admin User? @relation("AdminAuditActor", fields: [adminId], references: [id], onDelete: Cascade)
 
   @@index([adminId, createdAt])
   @@index([entityType, entityId])
@@ -1228,12 +1239,23 @@ enum MessageType {
   SYSTEM
 }
 
+enum ChatRoomContextType {
+  APPLICATION
+  INVITATION
+  SHIFT
+  VACANCY
+  GENERAL
+}
+
 model ChatRoom {
-  id         String   @id @default(cuid())
-  workerId   String   @map("worker_id")
-  employerId String   @map("employer_id")
-  orderId    String?  @map("order_id")
-  createdAt  DateTime @default(now()) @map("created_at")
+  id            String               @id @default(cuid())
+  workerId      String               @map("worker_id")
+  employerId    String               @map("employer_id")
+  orderId       String?              @map("order_id")
+  contextType   ChatRoomContextType  @default(GENERAL) @map("context_type")
+  contextId     String?              @map("context_id")
+  lastMessageAt DateTime             @map("last_message_at")
+  createdAt     DateTime             @default(now()) @map("created_at")
 
   worker   WorkerProfile   @relation("ChatRoomWorker", fields: [workerId], references: [id], onDelete: Cascade)
   employer EmployerProfile @relation("ChatRoomEmployer", fields: [employerId], references: [id], onDelete: Cascade)
@@ -1242,6 +1264,7 @@ model ChatRoom {
 
   @@unique([workerId, employerId])
   @@index([orderId])
+  @@index([lastMessageAt])
   @@map("chat_rooms")
 }
 

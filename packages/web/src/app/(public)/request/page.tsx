@@ -8,28 +8,43 @@ import { apiClient, ApiError } from '@/lib/api/client';
 import { useToast } from '@/components/ui/toast-context';
 import { Send } from 'lucide-react';
 
-const employerSchema = z.object({
-  role: z.literal('employer'),
-  name: z.string().min(2),
-  phone: z.string().min(5),
-  email: z.string().email(),
-  company: z.string().min(1),
-  eventType: z.string().min(1),
-  eventDate: z.string().optional(),
-  staffNeeded: z.string().min(1),
-  quantity: z.coerce.number().optional(),
-  message: z.string().min(1).max(8000),
-});
+const employerSchema = z
+  .object({
+    role: z.literal('employer'),
+    name: z.string().min(2),
+    phone: z.string().regex(/^\+7\d{10}$/, 'Формат: +7 и 10 цифр'),
+    email: z.string().email(),
+    company: z.string().trim().max(500).optional(),
+    companyName: z.string().trim().max(500).optional(),
+    eventType: z.string().min(1),
+    eventDate: z.string().optional(),
+    staffNeeded: z.string().min(1),
+    quantity: z.coerce.number().optional(),
+    message: z.string().max(8000).optional().default(''),
+  })
+  .superRefine((val, ctx) => {
+    if (!(val.companyName?.trim() || val.company?.trim())) {
+      ctx.addIssue({ code: 'custom', message: 'Укажите компанию', path: ['company'] });
+    }
+    const composed = [val.staffNeeded.trim(), val.message?.trim()].filter(Boolean).join('\n\n');
+    if (composed.length < 10) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Не менее 10 символов суммарно в описании и комментарии',
+        path: ['staffNeeded'],
+      });
+    }
+  });
 
 const workerSchema = z.object({
   role: z.literal('worker'),
   name: z.string().min(2),
-  phone: z.string().min(5),
+  phone: z.string().min(5).max(40),
   email: z.string().email(),
   position: z.string().min(1),
   experience: z.string().min(1),
   availability: z.string().optional(),
-  message: z.string().min(1).max(8000),
+  message: z.string().min(10).max(8000),
 });
 
 type Tab = 'employer' | 'worker';
@@ -47,6 +62,7 @@ export default function PublicRequestPage() {
       phone: '',
       email: '',
       company: '',
+      companyName: '',
       eventType: '',
       eventDate: '',
       staffNeeded: '',

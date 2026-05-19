@@ -1,1 +1,5 @@
-export { default } from '@/app/dashboard/company/media/page';
+import { EmployerProfileMediaClient } from '@/components/employer/EmployerProfileMediaClient';
+
+export default function EmployerProfileMediaPage() {
+  return <EmployerProfileMediaClient />;
+}

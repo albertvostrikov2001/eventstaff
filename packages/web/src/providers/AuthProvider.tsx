@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
+import { ChatInboxProvider } from '@/components/chat/ChatInboxProvider';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const initAuth = useAuthStore((s) => s.initAuth);
@@ -45,5 +46,5 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [initAuth]);
 
-  return <>{children}</>;
+  return <ChatInboxProvider>{children}</ChatInboxProvider>;
 }

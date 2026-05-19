@@ -1,8 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
-import multipart from '@fastify/multipart';
 import { z } from 'zod';
 import { MediaType } from '@prisma/client';
-import { MAX_FILE_BYTES } from '@/services/media-service';
 
 function mediaStatus(m: { isApproved: boolean; isRejected: boolean }) {
   if (m.isRejected) return 'rejected' as const;
@@ -38,10 +36,6 @@ function serializeMedia(m: {
 }
 
 export const mediaRoutes: FastifyPluginAsync = async (fastify) => {
-  await fastify.register(multipart, {
-    limits: { fileSize: MAX_FILE_BYTES },
-  });
-
   const auth = [fastify.authenticate];
 
   fastify.post('/upload', { preHandler: auth }, async (request, reply) => {

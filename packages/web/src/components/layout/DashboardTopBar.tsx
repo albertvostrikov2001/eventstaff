@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { LogOut, Menu, User } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
@@ -56,13 +57,14 @@ export function DashboardTopBar({
             <Menu className="h-5 w-5" />
           </button>
         )}
-        <span
+        <Link
+          href="/"
           className={`font-heading text-lg font-bold ${
-            isCabinet ? 'text-white' : 'text-gray-900'
+            isCabinet ? 'text-white hover:text-white/90' : 'text-gray-900 hover:text-gray-800'
           }`}
         >
           Юнити
-        </span>
+        </Link>
       </div>
       <div className="ml-auto flex items-center gap-3">
         <div

@@ -1,5 +1,5 @@
-import { randomUUID } from 'node:crypto';
-import type { Media, MediaType, PrismaClient } from '@prisma/client';
+import type { Media, MediaType, Prisma, PrismaClient } from '@prisma/client';
+import { nanoid } from 'nanoid';
 import type { StorageAdapter } from '@/storage/storage-adapter';
 
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -53,7 +53,7 @@ function allowedMimes(type: MediaType): Set<string> {
 function folderForType(userId: string, type: MediaType): string {
   const isCompany =
     type === 'COMPANY_LOGO' || type === 'COMPANY_BANNER' || type === 'COMPANY_GALLERY';
-  const base = isCompany ? pathJoin('companies', userId) : userId;
+  const base = isCompany ? pathJoin('employers', userId) : userId;
   switch (type) {
     case 'AVATAR':
       return pathJoin(base, 'avatar');
@@ -92,6 +92,9 @@ export function assertRoleForMediaType(activeRole: string, type: MediaType): voi
   }
 }
 
+/** DB client usable inside/outside `$transaction`. */
+export type DbClient = PrismaClient | Prisma.TransactionClient;
+
 export class MediaService {
   constructor(
     private readonly prisma: PrismaClient,
@@ -120,12 +123,12 @@ export class MediaService {
 
     await this.enforceCountLimits(userId, activeRole, type);
 
-    if (SINGLE_SLOT.includes(type)) {
-      await this.purgeSingleSlot(userId, type);
-    }
+    const singleSlotPrevious = SINGLE_SLOT.includes(type)
+      ? await this.prisma.media.findMany({ where: { userId, type } })
+      : [];
 
     const ext = EXT[mimeType] ?? '.bin';
-    const fileBase = `${randomUUID()}${ext}`;
+    const fileBase = `${nanoid()}${ext}`;
     const dir = folderForType(userId, type);
     const storagePath = pathJoin(dir, fileBase);
     const url = await this.storage.upload(buffer, storagePath);
@@ -133,23 +136,35 @@ export class MediaService {
     // Auto-approve photos/avatars — only documents and videos require moderation
     const autoApprove = AUTO_APPROVED_TYPES.has(type);
 
-    const media = await this.prisma.media.create({
-      data: {
-        userId,
-        type,
-        url,
-        storagePath,
-        filename: fileBase,
-        mimeType,
-        size: buffer.length,
-        isApproved: autoApprove,
-        isRejected: false,
-        ...(autoApprove ? { moderatedAt: new Date() } : {}),
-      },
+    const media = await this.prisma.$transaction(async (tx) => {
+      const m = await tx.media.create({
+        data: {
+          userId,
+          type,
+          url,
+          storagePath,
+          filename: fileBase,
+          mimeType,
+          size: buffer.length,
+          isApproved: autoApprove,
+          isRejected: false,
+          ...(autoApprove ? { moderatedAt: new Date() } : {}),
+        },
+      });
+      if (autoApprove) {
+        await this.applyApprovedProfileSync(tx, m);
+      }
+      return m;
     });
 
-    if (autoApprove) {
-      await this.applyApprovedProfileSync(media).catch(() => {});
+    for (const old of singleSlotPrevious) {
+      try {
+        await this.storage.delete(old.storagePath);
+      } catch {
+        /* ignore ENOENT etc. */
+      }
+      await this.prisma.media.delete({ where: { id: old.id } }).catch(() => {});
+      // Profile already points to the new asset — do NOT revertApprovedSync(old).
     }
 
     return media;
@@ -173,18 +188,6 @@ export class MediaService {
     }
     if (role === 'employer' && type === 'COMPANY_GALLERY' && (await countActive('COMPANY_GALLERY')) >= 10) {
       throw Object.assign(new Error('Лимит фото галереи: 10'), { statusCode: 400 });
-    }
-  }
-
-  /** Removes existing media of single-slot type (files + rows) and clears profile fields if needed. */
-  private async purgeSingleSlot(userId: string, type: MediaType): Promise<void> {
-    const existing = await this.prisma.media.findMany({
-      where: { userId, type },
-    });
-    for (const m of existing) {
-      await this.storage.delete(m.storagePath);
-      await this.revertApprovedSync(m);
-      await this.prisma.media.delete({ where: { id: m.id } });
     }
   }
 
@@ -275,7 +278,7 @@ export class MediaService {
       },
     });
 
-    await this.applyApprovedProfileSync(updated);
+    await this.applyApprovedProfileSync(this.prisma, updated);
     return updated;
   }
 
@@ -303,33 +306,33 @@ export class MediaService {
     });
   }
 
-  private async applyApprovedProfileSync(m: Media): Promise<void> {
+  private async applyApprovedProfileSync(db: DbClient, m: Media): Promise<void> {
     switch (m.type) {
       case 'AVATAR':
-        await this.prisma.workerProfile.update({
+        await db.workerProfile.update({
           where: { userId: m.userId },
           data: { photoUrl: m.url },
         });
         break;
       case 'VIDEO_CARD':
-        await this.prisma.workerProfile.update({
+        await db.workerProfile.update({
           where: { userId: m.userId },
           data: { videoUrl: m.url },
         });
         break;
       case 'PORTFOLIO_PHOTO': {
-        const wp = await this.prisma.workerProfile.findUnique({ where: { userId: m.userId } });
+        const wp = await db.workerProfile.findUnique({ where: { userId: m.userId } });
         if (wp) {
-          await this.prisma.workerPortfolioPhoto.create({
+          await db.workerPortfolioPhoto.create({
             data: { workerId: wp.id, url: m.url },
           });
         }
         break;
       }
       case 'DOCUMENT': {
-        const wp = await this.prisma.workerProfile.findUnique({ where: { userId: m.userId } });
+        const wp = await db.workerProfile.findUnique({ where: { userId: m.userId } });
         if (wp) {
-          await this.prisma.workerDocument.create({
+          await db.workerDocument.create({
             data: {
               workerId: wp.id,
               type: 'other',
@@ -342,13 +345,13 @@ export class MediaService {
         break;
       }
       case 'COMPANY_LOGO':
-        await this.prisma.employerProfile.update({
+        await db.employerProfile.update({
           where: { userId: m.userId },
           data: { logoUrl: m.url },
         });
         break;
       case 'COMPANY_BANNER':
-        await this.prisma.employerProfile.update({
+        await db.employerProfile.update({
           where: { userId: m.userId },
           data: { bannerUrl: m.url },
         });

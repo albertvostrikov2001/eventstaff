@@ -1,8 +1,23 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { z } from 'zod';
+import type { Namespace } from 'socket.io';
 import { ChatService } from '@/services/chat-service';
-import { MessageType, type Prisma } from '@prisma/client';
-import { resolveChatPair } from '@/lib/can-chat';
+import {
+  ChatRoomContextType,
+  type ChatMessage,
+  type MessageType,
+  UserStatus,
+  type Prisma,
+} from '@prisma/client';
+import { canChat, resolveChatPair } from '@/lib/can-chat';
+import {
+  InvalidChatContextError,
+  normalizeAndValidateOpenContext,
+  suggestOpenContextForPair,
+  type OpenChatContextPayload,
+} from '@/lib/chat-open-context';
+import { computeRoomContextLine } from '@/lib/chat-context-subtitle';
+import { serializeChatMessage } from '@/lib/chat-message-dto';
+import { z } from 'zod';
 
 type ChatRoomRow = Prisma.ChatRoomGetPayload<{
   include: {
@@ -14,9 +29,68 @@ type ChatRoomRow = Prisma.ChatRoomGetPayload<{
   };
 }>;
 
-function toMessageApi(
-  m: { id: string; type: MessageType; text: string | null; createdAt: Date; isSystem: boolean; senderId: string },
-) {
+type ChatRoomRowDetail = ChatRoomRow & {
+  worker: ChatRoomRow['worker'] & { user: { id: string; status: UserStatus } };
+  employer: ChatRoomRow['employer'] & { user: { id: string; status: UserStatus } };
+};
+
+type OpenChatSuggested =
+  | { type: 'GENERAL' }
+  | { type: 'APPLICATION' | 'INVITATION' | 'SHIFT' | 'VACANCY'; id: string };
+
+function prismaContextToSuggested(n: {
+  contextType: ChatRoomContextType;
+  contextId: string | null;
+}): OpenChatSuggested | null {
+  if (!n.contextId && n.contextType === ChatRoomContextType.GENERAL) {
+    return { type: 'GENERAL' };
+  }
+  if (!n.contextId) return null;
+  switch (n.contextType) {
+    case ChatRoomContextType.APPLICATION:
+      return { type: 'APPLICATION', id: n.contextId };
+    case ChatRoomContextType.INVITATION:
+      return { type: 'INVITATION', id: n.contextId };
+    case ChatRoomContextType.SHIFT:
+      return { type: 'SHIFT', id: n.contextId };
+    case ChatRoomContextType.VACANCY:
+      return { type: 'VACANCY', id: n.contextId };
+    default:
+      return { type: 'GENERAL' };
+  }
+}
+
+type FastifyChat = { chatNsp?: Namespace };
+
+function getNsp(app: FastifyChat): Namespace | undefined {
+  return app.chatNsp;
+}
+
+async function bumpUnreadTotals(
+  nsp: Namespace | undefined,
+  prisma: import('@prisma/client').PrismaClient,
+  ...userIds: string[]
+): Promise<void> {
+  if (!nsp || userIds.length === 0) return;
+  const svc = new ChatService(prisma);
+  const seen = new Set<string>();
+  for (const uid of userIds) {
+    if (!uid || seen.has(uid)) continue;
+    seen.add(uid);
+    const total = await svc.getTotalUnreadForUser(uid);
+    nsp.to(`user:${uid}`).emit('unread:update', { total });
+  }
+}
+
+/** Last message snippet in list APIs */
+function lastMessageBrief(m: {
+  id: string;
+  type: MessageType;
+  text: string | null;
+  createdAt: Date;
+  isSystem: boolean;
+  senderId: string;
+}) {
   return {
     id: m.id,
     type: m.type,
@@ -27,41 +101,129 @@ function toMessageApi(
   };
 }
 
-function mapRoomListItem(
-  userId: string,
-  r: ChatRoomRow,
-  unreadCount: number,
-): {
-  id: string;
-  createdAt: string;
-  peer: { displayName: string; role: 'worker' | 'employer'; avatarUrl: string | null };
-  lastMessage: ReturnType<typeof toMessageApi> | null;
-  unreadCount: number;
-} {
-  const isThisWorker = r.worker.userId === userId;
-  const peer = isThisWorker
-    ? {
-        role: 'employer' as const,
-        displayName: (r.employer.companyName?.trim() || 'Работодатель').slice(0, 200),
-        avatarUrl: r.employer.logoUrl,
-      }
-    : {
-        role: 'worker' as const,
-        displayName: `${r.worker.firstName} ${r.worker.lastName}`.trim() || 'Исполнитель',
-        avatarUrl: r.worker.photoUrl,
-      };
-  const last = r.messages[0] ?? null;
-  return {
-    id: r.id,
-    createdAt: r.createdAt.toISOString(),
-    peer,
-    lastMessage: last ? toMessageApi(last) : null,
-    unreadCount,
-  };
-}
-
 export const chatRoutes: FastifyPluginAsync = async (fastify) => {
   const pre = [fastify.authenticate, fastify.requireRole(['worker', 'employer'])];
+
+  async function notifyRoomBootstrap(roomId: string, roomWorkerUserId: string, roomEmployerUserId: string) {
+    const nsp = getNsp(fastify as FastifyChat);
+    if (!nsp) return;
+    const firstMsg = await fastify.prisma.chatMessage.findFirst({
+      where: { roomId },
+      orderBy: { createdAt: 'asc' },
+    });
+    for (const uid of [roomWorkerUserId, roomEmployerUserId]) {
+      nsp.to(`user:${uid}`).emit('room:created', { roomId });
+      if (firstMsg) {
+        nsp.to(`user:${uid}`).emit('message:new', {
+          roomId,
+          message: serializeChatMessage(firstMsg),
+        });
+      }
+    }
+  }
+
+  /** Shared payload for POST /rooms and POST /rooms/open after room + created flag resolved */
+  function roomOpenResponse(room: {
+    id: string;
+    workerId: string;
+    employerId: string;
+    orderId: string | null;
+    contextType: string;
+    contextId: string | null;
+  }) {
+    return {
+      id: room.id,
+      workerId: room.workerId,
+      employerId: room.employerId,
+      orderId: room.orderId,
+      contextType: room.contextType,
+      contextId: room.contextId,
+    };
+  }
+
+  async function enrichRoomPayload(
+    userId: string,
+    r: ChatRoomRow,
+    unreadCount: number,
+    prisma = fastify.prisma,
+  ) {
+    const base = enrichRoomPayloadSync(userId, r, unreadCount);
+    const line = await computeRoomContextLine(prisma, r);
+    return {
+      ...base,
+      contextType: r.contextType,
+      contextId: r.contextId,
+      contextSubtitle: line.subtitle,
+      vacancyId: line.vacancyId ?? null,
+      vacancyTitle: line.vacancyTitle ?? null,
+      vacancyUnavailable: line.vacancyUnavailable,
+    };
+  }
+
+  function enrichRoomPayloadSync(userId: string, r: ChatRoomRow, unreadCount: number) {
+    const isThisWorker = r.worker.userId === userId;
+    const peer = isThisWorker
+      ? ({
+          role: 'employer' as const,
+          displayName: (r.employer.companyName?.trim() || 'Работодатель').slice(0, 200),
+          avatarUrl: r.employer.logoUrl,
+        } satisfies {
+          role: 'employer';
+          displayName: string;
+          avatarUrl: string | null;
+        })
+      : ({
+          role: 'worker' as const,
+          displayName: `${r.worker.firstName} ${r.worker.lastName}`.trim() || 'Исполнитель',
+          avatarUrl: r.worker.photoUrl,
+          verified: r.worker.isVerified,
+        });
+    const last = r.messages[0] ?? null;
+    return {
+      id: r.id,
+      createdAt: r.createdAt.toISOString(),
+      lastMessageAt: r.lastMessageAt.toISOString(),
+      peer,
+      lastMessage: last ? lastMessageBrief(last) : null,
+      unreadCount,
+    };
+  }
+
+  async function enrichRoomPayloadWithUser(userId: string, r: ChatRoomRowDetail) {
+    const unread = r._count.messages;
+    const enriched = enrichRoomPayloadSync(userId, r as ChatRoomRow, unread);
+
+    let peerInactive = false;
+    const counterpartUser =
+      enriched.peer.role === 'worker' ? r.worker.user : r.employer.user;
+    if (counterpartUser.status !== UserStatus.active) {
+      peerInactive = true;
+    }
+
+    const line = await computeRoomContextLine(fastify.prisma, r);
+
+    let vacancyHref: string | null = null;
+    if (
+      line.vacancyId &&
+      !line.vacancyUnavailable &&
+      enriched.peer.role === 'worker'
+    ) {
+      vacancyHref = `/employer/vacancies/${line.vacancyId}`;
+    }
+
+    return {
+      ...enriched,
+      contextType: r.contextType,
+      contextId: r.contextId,
+      contextSubtitle: line.subtitle,
+      vacancyId: line.vacancyId ?? null,
+      vacancyTitle: line.vacancyTitle ?? null,
+      vacancyUnavailable: line.vacancyUnavailable,
+      vacancyHref,
+      peerInactive,
+      workerProfileId: enriched.peer.role === 'worker' ? r.worker.id : null,
+    };
+  }
 
   // GET /unread
   fastify.get('/unread', { preHandler: pre }, async (request) => {
@@ -71,7 +233,28 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
     return { data: { total } };
   });
 
-  // GET /rooms/:id — метаданные (собеседник) для шапки
+  fastify.get('/can-chat', { preHandler: pre }, async (request, reply) => {
+    const query = request.query as { recipientId?: string };
+    const recipientId = typeof query.recipientId === 'string' ? query.recipientId.trim() : '';
+    if (!recipientId) {
+      return reply.status(400).send({ error: { code: 'BAD_REQUEST', message: 'recipientId' } });
+    }
+    const viewerId = request.jwtUser.sub;
+    const allowed = await canChat(fastify.prisma, viewerId, recipientId);
+    let suggested: OpenChatSuggested | null = null;
+    const pair = await resolveChatPair(fastify.prisma, viewerId, recipientId);
+    if (pair && allowed) {
+      try {
+        const n = await suggestOpenContextForPair(fastify.prisma, pair);
+        suggested = prismaContextToSuggested(n);
+      } catch {
+        suggested = { type: 'GENERAL' };
+      }
+    }
+    return { data: { canChat: allowed, suggestedContext: suggested } };
+  });
+
+  // GET /rooms/:id
   fastify.get('/rooms/:id', { preHandler: pre }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const userId = request.jwtUser.sub;
@@ -83,8 +266,8 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
     const r = await fastify.prisma.chatRoom.findUniqueOrThrow({
       where: { id },
       include: {
-        worker: true,
-        employer: true,
+        worker: { include: { user: { select: { status: true, id: true } } } },
+        employer: { include: { user: { select: { status: true, id: true } } } },
         order: { select: { id: true, date: true } },
         messages: { orderBy: { createdAt: 'desc' }, take: 1 },
         _count: {
@@ -96,13 +279,10 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
         },
       },
     });
+    const enriched = await enrichRoomPayloadWithUser(userId, r as ChatRoomRowDetail);
     return {
       data: {
-        room: mapRoomListItem(
-          userId,
-          r as unknown as ChatRoomRow,
-          r._count.messages,
-        ),
+        room: enriched,
       },
     };
   });
@@ -112,87 +292,196 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
     const userId = request.jwtUser.sub;
     const svc = new ChatService(fastify.prisma);
     const rooms = await svc.getRoomsForUser(userId);
-    const out = rooms.map((r) =>
-      mapRoomListItem(
-        userId,
-        r as unknown as ChatRoomRow,
-        r._count.messages,
+    const out = await Promise.all(
+      rooms.map(async (raw) =>
+        enrichRoomPayload(userId, raw as unknown as ChatRoomRow, raw._count.messages),
       ),
     );
-    return { data: { rooms: out } };
+    const query = request.query as { search?: string };
+    const q = typeof query.search === 'string' ? query.search.trim().toLowerCase() : '';
+    let filtered = out;
+    if (q) {
+      filtered = out.filter((r) => r.peer.displayName.toLowerCase().includes(q));
+    }
+    return { data: { rooms: filtered } };
   });
 
-  // POST /rooms
-  fastify.post('/rooms', { preHandler: pre }, async (request, reply) => {
-    const body = z.object({ recipientId: z.string() }).parse(request.body);
-    const userId = request.jwtUser.sub;
-    const pair = await resolveChatPair(fastify.prisma, userId, body.recipientId);
-    if (!pair) {
-      return reply.status(403).send({
-        error: { code: 'CHAT_NOT_ALLOWED', message: 'Чат с этим пользователем недоступен' },
-      });
-    }
-    const svc = new ChatService(fastify.prisma);
-    let room;
-    let created: boolean;
+  async function handleRoomOpen(body: OpenChatContextPayload | undefined | null, recipientId: string, userId: string) {
+    const pair = await resolveChatPair(fastify.prisma, userId, recipientId);
+    if (!pair) return { ok: false as const, error: 'CHAT_PAIR' as const };
     try {
-      const res = await svc.getOrCreateRoom(pair);
-      room = res.room;
-      created = res.created;
+      const normalized = await normalizeAndValidateOpenContext(fastify.prisma, pair, body ?? undefined);
+      const svc = new ChatService(fastify.prisma);
+      const { room, created } = await svc.openOrUpdateRoom(pair, normalized);
+      return { ok: true as const, room, created };
     } catch (e) {
-      if (e instanceof Error && e.message === 'CHAT_NOT_ALLOWED') {
-        return reply
-          .status(403)
-          .send({ error: { code: 'CHAT_NOT_ALLOWED', message: 'Связь не найдена' } });
-      }
+      if (e instanceof Error && e.message === 'CHAT_NOT_ALLOWED')
+        return { ok: false as const, error: 'CHAT_NOT_ALLOWED' as const };
+      if (e instanceof InvalidChatContextError)
+        return { ok: false as const, error: 'BAD_CONTEXT' as const };
       throw e;
     }
-    const nsp = (fastify as { chatNsp?: import('socket.io').Namespace }).chatNsp;
-    if (created && nsp) {
-      const wUid = room.worker.userId;
-      const eUid = room.employer.userId;
-      const firstMsg = await fastify.prisma.chatMessage.findFirst({
-        where: { roomId: room.id },
-        orderBy: { createdAt: 'asc' },
-      });
-      for (const uid of [wUid, eUid]) {
-        nsp.to(`user:${uid}`).emit('room:created', { roomId: room.id });
-        if (firstMsg) {
-          nsp.to(`user:${uid}`).emit('message:new', {
-            roomId: room.id,
-            message: {
-              id: firstMsg.id,
-              roomId: firstMsg.roomId,
-              senderId: firstMsg.senderId,
-              type: firstMsg.type,
-              text: firstMsg.text,
-              isRead: firstMsg.isRead,
-              readAt: firstMsg.readAt?.toISOString() ?? null,
-              isSystem: firstMsg.isSystem,
-              createdAt: firstMsg.createdAt.toISOString(),
-            },
-          });
-        }
-      }
+  }
+
+  // POST /rooms/open
+  fastify.post('/rooms/open', { preHandler: pre }, async (request, reply) => {
+    const openBodySchema = z.object({
+      recipientId: z.string(),
+      context: z
+        .discriminatedUnion('type', [
+          z.object({ type: z.literal('GENERAL') }),
+          z.object({ type: z.literal('APPLICATION'), id: z.string() }),
+          z.object({ type: z.literal('INVITATION'), id: z.string() }),
+          z.object({ type: z.literal('SHIFT'), id: z.string() }),
+          z.object({ type: z.literal('VACANCY'), id: z.string() }),
+        ])
+        .optional(),
+    });
+
+    const userId = request.jwtUser.sub;
+    let bodyParsed: z.infer<typeof openBodySchema>;
+    try {
+      bodyParsed = openBodySchema.parse(request.body);
+    } catch {
+      return reply.status(400).send({ error: { code: 'BAD_REQUEST', message: 'Тело запроса' } });
     }
-    return reply.status(created ? 201 : 200).send({
+
+    const res = await handleRoomOpen(bodyParsed.context ?? undefined, bodyParsed.recipientId, userId);
+    if (!res.ok) {
+      if (res.error === 'CHAT_PAIR' || res.error === 'CHAT_NOT_ALLOWED') {
+        return reply.status(403).send({
+          error: { code: 'CHAT_NOT_ALLOWED', message: 'Чат с этим пользователем недоступен' },
+        });
+      }
+      return reply.status(400).send({
+        error: { code: 'BAD_CONTEXT', message: 'Указан неверный контекст диалога' },
+      });
+    }
+
+    const { room, created } = res;
+
+    const nsp = getNsp(fastify as FastifyChat);
+    if (created && nsp) {
+      await notifyRoomBootstrap(room.id, room.worker.userId, room.employer.userId);
+    }
+    const status = created ? 201 : 200;
+    return reply.status(status).send({
       data: {
-        room: {
-          id: room.id,
-          workerId: room.workerId,
-          employerId: room.employerId,
-          orderId: room.orderId,
-        },
+        room: roomOpenResponse(room),
         created,
       },
     });
   });
 
-  // GET /rooms/:id/messages
+  // POST /rooms (legacy — suggests context internally)
+  fastify.post('/rooms', { preHandler: pre }, async (request, reply) => {
+    const body = z.object({ recipientId: z.string() }).parse(request.body);
+    const userId = request.jwtUser.sub;
+    const res = await handleRoomOpen(undefined, body.recipientId, userId);
+
+    if (!res.ok) {
+      return reply.status(403).send({
+        error: { code: 'CHAT_NOT_ALLOWED', message: 'Чат с этим пользователем недоступен' },
+      });
+    }
+
+    const { room, created } = res;
+
+    if (created) {
+      await notifyRoomBootstrap(room.id, room.worker.userId, room.employer.userId);
+    }
+    return reply.status(created ? 201 : 200).send({
+      data: {
+        room: roomOpenResponse(room),
+        created,
+      },
+    });
+  });
+
+  // POST /rooms/:id/messages
+  fastify.post('/rooms/:id/messages', { preHandler: pre }, async (request, reply) => {
+    const { id: roomId } = request.params as { id: string };
+    const body = z.object({ text: z.string().max(2000) }).parse(request.body);
+    const senderId = request.jwtUser.sub;
+    const svc = new ChatService(fastify.prisma);
+    let msg: ChatMessage;
+    try {
+      msg = await svc.sendMessage(roomId, senderId, body.text);
+    } catch (e) {
+      if (e instanceof Error && e.message === 'FORBIDDEN')
+        return reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Нет доступа' } });
+      if (e instanceof Error && e.message === 'EMPTY_MESSAGE')
+        return reply.status(400).send({ error: { code: 'EMPTY_MESSAGE', message: 'Пустое сообщение' } });
+      throw e;
+    }
+    const nsp = getNsp(fastify as FastifyChat);
+    const payload = {
+      roomId,
+      message: serializeChatMessage(msg),
+    };
+    if (nsp) {
+      nsp.to(`room:${roomId}`).emit('message:new', payload);
+      const participants = await fastify.prisma.chatRoom.findUnique({
+        where: { id: roomId },
+        select: {
+          worker: { select: { userId: true } },
+          employer: { select: { userId: true } },
+        },
+      });
+      if (participants) {
+        const peerId =
+          senderId === participants.worker.userId
+            ? participants.employer.userId
+            : participants.worker.userId;
+        await bumpUnreadTotals(nsp, fastify.prisma, peerId);
+      }
+    }
+    return { data: { message: serializeChatMessage(msg) } };
+  });
+
+  fastify.patch('/rooms/:id/read', { preHandler: pre }, async (request, reply) => {
+    const { id: roomId } = request.params as { id: string };
+    const userId = request.jwtUser.sub;
+    const svc = new ChatService(fastify.prisma);
+    let result: { count: number; messageIds: string[]; readAt: Date | null };
+    try {
+      result = await svc.markRead(roomId, userId);
+    } catch (e) {
+      if (e instanceof Error && e.message === 'FORBIDDEN')
+        return reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Нет доступа' } });
+      throw e;
+    }
+    const nsp = getNsp(fastify as FastifyChat);
+    if (nsp && result.count > 0 && result.readAt) {
+      nsp.to(`room:${roomId}`).emit('message:read', {
+        roomId,
+        messageIds: result.messageIds,
+        readAt: result.readAt.toISOString(),
+        readBy: userId,
+      });
+      await bumpUnreadTotals(nsp, fastify.prisma, userId);
+      const room = await fastify.prisma.chatRoom.findUnique({
+        where: { id: roomId },
+        select: {
+          worker: { select: { userId: true } },
+          employer: { select: { userId: true } },
+        },
+      });
+      if (room) {
+        const peerId = userId === room.worker.userId ? room.employer.userId : room.worker.userId;
+        await bumpUnreadTotals(nsp, fastify.prisma, peerId);
+      }
+    }
+    return reply.status(200).send({ data: { ok: true, count: result.count } });
+  });
+
   fastify.get('/rooms/:id/messages', { preHandler: pre }, async (request, reply) => {
     const { id: roomId } = request.params as { id: string };
     const q = z
-      .object({ page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(100).default(50) })
+      .object({
+        page: z.coerce.number().int().min(1).default(1),
+        limit: z.coerce.number().int().min(1).max(100).default(50),
+      })
       .parse(request.query);
     const userId = request.jwtUser.sub;
     const svc = new ChatService(fastify.prisma);
@@ -200,23 +489,13 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
       const { data, meta } = await svc.getMessages(roomId, userId, q.page, q.limit);
       return {
         data: {
-          messages: data.map((m) => ({
-            id: m.id,
-            type: m.type,
-            text: m.text,
-            isRead: m.isRead,
-            readAt: m.readAt?.toISOString() ?? null,
-            isSystem: m.isSystem,
-            senderId: m.senderId,
-            createdAt: m.createdAt.toISOString(),
-          })),
+          messages: data.map((m) => serializeChatMessage(m)),
         },
         meta,
       };
     } catch (e) {
-      if (e instanceof Error && e.message === 'FORBIDDEN') {
+      if (e instanceof Error && e.message === 'FORBIDDEN')
         return reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Нет доступа' } });
-      }
       throw e;
     }
   });

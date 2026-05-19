@@ -18,7 +18,7 @@ interface EmployerProfileSummary {
   isVerified: boolean;
 }
 
-interface AuthUser {
+export interface AuthUser {
   id: string;
   email?: string | null;
   phone?: string | null;

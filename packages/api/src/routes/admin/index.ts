@@ -681,13 +681,49 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         role: z.string().optional(),
         status: z.string().optional(),
         page: z.coerce.number().default(1),
+        createdFrom: z.string().optional(),
+        createdTo: z.string().optional(),
+        search: z.string().optional(),
       })
       .parse(request.query);
     const limit = 30;
+    const search = q.search?.trim();
+    const createdFrom = q.createdFrom?.trim() ? new Date(q.createdFrom) : null;
+    const createdToRaw = q.createdTo?.trim() ? new Date(q.createdTo) : null;
+    const createdTo =
+      createdToRaw && !Number.isNaN(createdToRaw.getTime())
+        ? (() => {
+            const end = new Date(createdToRaw.getTime());
+            end.setHours(23, 59, 59, 999);
+            return end;
+          })()
+        : null;
+
     const where: Prisma.IndividualRequestWhereInput = {
       ...(q.role ? { role: q.role as Prisma.IndividualRequestWhereInput['role'] } : {}),
       ...(q.status
         ? { status: q.status as Prisma.IndividualRequestWhereInput['status'] }
+        : {}),
+      ...(createdFrom && !Number.isNaN(createdFrom.getTime())
+        ? { createdAt: { gte: createdFrom } }
+        : {}),
+      ...(createdTo && !Number.isNaN(createdTo.getTime())
+        ? {
+            createdAt:
+              createdFrom && !Number.isNaN(createdFrom.getTime())
+                ? { gte: createdFrom, lte: createdTo }
+                : { lte: createdTo },
+          }
+        : {}),
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search, mode: 'insensitive' } },
+              { email: { contains: search, mode: 'insensitive' } },
+              { phone: { contains: search, mode: 'insensitive' } },
+              { company: { contains: search, mode: 'insensitive' } },
+            ],
+          }
         : {}),
     };
     const [total, rows] = await fastify.prisma.$transaction([
@@ -697,6 +733,9 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         orderBy: { createdAt: 'desc' },
         skip: (q.page - 1) * limit,
         take: limit,
+        include: {
+          createdBy: { select: { id: true, email: true } },
+        },
       }),
     ]);
     return reply.send({

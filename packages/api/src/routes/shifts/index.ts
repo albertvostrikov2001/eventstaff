@@ -8,14 +8,12 @@ import {
 } from '@/lib/shift-codes';
 import { publicSiteUrl } from '@/lib/public-site-url';
 import { processStaleShiftConfirmations } from '@/lib/shift-escalation';
+import {
+  ShiftConfirmationError,
+  confirmShiftParticipation,
+} from '@/lib/shift-confirmation';
 
 const REVIEW_WINDOW_MS = 72 * 60 * 60 * 1000;
-
-const canConfirmStatuses: ShiftStatus[] = [
-  ShiftStatus.PENDING,
-  ShiftStatus.ACTIVE,
-  ShiftStatus.DISPUTED,
-];
 
 export const shiftActionRoutes: FastifyPluginAsync = async (fastify) => {
   const auth = [fastify.authenticate];
@@ -37,79 +35,19 @@ export const shiftActionRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post<{ Params: { id: string } }>('/shifts/:id/confirm', { preHandler: auth }, async (request, reply) => {
     const { id } = request.params;
     const uid = request.jwtUser.sub;
-    const shift = await fastify.prisma.shift.findUnique({
-      where: { id },
-      include: { booking: { include: { linkedVacancy: true } } },
-    });
-    if (!shift) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Смена не найдена' } });
+    try {
+      const shift = await confirmShiftParticipation(
+        { prisma: fastify.prisma, notificationService: fastify.notificationService },
+        id,
+        uid,
+      );
+      return reply.send({ data: shift });
+    } catch (e) {
+      if (e instanceof ShiftConfirmationError) {
+        return reply.status(e.statusCode).send({ error: { code: e.code, message: e.messageRu } });
+      }
+      throw e;
     }
-    if (!canConfirmStatuses.includes(shift.status)) {
-      return reply
-        .status(400)
-        .send({ error: { code: 'INVALID_STATE', message: 'Смена не может быть подтверждена' } });
-    }
-    const isWorker = shift.workerId === uid;
-    const isEmployer = shift.employerId === uid;
-    if (!isWorker && !isEmployer) {
-      return reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Нет доступа' } });
-    }
-    const now = new Date();
-    const res = isWorker
-      ? await fastify.prisma.shift.update({
-          where: { id },
-          data: { workerConfirmed: true, workerConfirmedAt: now },
-        })
-      : await fastify.prisma.shift.update({
-          where: { id },
-          data: { employerConfirmed: true, employerConfirmedAt: now },
-        });
-
-    const otherId = isWorker ? shift.employerId : shift.workerId;
-    const title = isWorker
-      ? 'Работник подтвердил завершение смены'
-      : 'Работодатель подтвердил завершение смены';
-    await fastify.notificationService.create({
-      userId: otherId,
-      type: 'SHIFT_COMPLETED',
-      title,
-      body: 'Подтвердите завершение, если согласны.',
-      data: { shiftId: id, bookingId: shift.bookingId },
-    });
-
-    if (res.workerConfirmed && res.employerConfirmed) {
-      const completed = await fastify.prisma.shift.update({
-        where: { id },
-        data: { status: ShiftStatus.COMPLETED, completedAt: new Date() },
-      });
-      await rel().recalculate(shift.workerId);
-      await rel().recalculate(shift.employerId);
-      const site = publicSiteUrl();
-      await fastify.notificationService.create({
-        userId: shift.workerId,
-        type: 'SHIFT_COMPLETED',
-        title: 'Смена завершена',
-        body: 'Оцените работодателя в течение 72 часов.',
-        data: { shiftId: id, ctaUrl: `${site}/worker/reviews?shift=${id}` },
-      });
-      await fastify.notificationService.create({
-        userId: shift.employerId,
-        type: 'SHIFT_COMPLETED',
-        title: 'Смена завершена',
-        body: 'Оцените исполнителя в течение 72 часов.',
-        data: { shiftId: id, ctaUrl: `${site}/employer/reviews?shift=${id}` },
-      });
-      return reply.send({ data: completed });
-    }
-
-    if (shift.status === ShiftStatus.PENDING) {
-      const updated = await fastify.prisma.shift.update({
-        where: { id },
-        data: { status: ShiftStatus.ACTIVE },
-      });
-      return reply.send({ data: updated });
-    }
-    return reply.send({ data: res });
   });
 
   // POST /shifts/:id/fail
