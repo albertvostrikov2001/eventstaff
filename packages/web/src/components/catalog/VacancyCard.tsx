@@ -24,6 +24,9 @@ interface VacancyCardProps {
   dateStart: string;
   isAuthenticated?: boolean;
   isFavorite?: boolean;
+  hasApplied?: boolean;
+  isApplying?: boolean;
+  isFavoriteLoading?: boolean;
   userRole?: string;
   onFavoriteToggle?: (id: string) => void;
   onApply?: (id: string) => void;
@@ -40,6 +43,9 @@ export function VacancyCard({
   dateStart,
   isAuthenticated,
   isFavorite,
+  hasApplied,
+  isApplying,
+  isFavoriteLoading,
   userRole,
   onFavoriteToggle,
   onApply,
@@ -112,23 +118,36 @@ export function VacancyCard({
         {isAuthenticated ? (
           <>
             {userRole === 'worker' && onApply && (
-              <button
-                onClick={() => onApply(id)}
-                className="rounded-input bg-primary-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-primary-600"
-              >
-                Откликнуться
-              </button>
+              hasApplied ? (
+                <span className="inline-flex items-center rounded-badge bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
+                  Отклик отправлен
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  disabled={isApplying}
+                  onClick={() => onApply(id)}
+                  className="rounded-input bg-primary-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isApplying ? 'Отправка…' : 'Откликнуться'}
+                </button>
+              )
             )}
             {onFavoriteToggle && (
               <button
+                type="button"
+                disabled={isFavoriteLoading}
                 onClick={() => onFavoriteToggle(id)}
-                className={`flex items-center gap-1.5 rounded-input border px-3 py-1.5 text-xs font-medium transition ${
+                aria-label={isFavorite ? 'Удалить из избранного' : 'Добавить в избранное'}
+                className={`flex items-center gap-1.5 rounded-input border px-3 py-1.5 text-xs font-medium transition disabled:opacity-60 ${
                   isFavorite
-                    ? 'border-red-200 bg-red-50 text-error'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
                     : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                 }`}
               >
-                <Heart className={`h-3.5 w-3.5 ${isFavorite ? 'fill-current' : ''}`} />
+                <Heart
+                  className={`h-3.5 w-3.5 ${isFavorite ? 'fill-current text-emerald-600' : ''}`}
+                />
               </button>
             )}
           </>

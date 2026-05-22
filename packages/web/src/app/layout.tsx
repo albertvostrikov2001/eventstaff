@@ -5,8 +5,9 @@ import { AuthProvider } from '@/providers/AuthProvider';
 import { ToastProvider } from '@/components/ui/toast-context';
 import { NetworkErrorBanner } from '@/components/common/NetworkErrorBanner';
 
-const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') || 'http://localhost:3000';
+import { config } from '@/lib/config';
+
+const siteUrl = config.siteUrl;
 
 const inter = Inter({
   subsets: ['latin', 'cyrillic'],

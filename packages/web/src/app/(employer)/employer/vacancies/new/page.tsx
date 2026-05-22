@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/toast-context';
 import { ApiError, apiClient } from '@/lib/api/client';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
+import { Breadcrumbs } from '@/components/ui/Breadcrumbs';
 
 interface City { id: string; name: string }
 
@@ -32,6 +33,12 @@ export default function NewVacancyPage() {
 
   return (
     <div>
+      <Breadcrumbs
+        items={[
+          { label: 'Мои вакансии', href: '/employer/vacancies' },
+          { label: 'Новая вакансия' },
+        ]}
+      />
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
           <Link

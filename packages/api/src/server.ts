@@ -124,20 +124,22 @@ async function buildApp() {
     keyGenerator: (request) => request.ip,
   });
 
-  await app.register(swagger, {
-    openapi: {
-      info: {
-        title: 'Unity API',
-        description: 'Специализированная биржа труда для event-персонала',
-        version: '1.0.0',
+  if (isDev) {
+    await app.register(swagger, {
+      openapi: {
+        info: {
+          title: 'Unity API',
+          description: 'Специализированная биржа труда для event-персонала',
+          version: '1.0.0',
+        },
+        servers: [{ url: `http://localhost:${PORT}`, description: 'Development' }],
       },
-      servers: [{ url: `http://localhost:${PORT}`, description: 'Development' }],
-    },
-  });
+    });
 
-  await app.register(swaggerUi, {
-    routePrefix: '/docs',
-  });
+    await app.register(swaggerUi, {
+      routePrefix: '/docs',
+    });
+  }
 
   await app.register(prismaPlugin);
   await app.register(redisPlugin);

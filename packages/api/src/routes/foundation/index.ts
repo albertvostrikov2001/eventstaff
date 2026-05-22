@@ -13,7 +13,9 @@ import { ReliabilityService } from '@/services/reliability-service';
 import { ensureShiftForBooking } from '@/lib/ensure-booking-shift';
 import { paginationSchema } from '@unity/shared';
 import { ReviewAccessService } from '@/services/review-access-service';
+import { safeUserSelect } from '@/lib/safe-user-select';
 import { getOptionalUserId } from '@/lib/optional-jwt';
+import { replyFail, replyOk, replyPaginated } from '../../lib/api-reply';
 
 function combineBookingDateTime(date: Date, timeStart: string | null): Date {
   const d = new Date(date);
@@ -34,7 +36,7 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
-    return reply.send({ data: list });
+    return replyOk(reply, list);
   };
 
   fastify.get('/complaints', { preHandler: auth }, myComplaints);
@@ -50,9 +52,7 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
       })
       .parse(request.body);
     if (body.targetId === request.jwtUser.sub) {
-      return reply
-        .status(400)
-        .send({ error: { code: 'INVALID', message: 'Нельзя пожаловаться на самого себя' } });
+      return replyFail(reply, 400, 'INVALID', 'Нельзя пожаловаться на самого себя');
     }
     const count = await fastify.prisma.complaint.count({
       where: {
@@ -62,9 +62,7 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
       },
     });
     if (count >= 3) {
-      return reply.status(400).send({
-        error: { code: 'LIMIT', message: 'Уже 3 жалобы на эту сущность' },
-      });
+      return replyFail(reply, 400, 'LIMIT', 'Уже 3 жалобы на эту сущность');
     }
     const complaint = await fastify.prisma.complaint.create({
       data: {
@@ -108,7 +106,7 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
-    return reply.status(201).send({ data: complaint });
+    return replyOk(reply, complaint, 201);
   });
 
   // GET /reliability/me — до /reliability/:userId
@@ -118,24 +116,22 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
       create: { userId: request.jwtUser.sub },
       update: {},
     });
-    return reply.send({ data: row });
+    return replyOk(reply, row);
   });
 
   // GET /reliability/:userId
   fastify.get<{ Params: { userId: string } }>('/reliability/:userId', async (request, reply) => {
     const { userId } = request.params;
     if (userId === 'me') {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Not found');
     }
     const row = await fastify.prisma.userReliabilityScore.findUnique({
       where: { userId },
     });
     if (!row) {
-      return reply.send({
-        data: { score: 100, level: 'NEW', totalShifts: 0, isRestricted: false },
-      });
+      return replyOk(reply, { score: 100, level: 'NEW', totalShifts: 0, isRestricted: false });
     }
-    return reply.send({ data: row });
+    return replyOk(reply, row);
   });
 
   // GET /users/:id/reviews (лимит — для авторизованных работодателей)
@@ -147,13 +143,9 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
     if (viewerId) {
       const gate = await reviewAccess.canViewReviews(viewerId, userId);
       if (!gate.allowed) {
-        return reply.status(403).send({
-          error: {
-            code: 'LIMIT_EXCEEDED',
-            message: 'Достигнут лимит просмотра профилей',
-            remaining: 0,
-            upgradeTo: gate.upgradeTo,
-          },
+        return replyFail(reply, 403, 'LIMIT_EXCEEDED', 'Достигнут лимит просмотра профилей', {
+          remaining: 0,
+          upgradeTo: gate.upgradeTo,
         });
       }
     }
@@ -180,9 +172,11 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
     if (viewerId) {
       await reviewAccess.trackReviewView(viewerId, userId);
     }
-    return reply.send({
-      data: rows,
-      meta: { total, page: q.page, limit: q.limit, totalPages: Math.ceil(total / q.limit) },
+    return replyPaginated(reply, rows, {
+      total,
+      page: q.page,
+      limit: q.limit,
+      totalPages: Math.ceil(total / q.limit),
     });
   });
 
@@ -190,7 +184,7 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/user/review-usage', { preHandler: auth }, async (request, reply) => {
     const s = new ReviewAccessService(fastify.prisma);
     const u = await s.getUsage(request.jwtUser.sub);
-    return reply.send({ data: u });
+    return replyOk(reply, u);
   });
 
   fastify.get<{ Params: { id: string } }>('/shifts/:id', { preHandler: auth }, async (request, reply) => {
@@ -201,20 +195,20 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
         booking: {
           include: {
             linkedVacancy: true,
-            worker: { include: { user: true } },
-            employer: { include: { user: true } },
+            worker: { include: { user: { select: safeUserSelect } } },
+            employer: { include: { user: { select: safeUserSelect } } },
           },
         },
       },
     });
     if (!shift) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Shift not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Shift not found');
     }
     const uid = request.jwtUser.sub;
     if (shift.workerId !== uid && shift.employerId !== uid) {
-      return reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'No access' } });
+      return replyFail(reply, 403, 'FORBIDDEN', 'No access');
     }
-    return reply.send({ data: shift });
+    return replyOk(reply, shift);
   });
 
   const cancelOrderHandler = async (
@@ -232,30 +226,26 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
     const booking = await fastify.prisma.booking.findUnique({
       where: { id: bookingId },
       include: {
-        worker: { include: { user: true } },
-        employer: { include: { user: true } },
+        worker: { include: { user: { select: safeUserSelect } } },
+        employer: { include: { user: { select: safeUserSelect } } },
       },
     });
     if (!booking) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Заказ не найден' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Заказ не найден');
     }
     const isWorker = booking.worker.userId === uid;
     const isEmployer = booking.employer.userId === uid;
     if (!isWorker && !isEmployer) {
-      return reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Нет доступа' } });
+      return replyFail(reply, 403, 'FORBIDDEN', 'Нет доступа');
     }
     const role: Role = isWorker ? 'worker' : 'employer';
     const start = combineBookingDateTime(booking.date, booking.timeStart);
     const now = new Date();
     if (now >= start) {
-      return reply
-        .status(400)
-        .send({ error: { code: 'LATE', message: 'Смена уже началась — отмена невозможна' } });
+      return replyFail(reply, 400, 'LATE', 'Смена уже началась — отмена невозможна');
     }
     if (start.getTime() - now.getTime() < 24 * 60 * 60 * 1000) {
-      return reply
-        .status(400)
-        .send({ error: { code: 'TOO_LATE', message: 'Отмена возможна не позднее чем за 24 часа до начала' } });
+      return replyFail(reply, 400, 'TOO_LATE', 'Отмена возможна не позднее чем за 24 часа до начала');
     }
     const codeNorm =
       body.reasonCode === 'other'
@@ -267,14 +257,10 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
       where: { code: codeNorm, role, isActive: true },
     });
     if (!reasonResolved) {
-      return reply
-        .status(400)
-        .send({ error: { code: 'INVALID', message: 'Неизвестный код причины' } });
+      return replyFail(reply, 400, 'INVALID', 'Неизвестный код причины');
     }
     if ((body.reasonCode === 'other' || codeNorm.includes('OTHER')) && !body.customReason?.trim()) {
-      return reply
-        .status(400)
-        .send({ error: { code: 'INVALID', message: 'Укажите причину' } });
+      return replyFail(reply, 400, 'INVALID', 'Укажите причину');
     }
     const { id: shiftId } = await ensureShiftForBooking(fastify.prisma, bookingId);
     const rel = new ReliabilityService(fastify.prisma, fastify.notificationService);
@@ -302,7 +288,7 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
       body: isWorker ? 'Исполнитель отменил участие' : 'Работодатель отменил смену',
       data: { shiftId, bookingId },
     });
-    return reply.send({ data: updated });
+    return replyOk(reply, updated);
   };
 
   fastify.post<{ Params: { id: string } }>('/bookings/:id/cancel', { preHandler: auth }, cancelOrderHandler);
@@ -316,12 +302,7 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
         await fastify.redis.expire(dayKey, 86_400);
       }
       if (n > 3) {
-        return reply.status(429).send({
-          error: {
-            code: 'RATE_LIMIT',
-            message: 'Вы уже отправляли запрос сегодня. Попробуйте завтра.',
-          },
-        });
+        return replyFail(reply, 429, 'RATE_LIMIT', 'Вы уже отправляли запрос сегодня. Попробуйте завтра.');
       }
 
       const ruPhone = z
@@ -396,7 +377,7 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
       const adminEmail = process.env.ADMIN_EMAIL?.trim();
       if (!adminEmail) {
         fastify.log.error('ADMIN_EMAIL is not set');
-        return reply.status(503).send({ error: { code: 'CONFIG', message: 'Сервис временно недоступен' } });
+        return replyFail(reply, 503, 'CONFIG', 'Сервис временно недоступен');
       }
 
       const optionalUserId = await getOptionalUserId(request);
@@ -494,13 +475,55 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
           ctaUrl: `${site}/admin/individual-requests/${created.id}`,
         },
       });
-      return reply.status(201).send({
-        success: true,
-        data: {
+      return replyOk(
+        reply,
+        {
           id: created.id,
           status: created.status,
           createdAt: created.createdAt.toISOString(),
         },
+        201,
+      );
+  });
+
+  // POST /contact — public contact form
+  fastify.post('/contact', async (request, reply) => {
+    const dayKey = `contact_req:${request.ip}`;
+    const n = await fastify.redis.incr(dayKey);
+    if (n === 1) await fastify.redis.expire(dayKey, 86_400);
+    if (n > 5) {
+      return replyFail(reply, 429, 'RATE_LIMIT', 'Слишком много запросов сегодня. Попробуйте завтра.');
+    }
+
+    const body = z.object({
+      name: z.string().trim().min(2, 'Укажите имя').max(200),
+      email: z.string().email('Некорректный email').max(320),
+      message: z.string().trim().min(10, 'Сообщение слишком короткое').max(4000),
+    }).parse(request.body);
+
+    const created = await fastify.prisma.contactRequest.create({
+      data: {
+        name: body.name,
+        email: body.email.trim().toLowerCase(),
+        message: body.message,
+      },
+    });
+
+    // Notify all admins
+    const admins = await fastify.prisma.user.findMany({
+      where: { roles: { some: { role: 'admin' } } },
+      select: { id: true },
+    });
+    for (const a of admins) {
+      await fastify.notificationService.create({
+        userId: a.id,
+        type: 'INDIVIDUAL_REQUEST' as InAppNotificationType,
+        title: 'Новое обращение с сайта',
+        body: `${body.name} <${body.email}>`,
+        data: { contactRequestId: created.id },
       });
+    }
+
+    return replyOk(reply, { id: created.id }, 201);
   });
 };

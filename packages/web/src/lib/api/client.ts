@@ -39,6 +39,52 @@ function tryRefresh(): Promise<boolean> {
   return refreshPromise;
 }
 
+/**
+ * Сервер может отвечать единым конвертом `{ success, data?, meta? }` или legacy `{ data }`.
+ * После успешного HTTP успех клиент всегда нормализует к `{ data, meta? }` для типичных callers.
+ */
+function normalizeSuccessEnvelope<T>(json: Record<string, unknown>): T {
+  if (typeof json.success === 'boolean' && json.success === true && 'data' in json) {
+    const out: Record<string, unknown> = { data: json.data };
+    if ('meta' in json && json.meta != null) {
+      out.meta = json.meta;
+    }
+    return out as T;
+  }
+  return json as T;
+}
+
+function extractErrorFromBody(json: Record<string, unknown>): {
+  message: string;
+  code?: string;
+  payload: Record<string, unknown> | undefined;
+} {
+  const errEnvelope =
+    typeof json.success === 'boolean' && json.success === false && json.error && typeof json.error === 'object'
+      ? (json.error as Record<string, unknown>)
+      : json.error !== undefined && typeof json.error === 'object'
+        ? (json.error as Record<string, unknown>)
+        : undefined;
+
+  const message =
+    (typeof errEnvelope?.message === 'string' ? errEnvelope.message : null) ??
+    (typeof (json as { message?: string }).message === 'string' ? (json as { message: string }).message : null) ??
+    'Request failed';
+
+  const code = typeof errEnvelope?.code === 'string' ? errEnvelope.code : undefined;
+
+  const payload =
+    typeof json.success === 'boolean' && json.success === false && json.error && typeof json.error === 'object'
+      ? (json.error as Record<string, unknown>)
+      : errEnvelope;
+
+  return {
+    message,
+    code,
+    payload,
+  };
+}
+
 async function doLogout(): Promise<void> {
   try {
     await fetch(`${getPublicApiBase()}/auth/logout`, {
@@ -104,17 +150,10 @@ async function request<T>(endpoint: string, options: FetchOptions = {}): Promise
       const retryRes = await fetch(url, { ...init, headers, credentials: 'include' });
       const retryJson = await retryRes.json().catch(() => ({})) as Record<string, unknown>;
       if (!retryRes.ok) {
-        const errObj = retryJson.error as Record<string, unknown> | undefined;
-        throw new ApiError(
-          retryRes.status,
-          (typeof errObj?.message === 'string' ? errObj.message : null) ??
-            (retryJson as { message?: string }).message ??
-            `HTTP ${retryRes.status}`,
-          typeof errObj?.code === 'string' ? errObj.code : undefined,
-          errObj ?? retryJson,
-        );
+        const { message, code, payload } = extractErrorFromBody(retryJson);
+        throw new ApiError(retryRes.status, message, code, payload ?? retryJson);
       }
-      return retryJson as T;
+      return normalizeSuccessEnvelope<T>(retryJson);
     } else {
       // Refresh failed — session truly expired or account banned
       await doLogout();
@@ -125,18 +164,12 @@ async function request<T>(endpoint: string, options: FetchOptions = {}): Promise
   const json = await res.json().catch(() => ({})) as Record<string, unknown>;
 
   if (!res.ok) {
-    const errObj = json.error as Record<string, unknown> | undefined;
-    const message =
-      (typeof errObj?.message === 'string' ? errObj.message : null) ??
-      (json as { message?: string }).message ??
-      `HTTP ${res.status}`;
-    const code = typeof errObj?.code === 'string' ? errObj.code : undefined;
-
+    const { message, code, payload } = extractErrorFromBody(json);
     // 429 Too Many Requests — do NOT retry, let caller handle
-    throw new ApiError(res.status, message, code, errObj ?? json);
+    throw new ApiError(res.status, message, code, payload ?? json);
   }
 
-  return json as T;
+  return normalizeSuccessEnvelope<T>(json);
 }
 
 export const apiClient = {
@@ -152,15 +185,10 @@ export const apiClient = {
     });
     const json = await res.json().catch(() => ({})) as Record<string, unknown>;
     if (!res.ok) {
-      const errObj = json.error as Record<string, unknown> | undefined;
-      throw new ApiError(
-        res.status,
-        (typeof errObj?.message === 'string' ? errObj.message : null) ?? `HTTP ${res.status}`,
-        typeof errObj?.code === 'string' ? errObj.code : undefined,
-        errObj,
-      );
+      const { message, code, payload } = extractErrorFromBody(json);
+      throw new ApiError(res.status, message, code, payload ?? json);
     }
-    return json as T;
+    return normalizeSuccessEnvelope<T>(json);
   },
 
   post: <T>(endpoint: string, body?: unknown) =>

@@ -1,9 +1,12 @@
 import { ChatRoomView } from '@/components/chat/ChatRoomView';
 
-export function generateStaticParams() {
-  return [{ roomId: 'placeholder' }];
-}
+export const dynamic = 'force-dynamic';
 
 export default function EmployerConversationPage() {
-  return <ChatRoomView listHref="/employer/messages" />;
+  return (
+    <ChatRoomView
+      listHref="/employer/messages"
+      employerBreadcrumbParent={{ label: 'Сообщения', href: '/employer/messages' }}
+    />
+  );
 }

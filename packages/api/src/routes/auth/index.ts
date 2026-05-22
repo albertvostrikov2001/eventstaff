@@ -10,8 +10,13 @@ import {
   invalidateAllUserTokens,
   removeRefreshToken,
 } from '@/lib/refresh-tokens';
-import { ok } from '@/lib/response';
+import { ok, fail } from '@/lib/response';
 import { publicSiteUrl } from '@/lib/public-site-url';
+import {
+  authUserWithRolesSelect,
+  safeUserSelect,
+  safeUserWithRolesSelect,
+} from '@/lib/safe-user-select';
 
 const nanoidToken = customAlphabet(
   'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789',
@@ -55,12 +60,11 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
           body.phone ? { phone: body.phone } : {},
         ].filter((o) => Object.keys(o).length > 0),
       },
+      select: { id: true },
     });
 
     if (existing) {
-      return reply
-        .status(409)
-        .send({ error: { code: 'CONFLICT', message: 'Пользователь с таким email уже существует' } });
+      return fail(reply, 409, 'CONFLICT', 'Пользователь с таким email уже существует');
     }
 
     const passwordHash = await bcrypt.hash(body.password, BCRYPT_ROUNDS);
@@ -158,26 +162,20 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       where: {
         OR: [{ email: body.login }, { phone: body.login }],
       },
-      include: { roles: true },
+      select: authUserWithRolesSelect,
     });
 
     if (!user || !user.passwordHash) {
-      return reply
-        .status(401)
-        .send({ error: { code: 'UNAUTHORIZED', message: 'Неверный email или пароль' } });
+      return fail(reply, 401, 'UNAUTHORIZED', 'Неверный email или пароль');
     }
 
     if (user.status === 'banned' || user.status === 'deleted') {
-      return reply
-        .status(403)
-        .send({ error: { code: 'FORBIDDEN', message: 'Аккаунт заблокирован' } });
+      return fail(reply, 403, 'FORBIDDEN', 'Аккаунт заблокирован');
     }
 
     const valid = await bcrypt.compare(body.password, user.passwordHash);
     if (!valid) {
-      return reply
-        .status(401)
-        .send({ error: { code: 'UNAUTHORIZED', message: 'Неверный email или пароль' } });
+      return fail(reply, 401, 'UNAUTHORIZED', 'Неверный email или пароль');
     }
 
     await fastify.prisma.user.update({
@@ -240,9 +238,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/refresh', async (request, reply) => {
     const oldToken = request.cookies?.refresh_token;
     if (!oldToken) {
-      return reply
-        .status(401)
-        .send({ error: { code: 'UNAUTHORIZED', message: 'No refresh token' } });
+      return fail(reply, 401, 'UNAUTHORIZED', 'No refresh token');
     }
 
     // Atomically consume the old token — returns userId if valid, null if already consumed
@@ -259,20 +255,16 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       reply
         .clearCookie('access_token', { path: '/' })
         .clearCookie('refresh_token', { path: '/' });
-      return reply
-        .status(401)
-        .send({ error: { code: 'POSSIBLE_TOKEN_THEFT', message: 'Refresh token reuse detected' } });
+      return fail(reply, 401, 'POSSIBLE_TOKEN_THEFT', 'Refresh token reuse detected');
     }
 
     const user = await fastify.prisma.user.findUnique({
       where: { id: userId },
-      include: { roles: true },
+      select: safeUserWithRolesSelect,
     });
 
     if (!user) {
-      return reply
-        .status(401)
-        .send({ error: { code: 'UNAUTHORIZED', message: 'User not found' } });
+      return fail(reply, 401, 'UNAUTHORIZED', 'User not found');
     }
 
     // Ban check — invalidate session for banned/deleted accounts
@@ -281,9 +273,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       reply
         .clearCookie('access_token', { path: '/' })
         .clearCookie('refresh_token', { path: '/' });
-      return reply
-        .status(401)
-        .send({ error: { code: 'ACCOUNT_BANNED', message: 'Account is banned' } });
+      return fail(reply, 401, 'ACCOUNT_BANNED', 'Account is banned');
     }
 
     const roles = user.roles.map((r) => r.role as string);
@@ -314,17 +304,32 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/me', { preHandler: [fastify.authenticate] }, async (request, reply) => {
     const user = await fastify.prisma.user.findUnique({
       where: { id: request.jwtUser.sub },
-      include: {
+      select: {
+        ...safeUserSelect,
         roles: true,
-        workerProfile: true,
-        employerProfile: true,
+        workerProfile: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            photoUrl: true,
+            visibility: true,
+          },
+        },
+        employerProfile: {
+          select: {
+            id: true,
+            companyName: true,
+            contactName: true,
+            logoUrl: true,
+            isVerified: true,
+          },
+        },
       },
     });
 
     if (!user) {
-      return reply
-        .status(404)
-        .send({ error: { code: 'NOT_FOUND', message: 'User not found' } });
+      return fail(reply, 404, 'NOT_FOUND', 'User not found');
     }
 
     const roles = user.roles.map((r) => r.role as string);
@@ -350,9 +355,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     const rateLimitKey = `reset_rl:${request.ip}`;
     const currentAttempts = await fastify.redis.get(rateLimitKey);
     if (currentAttempts && parseInt(currentAttempts, 10) >= 3) {
-      return reply
-        .status(429)
-        .send({ error: { code: 'RATE_LIMIT', message: 'Слишком много запросов. Повторите через 15 минут.' } });
+      return fail(reply, 429, 'RATE_LIMIT', 'Слишком много запросов. Повторите через 15 минут.');
     }
     const newCount = await fastify.redis.incr(rateLimitKey);
     if (newCount === 1) {
@@ -364,7 +367,8 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     const user = await fastify.prisma.user.findFirst({
       where: { email: body.email },
-      include: {
+      select: {
+        ...safeUserSelect,
         workerProfile: { select: { firstName: true } },
         employerProfile: { select: { contactName: true, companyName: true } },
       },
@@ -410,9 +414,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
 
     const userId = await fastify.redis.get(`reset:${body.token}`);
     if (!userId) {
-      return reply.status(400).send({
-        error: { code: 'INVALID_OR_EXPIRED_TOKEN', message: 'Ссылка устарела или уже была использована' },
-      });
+      return fail(reply, 400, 'INVALID_OR_EXPIRED_TOKEN', 'Ссылка устарела или уже была использована');
     }
 
     const passwordHash = await bcrypt.hash(body.password, BCRYPT_ROUNDS);
@@ -429,5 +431,43 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     await invalidateAllUserTokens(fastify.redis, userId);
 
     return ok(reply, { message: 'Пароль успешно изменён' });
+  });
+
+  // PATCH /change-password
+  fastify.patch('/change-password', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const body = z
+      .object({
+        currentPassword: z.string().min(1),
+        newPassword: z.string().min(8, 'Минимум 8 символов').max(128),
+      })
+      .parse(request.body);
+
+    const user = await fastify.prisma.user.findUnique({
+      where: { id: request.jwtUser.sub },
+      select: authUserWithRolesSelect,
+    });
+
+    if (!user?.passwordHash) {
+      return fail(reply, 400, 'NO_PASSWORD', 'У аккаунта нет пароля');
+    }
+
+    const valid = await bcrypt.compare(body.currentPassword, user.passwordHash);
+    if (!valid) {
+      return fail(reply, 401, 'INVALID_PASSWORD', 'Неверный текущий пароль');
+    }
+
+    const passwordHash = await bcrypt.hash(body.newPassword, BCRYPT_ROUNDS);
+    await fastify.prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash },
+    });
+
+    await invalidateAllUserTokens(fastify.redis, user.id);
+
+    reply
+      .clearCookie('access_token', { path: '/' })
+      .clearCookie('refresh_token', { path: '/' });
+
+    return ok(reply, { message: 'Пароль успешно изменён. Войдите снова.' });
   });
 };

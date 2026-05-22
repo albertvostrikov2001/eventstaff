@@ -17,10 +17,12 @@ import {
 } from 'lucide-react';
 import { EmployerIndividualRequestModal } from '@/components/employer/EmployerIndividualRequestModal';
 import { EmployerRecentApplicationsSection } from '@/components/employer/EmployerRecentApplicationsSection';
+import { Button } from '@/components/ui/button';
 
 interface Stats {
   activeVacancies: number;
   pendingApplications: number;
+  totalApplications: number;
   favoriteWorkers: number;
 }
 
@@ -48,6 +50,7 @@ export default function EmployerDashboardPage() {
   const [stats, setStats] = useState<Stats>({
     activeVacancies: 0,
     pendingApplications: 0,
+    totalApplications: 0,
     favoriteWorkers: 0,
   });
   const [usage, setUsage] = useState<{
@@ -62,23 +65,24 @@ export default function EmployerDashboardPage() {
 
   useEffect(() => {
     Promise.all([
-      apiClient.get<{ data: { id: string; status: string; _count: { applications: number } }[] }>(
-        '/employer/vacancies',
-      ),
+      apiClient.get<{ data: { id: string; status: string }[] }>('/employer/vacancies', {
+        page: 1,
+        perPage: 50,
+      }),
       apiClient.get<{ data: unknown[] }>('/employer/favorites/workers'),
+      apiClient.get<{
+        data: { pendingApplicationsCount: number; totalApplicationsCount: number };
+      }>('/employer/dashboard/summary'),
       apiClient
         .get<{ data: { used: number; limit: number; unlimited: boolean } }>('/user/review-usage')
         .catch(() => null),
     ])
-      .then(([vacRes, favRes, usageRes]) => {
+      .then(([vacRes, favRes, summaryRes, usageRes]) => {
         const activeVacancies = vacRes.data.filter((v) => v.status === 'active').length;
-        const pendingApplications = vacRes.data.reduce(
-          (sum, v) => sum + (v._count?.applications ?? 0),
-          0,
-        );
         setStats({
           activeVacancies,
-          pendingApplications,
+          pendingApplications: summaryRes.data.pendingApplicationsCount,
+          totalApplications: summaryRes.data.totalApplicationsCount,
           favoriteWorkers: favRes.data.length,
         });
         if (usageRes?.data) setUsage(usageRes.data);
@@ -144,28 +148,51 @@ export default function EmployerDashboardPage() {
       )}
 
       <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {[
-          {
-            label: 'Активных вакансий',
-            value: stats.activeVacancies,
-            icon: FileText,
-            color: 'text-sky-300 bg-white/10',
-          },
-          { label: 'Откликов', value: stats.pendingApplications, icon: Users, color: 'text-violet-300 bg-white/10' },
-          { label: 'В избранном', value: stats.favoriteWorkers, icon: Heart, color: 'text-pink-300 bg-white/10' },
-        ].map((m) => (
-          <div key={m.label} className={`p-5 ${cardCls()}`}>
-            <div className="flex items-center gap-3">
-              <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${m.color}`}>
-                <m.icon className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-white">{loading ? '—' : m.value}</div>
-                <div className="text-xs text-white/50">{m.label}</div>
+        <div className={`p-5 ${cardCls()}`}>
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl text-sky-300 bg-white/10">
+              <FileText className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-white">{loading ? '—' : stats.activeVacancies}</div>
+              <div className="text-xs text-white/50">Активных вакансий</div>
+            </div>
+          </div>
+        </div>
+
+        <Link
+          href="/employer/applications?status=pending"
+          className={`block p-5 transition hover:bg-white/[0.06] ${
+            stats.pendingApplications > 0
+              ? 'rounded-[14px] border border-emerald-400/40 bg-white/[0.04] shadow-[0_0_0_1px_rgba(52,211,153,0.12)]'
+              : cardCls()
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl text-violet-300 bg-white/10">
+              <Users className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-white">{loading ? '—' : stats.pendingApplications}</div>
+              <div className="text-xs text-white/50">Откликов ждут ответа</div>
+              <div className="mt-1 text-[11px] text-white/50">
+                Всего откликов: {loading ? '—' : stats.totalApplications}
               </div>
             </div>
           </div>
-        ))}
+        </Link>
+
+        <div className={`p-5 ${cardCls()}`}>
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl text-pink-300 bg-white/10">
+              <Heart className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-white">{loading ? '—' : stats.favoriteWorkers}</div>
+              <div className="text-xs text-white/50">В избранном</div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="mt-8 space-y-6">
@@ -174,13 +201,15 @@ export default function EmployerDashboardPage() {
           <p className="mt-2 max-w-xl text-sm text-white/55">
             Мы подберём персонал лично для вас. Оставьте заявку — менеджер свяжется с вами в течение 24 часов.
           </p>
-          <button
+          <Button
             type="button"
-            className="mt-4 rounded-xl bg-gradient-to-r from-emerald-400 to-teal-500 px-6 py-2.5 text-sm font-semibold text-gray-950 shadow-lg transition hover:brightness-105"
+            variant="primary"
+            size="md"
+            className="mt-4 rounded-xl shadow-lg"
             onClick={() => setRequestModalOpen(true)}
           >
             Оставить персональный запрос
-          </button>
+          </Button>
         </div>
 
         {myRequests.length > 0 && (
@@ -223,20 +252,21 @@ export default function EmployerDashboardPage() {
                 Создать вакансию
               </Link>
               <Link
-                href="/employer/workers"
+                href="/employer/search"
                 className="flex items-center gap-3 rounded-[14px] border border-white/[0.08] bg-white/5 px-4 py-3 text-sm font-medium text-white/90 transition hover:border-primary-400/50 hover:bg-white/10"
               >
                 <Search className="h-4 w-4 text-primary-400" />
                 Найти персонал
               </Link>
-              <button
+              <Button
                 type="button"
-                className="flex w-full items-center gap-3 rounded-[14px] border border-white/[0.08] bg-white/5 px-4 py-3 text-left text-sm font-medium text-white/90 transition hover:border-primary-400/50 hover:bg-white/10"
+                variant="ghostInverse"
+                className="flex w-full items-center justify-start gap-3 rounded-[14px] border border-white/[0.08] bg-white/5 px-4 py-3 text-left text-sm font-medium text-white/90 transition hover:border-primary-400/50 hover:bg-white/10"
                 onClick={() => setRequestModalOpen(true)}
               >
                 <Send className="h-4 w-4 text-primary-400" />
                 Персональный запрос
-              </button>
+              </Button>
             </div>
           </div>
 

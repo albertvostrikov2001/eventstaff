@@ -15,6 +15,7 @@ import {
 } from '@/hooks/useEmployerFavoriteWorkerIds';
 import { apiClient } from '@/lib/api/client';
 import { useToast } from '@/components/ui/toast-context';
+import { Button } from '@/components/ui/button';
 
 function FavoritesInner() {
   const { toast } = useToast();
@@ -91,7 +92,7 @@ function FavoritesInner() {
         ) : workers.length === 0 ? (
           total === 0 ? (
             <div className="rounded-[18px] border border-dashed border-white/[0.12] bg-black/20 px-6 py-16 text-center">
-              <Heart className="mx-auto mb-4 h-10 w-10 text-white/35" aria-hidden />
+              <Heart className="mx-auto mb-4 h-10 w-10 text-white/40" aria-hidden />
               <h3 className="font-semibold text-white">У вас пока нет избранных кандидатов</h3>
               <p className="mx-auto mb-8 mt-3 max-w-md text-sm text-white/58">
                 Найдите специалистов в разделе «Поиск персонала» и сохраняйте подходящих исполнителей.
@@ -132,22 +133,24 @@ function FavoritesInner() {
                   Страница {page} из {totalPages}
                 </span>
                 <div className="flex gap-2">
-                  <button
+                  <Button
                     type="button"
+                    variant="muted"
+                    size="sm"
                     disabled={page <= 1}
-                    className="rounded-[12px] border border-white/[0.12] px-4 py-2 text-white/85 disabled:opacity-35"
                     onClick={() => setPage((p) => Math.max(1, p - 1))}
                   >
                     Назад
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     type="button"
+                    variant="muted"
+                    size="sm"
                     disabled={page >= totalPages}
-                    className="rounded-[12px] border border-white/[0.12] px-4 py-2 text-white/85 disabled:opacity-35"
                     onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   >
                     Далее
-                  </button>
+                  </Button>
                 </div>
               </div>
             ) : null}

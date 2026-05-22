@@ -147,7 +147,8 @@ export function FormDateTimePicker({
             id={fieldId}
             type="button"
             disabled={disabled}
-            aria-invalid={error ? true : undefined}
+            aria-expanded={open}
+            aria-haspopup="dialog"
             onBlur={() => onBlur?.()}
             className={cn(
               formControlCn(variant, tone, { disabled }),
@@ -174,6 +175,8 @@ export function FormDateTimePicker({
 
         <Popover.Portal>
           <Popover.Content
+            id={`${fieldId}-datepicker`}
+            aria-labelledby={fieldId}
             sideOffset={8}
             collisionPadding={12}
             className={cn(

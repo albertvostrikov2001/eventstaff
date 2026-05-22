@@ -3,11 +3,11 @@
 import { useEffect, useState, Suspense } from 'react';
 import { BUSINESS_TYPES } from '@unity/shared';
 import { EmployerCard } from '@/components/catalog/EmployerCard';
-import { SlidersHorizontal, X, Building2 } from 'lucide-react';
+import { SlidersHorizontal, X, Building2, AlertCircle, RotateCcw } from 'lucide-react';
+import { config } from '@/lib/config';
+import { Button } from '@/components/ui/button';
 
-import { MOCK_EMPLOYERS } from '@/lib/mockData';
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+const API = config.apiUrl;
 
 interface EmployerProfile {
   id: string;
@@ -37,6 +37,7 @@ function EmployersCatalog() {
   const [total, setTotal] = useState(0);
   const [cities, setCities] = useState<City[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
   const [businessType, setBusinessType] = useState('');
@@ -53,6 +54,7 @@ function EmployersCatalog() {
 
   useEffect(() => {
     setLoading(true);
+    setError(false);
     const params = new URLSearchParams();
     if (businessType) params.set('businessType', businessType);
     if (cityId) params.set('cityId', cityId);
@@ -68,8 +70,9 @@ function EmployersCatalog() {
         setTotal(j.meta?.total ?? 0);
       })
       .catch(() => {
-        setEmployers(MOCK_EMPLOYERS);
-        setTotal(MOCK_EMPLOYERS.length);
+        setEmployers([]);
+        setTotal(0);
+        setError(true);
       })
       .finally(() => setLoading(false));
   }, [businessType, cityId, sortBy, page]);
@@ -174,6 +177,15 @@ function EmployersCatalog() {
           {[...Array(6)].map((_, i) => (
             <div key={i} className="h-52 animate-pulse rounded-card bg-gray-200" />
           ))}
+        </div>
+      ) : error ? (
+        <div className="mt-16 flex flex-col items-center gap-3 text-center">
+          <AlertCircle className="h-12 w-12 text-gray-300" />
+          <p className="text-gray-600">Не удалось загрузить данные</p>
+          <Button type="button" variant="outline" onClick={() => { setPage(1); setError(false); }}>
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Попробовать снова
+          </Button>
         </div>
       ) : employers.length === 0 ? (
         <div className="mt-16 flex flex-col items-center gap-3 text-center">

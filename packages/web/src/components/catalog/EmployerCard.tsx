@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { BUSINESS_TYPES } from '@unity/shared';
 import { MapPin, Star, Briefcase, ShieldCheck, Globe } from 'lucide-react';
 
@@ -51,7 +52,14 @@ export function EmployerCard({
       <div className="flex items-start gap-4">
         <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-primary-100">
           {logoUrl ? (
-            <img src={logoUrl} alt={displayName} className="h-14 w-14 rounded-xl object-cover" />
+            <Image
+              src={logoUrl}
+              alt={`Логотип ${displayName}`}
+              width={56}
+              height={56}
+              className="h-14 w-14 rounded-xl object-cover"
+              sizes="56px"
+            />
           ) : (
             <span className="text-lg font-bold text-primary-600">{initials}</span>
           )}

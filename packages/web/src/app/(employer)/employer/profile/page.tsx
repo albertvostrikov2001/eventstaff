@@ -1,9 +1,10 @@
 'use client';
 
 import type { EmployerProfileUpdateInput } from '@unity/shared';
-import { EMPLOYER_COMPANY_ACTIVITY_OPTIONS, employerProfileUpdateSchema } from '@unity/shared';
+import { EMPLOYER_COMPANY_ACTIVITY_OPTIONS } from '@unity/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ApiError, apiClient } from '@/lib/api/client';
+import { CompanyProfileSchema } from '@/lib/validations/employer';
 import {
   employerFormHeadingClass,
   employerFormSectionShellClass,
@@ -14,6 +15,7 @@ import { FormField } from '@/components/forms/FormField';
 import { FormSelect } from '@/components/forms/FormSelect';
 import { FormTextarea } from '@/components/forms/FormTextarea';
 import { useToast } from '@/components/ui/toast-context';
+import { Button } from '@/components/ui/button';
 import { Shield, ShieldCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -85,7 +87,7 @@ export default function EmployerProfilePage() {
   const [emailVerifiedState, setEmailVerifiedState] = useState(false);
 
   const form = useForm<EmployerProfileUpdateInput>({
-    resolver: zodResolver(employerProfileUpdateSchema),
+    resolver: zodResolver(CompanyProfileSchema),
     defaultValues: {
       type: 'company',
       companyName: '',
@@ -427,13 +429,15 @@ export default function EmployerProfilePage() {
         </section>
 
         <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
-          <button
+          <Button
             type="submit"
+            variant="primary"
             disabled={!isDirty || isSubmitting}
-            className="inline-flex items-center justify-center rounded-[10px] bg-[color:var(--u-emerald,#2d6a4a)] px-6 py-3 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(45,106,74,0.35)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/40 disabled:shadow-none"
+            isLoading={isSubmitting}
+            className="rounded-[10px] px-6 py-3 shadow-[0_8px_24px_rgba(45,106,74,0.35)] disabled:bg-white/10 disabled:text-white/40 disabled:shadow-none"
           >
-            {isSubmitting ? 'Сохранение…' : 'Сохранить'}
-          </button>
+            Сохранить
+          </Button>
         </div>
       </form>
     </div>

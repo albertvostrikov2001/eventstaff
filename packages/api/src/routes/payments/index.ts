@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { ShiftPayStatus, ShiftStatus } from '@prisma/client';
 import { YookassaAdapter } from '@/payment/yookassa-adapter';
 import { publicSiteUrl } from '@/lib/public-site-url';
+import { replyFail, replyOk, replyPaginated } from '@/lib/api-reply';
 
 function paymentAdapterFromEnv() {
   const shopId = process.env.YOOKASSA_SHOP_ID?.trim() ?? '';
@@ -12,7 +13,6 @@ function paymentAdapterFromEnv() {
   }
   return new YookassaAdapter(shopId, key);
 }
-
 function returnUrl(): string {
   return (
     process.env.PAYMENT_RETURN_URL?.trim() ||
@@ -32,9 +32,7 @@ export const paymentRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/create', { preHandler: authEmployer, config: { rateLimit: { max: 30 } } }, async (request, reply) => {
     const adapter = paymentAdapterFromEnv();
     if (!adapter) {
-      return reply.status(503).send({
-        error: { code: 'PAYMENTS_DISABLED', message: 'Платежи не настроены' },
-      });
+      return replyFail(reply, 503, 'PAYMENTS_UNAVAILABLE', 'Платежи временно недоступны');
     }
     const body = z.object({ shiftId: z.string() }).parse(request.body);
     const uid = request.jwtUser.sub;
@@ -44,29 +42,23 @@ export const paymentRoutes: FastifyPluginAsync = async (fastify) => {
       include: { booking: true },
     });
     if (!shift) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Смена не найдена' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Смена не найдена');
     }
     if (shift.employerId !== uid) {
-      return reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Нет доступа' } });
+      return replyFail(reply, 403, 'FORBIDDEN', 'Нет доступа');
     }
     if (shift.status !== ShiftStatus.COMPLETED) {
-      return reply
-        .status(400)
-        .send({ error: { code: 'INVALID_STATE', message: 'Смена должна быть успешно завершена' } });
+      return replyFail(reply, 400, 'INVALID_STATE', 'Смена должна быть успешно завершена');
     }
     if (!shift.workerConfirmed || !shift.employerConfirmed) {
-      return reply.status(400).send({
-        error: { code: 'INVALID_STATE', message: 'Нужны подтверждения обеих сторон' },
-      });
+      return replyFail(reply, 400, 'INVALID_STATE', 'Нужны подтверждения обеих сторон');
     }
     const previous = await fastify.prisma.shiftPayment.findUnique({ where: { shiftId: shift.id } });
     if (previous) {
       if (previous.status === ShiftPayStatus.FAILED) {
         await fastify.prisma.shiftPayment.delete({ where: { id: previous.id } });
       } else {
-        return reply
-          .status(400)
-          .send({ error: { code: 'ALREADY_PAID', message: 'Оплата по этой смене уже создана' } });
+        return replyFail(reply, 400, 'ALREADY_PAID', 'Оплата по этой смене уже создана');
       }
     }
 
@@ -106,9 +98,7 @@ export const paymentRoutes: FastifyPluginAsync = async (fastify) => {
         data: { status: ShiftPayStatus.FAILED, providerData: { error: 'create_failed' } },
       });
       fastify.log.error({ err: e, shiftPaymentId: sp.id }, 'yookassa_create_failed');
-      return reply
-        .status(502)
-        .send({ error: { code: 'GATEWAY', message: 'Не удалось создать платёж' } });
+      return replyFail(reply, 502, 'GATEWAY', 'Не удалось создать платёж');
     }
 
     await fastify.prisma.shiftPayment.update({
@@ -120,9 +110,7 @@ export const paymentRoutes: FastifyPluginAsync = async (fastify) => {
       },
     });
 
-    return reply.send({
-      data: { paymentUrl: payUrl, shiftPaymentId: sp.id, providerPaymentId: providerId },
-    });
+    return replyOk(reply, { paymentUrl: payUrl, shiftPaymentId: sp.id, providerPaymentId: providerId });
   });
 
   // GET /payments/shift/:shiftId
@@ -137,13 +125,13 @@ export const paymentRoutes: FastifyPluginAsync = async (fastify) => {
         include: { payments: true },
       });
       if (!shift) {
-        return reply.status(404).send({ error: { code: 'NOT_FOUND' } });
+        return replyFail(reply, 404, 'NOT_FOUND', 'Смена не найдена');
       }
       if (shift.workerId !== uid && shift.employerId !== uid) {
-        return reply.status(403).send({ error: { code: 'FORBIDDEN' } });
+        return replyFail(reply, 403, 'FORBIDDEN', 'Нет доступа');
       }
       const p = shift.payments[0] ?? null;
-      return reply.send({ data: p });
+      return replyOk(reply, p);
     },
   );
 
@@ -177,10 +165,11 @@ export const paymentRoutes: FastifyPluginAsync = async (fastify) => {
         }),
       ]);
 
-      return reply.send({
-        success: true,
-        data: rows,
-        meta: { total, page, perPage, totalPages: Math.ceil(total / perPage) },
+      return replyPaginated(reply, rows, {
+        total,
+        page,
+        perPage,
+        totalPages: Math.ceil(total / perPage),
       });
     },
   );
@@ -192,10 +181,10 @@ export const paymentRoutes: FastifyPluginAsync = async (fastify) => {
     async (request: FastifyRequest<{ Querystring: { secret?: string } }>, reply: FastifyReply) => {
       const adapter = paymentAdapterFromEnv();
       if (!adapter) {
-        return reply.status(503).send({ error: { code: 'PAYMENTS_DISABLED' } });
+        return replyFail(reply, 503, 'PAYMENTS_UNAVAILABLE', 'Платежи временно недоступны');
       }
       if (!adapter.verifyWebhookRequest(request.query?.secret, webhookSecret())) {
-        return reply.status(401).send({ error: { code: 'UNAUTHORIZED' } });
+        return replyFail(reply, 401, 'UNAUTHORIZED', 'Не авторизовано');
       }
 
       const parseResult = z
@@ -212,12 +201,12 @@ export const paymentRoutes: FastifyPluginAsync = async (fastify) => {
         .safeParse(request.body);
 
       if (!parseResult.success) {
-        return reply.status(400).send({ error: { code: 'INVALID_BODY' } });
+        return replyFail(reply, 400, 'INVALID_BODY', 'Некорректное тело запроса');
       }
       const body = parseResult.data;
       const paymentId = body.object?.id;
       if (!paymentId) {
-        return reply.status(400).send({ error: { code: 'NO_PAYMENT_ID' } });
+        return replyFail(reply, 400, 'NO_PAYMENT_ID', 'Нет идентификатора платежа');
       }
 
       let external;
@@ -225,7 +214,7 @@ export const paymentRoutes: FastifyPluginAsync = async (fastify) => {
         external = await adapter.getPayment(paymentId);
       } catch (e) {
         fastify.log.error({ err: e, providerPaymentId: paymentId }, 'yookassa_webhook_verify');
-        return reply.status(502).send({ error: { code: 'VERIFY_FAILED' } });
+        return replyFail(reply, 502, 'VERIFY_FAILED', 'Не удалось проверить платёж');
       }
 
       const shiftPay = await fastify.prisma.shiftPayment.findFirst({
@@ -234,23 +223,23 @@ export const paymentRoutes: FastifyPluginAsync = async (fastify) => {
       });
       if (!shiftPay) {
         fastify.log.warn({ providerPaymentId: paymentId }, 'yookassa_unknown_payment_id');
-        return reply.send({ ok: true });
+        return replyOk(reply, { ok: true });
       }
 
       if (shiftPay.status === ShiftPayStatus.COMPLETED) {
-        return reply.send({ ok: true });
+        return replyOk(reply, { ok: true });
       }
 
       const meta = (external.metadata ?? {}) as Record<string, string>;
       if (meta.shiftPaymentId && meta.shiftPaymentId !== shiftPay.id) {
-        return reply.status(400).send({ error: { code: 'MISMATCH' } });
+        return replyFail(reply, 400, 'MISMATCH', 'Несовпадение метаданных');
       }
       if (Math.round(external.amountRub) !== shiftPay.amount) {
         fastify.log.error(
           { providerPaymentId: paymentId, shiftPaymentId: shiftPay.id },
           'yookassa_amount_mismatch',
         );
-        return reply.status(400).send({ error: { code: 'AMOUNT_MISMATCH' } });
+        return replyFail(reply, 400, 'AMOUNT_MISMATCH', 'Несовпадение суммы');
       }
 
       if (external.status === 'succeeded') {
@@ -306,7 +295,7 @@ export const paymentRoutes: FastifyPluginAsync = async (fastify) => {
             },
           });
         }
-        return reply.send({ ok: true });
+        return replyOk(reply, { ok: true });
       }
 
       if (external.status === 'canceled' || body.event === 'payment.canceled') {
@@ -315,7 +304,7 @@ export const paymentRoutes: FastifyPluginAsync = async (fastify) => {
           data: { status: ShiftPayStatus.FAILED, providerData: { yookassaStatus: 'canceled' } },
         });
       }
-      return reply.send({ ok: true });
+      return replyOk(reply, { ok: true });
     },
   );
 };

@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/toast-context';
 import { ApiError, apiClient } from '@/lib/api/client';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
+import { Breadcrumbs } from '@/components/ui/Breadcrumbs';
 
 interface City {
   id: string;
@@ -79,6 +80,13 @@ export function EditVacancyPageClient() {
   if (loading) {
     return (
       <div className="space-y-4">
+        <Breadcrumbs
+          items={[
+            { label: 'Мои вакансии', href: '/employer/vacancies' },
+            { label: '…' },
+            { label: 'Редактирование' },
+          ]}
+        />
         {[...Array(8)].map((_, i) => (
           <div
             key={i}
@@ -89,8 +97,23 @@ export function EditVacancyPageClient() {
     );
   }
 
+  if (!vacancy) {
+    return (
+      <div className="rounded-[16px] border border-white/[0.08] bg-white/[0.03] p-12 text-center text-white/70">
+        Вакансия не найдена
+      </div>
+    );
+  }
+
   return (
     <div>
+      <Breadcrumbs
+        items={[
+          { label: 'Мои вакансии', href: '/employer/vacancies' },
+          { label: vacancy.title, href: `/employer/vacancies/${id}` },
+          { label: 'Редактирование' },
+        ]}
+      />
       <div className="mb-8 flex flex-col gap-4">
         <div className="flex items-start gap-3">
           <Link
@@ -101,12 +124,11 @@ export function EditVacancyPageClient() {
           </Link>
           <div>
             <h1 className="text-2xl font-bold text-white">Редактировать вакансию</h1>
-            <p className="mt-1 text-sm text-white/55">{vacancy?.title}</p>
+            <p className="mt-1 text-sm text-white/55">{vacancy.title}</p>
           </div>
         </div>
       </div>
-      {vacancy && (
-        <VacancyForm
+      <VacancyForm
           mode="edit"
           cities={cities}
           defaultValues={{
@@ -134,7 +156,6 @@ export function EditVacancyPageClient() {
           onSubmit={onSubmit}
           submitLabel="Сохранить изменения"
         />
-      )}
     </div>
   );
 }

@@ -1,8 +1,6 @@
 import { ChatRoomView } from '@/components/chat/ChatRoomView';
 
-export function generateStaticParams() {
-  return [{ id: 'placeholder' }];
-}
+export const dynamic = 'force-dynamic';
 
 export default function WorkerConversationPage() {
   return <ChatRoomView listHref="/worker/messages" />;

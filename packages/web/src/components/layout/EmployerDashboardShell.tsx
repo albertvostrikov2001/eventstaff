@@ -16,6 +16,8 @@ import {
   Briefcase,
   Send,
   ExternalLink,
+  Settings,
+  Mail,
 } from 'lucide-react';
 import { DashboardSidebar } from '@/components/layout/DashboardSidebar';
 import { DashboardTopBar } from '@/components/layout/DashboardTopBar';
@@ -25,9 +27,11 @@ import {
   useEmployerFavoriteWorkerIdsQuery,
   useIsEmployerFavoritesLoaded,
 } from '@/hooks/useEmployerFavoriteWorkerIds';
+import { useNotificationUnreadCount } from '@/hooks/useNotificationUnreadCount';
 
 export function EmployerDashboardShell({ children }: { children: React.ReactNode }) {
   const chatUnread = useChatInboxStore((s) => s.unreadTotal);
+  const notifUnread = useNotificationUnreadCount();
   const isEmployer = useIsEmployerFavoritesLoaded();
   const { data: favIds } = useEmployerFavoriteWorkerIdsQuery(isEmployer);
   const favCount = favIds?.length ?? 0;
@@ -49,10 +53,12 @@ export function EmployerDashboardShell({ children }: { children: React.ReactNode
       { href: '/employer/messages', label: 'Сообщения', icon: MessageSquare, badge: chatUnread },
       { href: '/employer/applications', label: 'Все отклики', icon: Users },
       { href: '/employer/payments', label: 'Оплата', icon: Banknote },
-      { href: '/employer/settings/notifications', label: 'Уведомления', icon: Bell },
+      { href: '/employer/notifications', label: 'Уведомления', icon: Bell, badge: notifUnread || undefined },
+      { href: '/employer/settings', label: 'Настройки', icon: Settings },
+      { href: '/employer/settings/notifications', label: 'Email-рассылка', icon: Mail },
       { href: '/employer/profile/media', label: 'Медиа', icon: ImagePlus },
     ],
-    [chatUnread, favCount],
+    [chatUnread, favCount, notifUnread],
   );
 
   const sidebarFooter = (

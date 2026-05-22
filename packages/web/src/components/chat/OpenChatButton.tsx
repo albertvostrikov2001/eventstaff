@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { MessageCircle } from 'lucide-react';
 import { apiClient, ApiError } from '@/lib/api/client';
 import { useAuthStore } from '@/stores/authStore';
+import { useToast } from '@/components/ui/toast-context';
 
 export type ChatOpenContextPayload =
   | { type: 'GENERAL' }
@@ -19,20 +20,34 @@ type Props = {
   label?: string;
   /** Если задан — уходит на /chat/rooms/open вместо авто-подстановки контекста */
   context?: ChatOpenContextPayload;
+  /** Показать кнопку без предварительной проверки can-chat (например, после принятия отклика) */
+  forceVisible?: boolean;
 };
 
 /**
  * Открывает (или создаёт) чат с пользователем при наличии связи по правилам canChat.
  */
-export function OpenChatButton({ recipientUserId, className, label = 'Написать', context }: Props) {
+export function OpenChatButton({
+  recipientUserId,
+  className,
+  label = 'Написать',
+  context,
+  forceVisible = false,
+}: Props) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [suggested, setSuggested] = useState<ChatOpenContextPayload | null>(null);
   const router = useRouter();
   const { user } = useAuthStore();
+  const { toast } = useToast();
 
   useEffect(() => {
+    if (forceVisible) {
+      setAllowed(true);
+      setSuggested(context ?? { type: 'GENERAL' });
+      return;
+    }
     let cancelled = false;
     setAllowed(null);
     apiClient
@@ -54,7 +69,7 @@ export function OpenChatButton({ recipientUserId, className, label = 'Напис
     return () => {
       cancelled = true;
     };
-  }, [recipientUserId]);
+  }, [recipientUserId, forceVisible, context]);
 
   const messagesHref = user?.activeRole === 'worker' ? '/worker/messages' : '/employer/messages';
 
@@ -72,7 +87,8 @@ export function OpenChatButton({ recipientUserId, className, label = 'Напис
       router.push(`${messagesHref}/${r.data.room.id}`);
     } catch (e) {
       if (e instanceof ApiError && e.code === 'CHAT_NOT_ALLOWED') {
-        setErr('Чат пока недоступен');
+        setErr('Чат недоступен');
+        toast('Чат недоступен', 'error');
       } else if (e instanceof ApiError && e.code === 'BAD_CONTEXT') {
         setErr('Неверный контекст');
       } else {

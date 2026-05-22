@@ -9,8 +9,9 @@ import {
   ArrowLeft, Calendar, Users, X,
 } from 'lucide-react';
 import { EmployerLogoMark } from '@/components/employer/EmployerLogoMark';
+import { config } from '@/lib/config';
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+const API = config.apiUrl;
 
 interface Vacancy {
   id: string;

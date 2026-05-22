@@ -36,12 +36,27 @@ const nextConfig = {
               protocol: 'https',
               hostname: 'storage.yandexcloud.net',
             },
+            { protocol: 'https', hostname: 'images.unsplash.com', pathname: '/**' },
+            { protocol: 'https', hostname: 'api.dicebear.com', pathname: '/**' },
+            { protocol: 'http', hostname: 'localhost', pathname: '/**' },
+            { protocol: 'http', hostname: '127.0.0.1', pathname: '/**' },
+            { protocol: 'http', hostname: '147.45.235.70', pathname: '/**' },
+            { protocol: 'https', hostname: '147.45.235.70', pathname: '/**' },
           ],
         },
       }),
   ...(basePath ? { basePath } : {}),
   ...(!isStaticExport
     ? {
+        async redirects() {
+          return [
+            {
+              source: '/messages/:path*',
+              destination: '/worker/messages/:path*',
+              permanent: false,
+            },
+          ];
+        },
         async headers() {
           return [
             {

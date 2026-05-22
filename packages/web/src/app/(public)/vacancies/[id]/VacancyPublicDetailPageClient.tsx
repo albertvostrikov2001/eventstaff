@@ -7,8 +7,9 @@ import { STAFF_CATEGORIES, RATE_TYPES, EMPLOYMENT_TYPES } from '@unity/shared';
 import { MapPin, Calendar, ShieldCheck, ArrowLeft } from 'lucide-react';
 import { formatDateTimeRu } from '@/lib/dates/formatDateTime';
 import { EmployerLogoMark } from '@/components/employer/EmployerLogoMark';
+import { config } from '@/lib/config';
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+const API = config.apiUrl;
 
 interface VacancyPublic {
   id: string;

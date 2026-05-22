@@ -319,6 +319,7 @@ enum MediaType {
   COMPANY_LOGO
   COMPANY_BANNER
   COMPANY_GALLERY
+  CHAT_FILE
 }
 
 // ─────────────────────────────────────────────
@@ -1136,6 +1137,20 @@ model IndividualRequest {
   @@map("individual_requests")
 }
 
+model ContactRequest {
+  id        String   @id @default(cuid())
+  name      String   @db.VarChar(200)
+  email     String   @db.VarChar(320)
+  message   String   @db.Text
+  status    String   @default("new") @db.VarChar(20)
+  adminNote String?  @map("admin_note") @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@map("contact_requests")
+}
+
 model Media {
   id             String     @id @default(cuid())
   userId         String     @map("user_id")
@@ -1237,6 +1252,7 @@ model AdminAuditLog {
 enum MessageType {
   TEXT
   SYSTEM
+  FILE
 }
 
 enum ChatRoomContextType {
@@ -1269,15 +1285,20 @@ model ChatRoom {
 }
 
 model ChatMessage {
-  id         String      @id @default(cuid())
-  roomId     String      @map("room_id")
-  senderId   String      @map("sender_id")
-  type       MessageType @default(TEXT)
-  text       String?     @db.Text
-  isRead     Boolean     @default(false) @map("is_read")
-  readAt     DateTime?   @map("read_at")
-  isSystem   Boolean     @default(false) @map("is_system")
-  createdAt  DateTime    @default(now()) @map("created_at")
+  id                  String      @id @default(cuid())
+  roomId              String      @map("room_id")
+  senderId            String      @map("sender_id")
+  type                MessageType @default(TEXT)
+  text                String?     @db.Text
+  isRead              Boolean     @default(false) @map("is_read")
+  readAt              DateTime?   @map("read_at")
+  isSystem            Boolean     @default(false) @map("is_system")
+  createdAt           DateTime    @default(now()) @map("created_at")
+  fileUrl             String?     @map("file_url") @db.Text
+  fileName            String?     @map("file_name") @db.VarChar(255)
+  replyToId           String?     @map("reply_to_id")
+  replyToText         String?     @map("reply_to_text") @db.Text
+  replyToSenderName   String?     @map("reply_to_sender_name") @db.VarChar(100)
 
   room   ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
   sender User     @relation("ChatMessageSender", fields: [senderId], references: [id], onDelete: Cascade)

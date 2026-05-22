@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   MapPin, Star, Briefcase, BookOpen, Plane,
   Heart, ArrowLeft, CheckCircle, Calendar, Languages, Clock,
@@ -12,13 +13,16 @@ import { useAuthStore } from '@/stores/authStore';
 import { apiClient } from '@/lib/api/client';
 import { OpenChatButton } from '@/components/chat/OpenChatButton';
 import { useToast } from '@/components/ui/toast-context';
+import { UserAvatar } from '@/components/ui/UserAvatar';
+import { config } from '@/lib/config';
+import { resolveMediaUrl } from '@/lib/media/url';
 import {
   useEmployerFavoriteWorkerIdsQuery,
   useIsEmployerFavoritesLoaded,
   useToggleEmployerFavorite,
 } from '@/hooks/useEmployerFavoriteWorkerIds';
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+const API = config.apiUrl;
 
 const RATE_SUFFIXES: Record<string, string> = {
   hourly: 'ч',
@@ -61,6 +65,7 @@ interface WorkerDetail {
     dateFrom: string;
     dateTo: string | null;
   }[];
+  portfolio: { id: string; url: string }[];
 }
 
 function formatDate(dateStr: string): string {
@@ -92,6 +97,7 @@ export function WorkerDetailPageClient() {
   const [reviews, setReviews] = useState<RevRow[] | null>(null);
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [reviewBlock, setReviewBlock] = useState<string | null>(null);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`${API}/catalog/workers/${id}`, { credentials: 'include' })
@@ -205,13 +211,12 @@ export function WorkerDetailPageClient() {
         <div className="lg:col-span-2 space-y-6">
           <div className="rounded-card border border-gray-200 bg-white p-6 shadow-sm">
             <div className="flex items-start gap-5">
-              <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-full bg-primary-100">
-                {worker.photoUrl ? (
-                  <img src={worker.photoUrl} alt={worker.firstName} className="h-24 w-24 rounded-full object-cover" />
-                ) : (
-                  <span className="text-3xl font-bold text-primary-600">{worker.firstName[0]?.toUpperCase()}</span>
-                )}
-              </div>
+              <UserAvatar
+                src={worker.photoUrl}
+                name={`${worker.firstName} ${worker.lastName}`}
+                size={80}
+                className="h-24 w-24 shrink-0"
+              />
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -286,6 +291,35 @@ export function WorkerDetailPageClient() {
               </p>
             )}
           </div>
+
+          {worker.portfolio && worker.portfolio.length > 0 && (
+            <div className="rounded-card border border-gray-200 bg-white p-6 shadow-sm">
+              <h2 className="mb-4 text-base font-semibold text-gray-900">Портфолио</h2>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {worker.portfolio.map((photo) => {
+                  const src = resolveMediaUrl(photo.url);
+                  if (!src) return null;
+                  return (
+                  <button
+                    key={photo.id}
+                    type="button"
+                    className="relative aspect-square overflow-hidden rounded-lg bg-gray-100"
+                    onClick={() => setLightboxUrl(src)}
+                  >
+                    <Image
+                      src={src}
+                      alt=""
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 640px) 50vw, 200px"
+                      unoptimized
+                    />
+                  </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {worker.categories.length > 0 && (
             <div className="rounded-card border border-gray-200 bg-white p-6 shadow-sm">
@@ -445,6 +479,23 @@ export function WorkerDetailPageClient() {
           </div>
         </div>
       </div>
+
+      {lightboxUrl ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4"
+          onClick={() => setLightboxUrl(null)}
+          aria-label="Закрыть"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightboxUrl}
+            alt=""
+            className="max-h-[90vh] max-w-full rounded-lg object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </button>
+      ) : null}
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { STAFF_CATEGORIES } from '@unity/shared';
 import { MapPin, Star, Briefcase, BookOpen, Plane, Heart, MessageSquare } from 'lucide-react';
+import { UserAvatar } from '@/components/ui/UserAvatar';
 
 interface WorkerCardProps {
   id: string;
@@ -26,6 +27,7 @@ export function WorkerCard({
   id,
   firstName,
   lastName,
+  photoUrl,
   categories,
   city,
   desiredRate,
@@ -45,11 +47,12 @@ export function WorkerCard({
   return (
     <div className="flex flex-col rounded-card border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-card-hover">
       <div className="flex items-start gap-4">
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-primary-100">
-          <span className="text-xl font-bold text-primary-600">
-            {firstName[0]?.toUpperCase() ?? '?'}
-          </span>
-        </div>
+        <UserAvatar
+          src={photoUrl}
+          name={`${firstName} ${lastName}`}
+          size={64}
+          className="h-14 w-14 shrink-0"
+        />
         <div className="flex-1 min-w-0">
           <Link
             href={`/workers/${id}`}

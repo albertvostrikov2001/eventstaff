@@ -5,6 +5,8 @@ import type { EmailLogStatus, InAppNotificationType } from '@prisma/client';
 import { ReliabilityService } from '@/services/reliability-service';
 import { IndividualRequestStatus } from '@prisma/client';
 import { invalidateAllUserTokens } from '@/lib/refresh-tokens';
+import { replyFail, replyOk, replyPaginated } from '../../lib/api-reply';
+import { safeUserSelect } from '@/lib/safe-user-select';
 
 export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   const adminAuth = [fastify.authenticate, fastify.requireRole(['admin'])];
@@ -40,7 +42,8 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.prisma.user.count({ where }),
       fastify.prisma.user.findMany({
         where,
-        include: {
+        select: {
+          ...safeUserSelect,
           roles: true,
           workerProfile: { select: { id: true, firstName: true, lastName: true, photoUrl: true, visibility: true, isVerified: true } },
           employerProfile: { select: { id: true, companyName: true, contactName: true, logoUrl: true, isVerified: true } },
@@ -52,9 +55,11 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ]);
 
-    return reply.send({
-      data: users,
-      meta: { total, page: query.page, limit: 20, totalPages: Math.ceil(total / 20) },
+    return replyPaginated(reply, users, {
+      total,
+      page: query.page,
+      limit: 20,
+      totalPages: Math.ceil(total / 20),
     });
   });
 
@@ -65,9 +70,12 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       .object({ role: z.enum(['worker', 'employer', 'admin', 'moderator']) })
       .parse(request.body);
 
-    const user = await fastify.prisma.user.findUnique({ where: { id }, include: { roles: true } });
+    const user = await fastify.prisma.user.findUnique({
+      where: { id },
+      select: { ...safeUserSelect, roles: true },
+    });
     if (!user) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'User not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'User not found');
     }
 
     await fastify.prisma.$transaction([
@@ -82,7 +90,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ]);
 
-    return reply.send({ data: { success: true } });
+    return replyOk(reply, { success: true });
   });
 
   // PATCH /employers/:id/verify
@@ -92,7 +100,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
     const profile = await fastify.prisma.employerProfile.findUnique({ where: { id } });
     if (!profile) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Employer not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Employer not found');
     }
 
     const updated = await fastify.prisma.employerProfile.update({
@@ -103,7 +111,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       },
     });
 
-    return reply.send({ data: updated });
+    return replyOk(reply, updated);
   });
 
   // PATCH /workers/:id/visibility
@@ -115,7 +123,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
     const profile = await fastify.prisma.workerProfile.findUnique({ where: { id } });
     if (!profile) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Worker not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Worker not found');
     }
 
     const updated = await fastify.prisma.workerProfile.update({
@@ -123,7 +131,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       data: { visibility: body.visibility },
     });
 
-    return reply.send({ data: updated });
+    return replyOk(reply, updated);
   });
 
   // GET /vacancies
@@ -154,9 +162,11 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ]);
 
-    return reply.send({
-      data: vacancies,
-      meta: { total, page: query.page, limit: 20, totalPages: Math.ceil(total / 20) },
+    return replyPaginated(reply, vacancies, {
+      total,
+      page: query.page,
+      limit: 20,
+      totalPages: Math.ceil(total / 20),
     });
   });
 
@@ -194,9 +204,11 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ]);
 
-    return reply.send({
-      data: applications,
-      meta: { total, page: query.page, limit: 20, totalPages: Math.ceil(total / 20) },
+    return replyPaginated(reply, applications, {
+      total,
+      page: query.page,
+      limit: 20,
+      totalPages: Math.ceil(total / 20),
     });
   });
 
@@ -210,9 +222,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         fastify.prisma.employerProfile.count({ where: { isVerified: true } }),
       ]);
 
-    return reply.send({
-      data: { users, activeVacancies, applications, verifiedEmployers },
-    });
+    return replyOk(reply, { users, activeVacancies, applications, verifiedEmployers });
   });
 
   fastify.get('/complaints', { preHandler: adminAuth }, async (request, reply) => {
@@ -245,9 +255,11 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ]);
 
-    return reply.send({
-      data: rows,
-      meta: { total, page: query.page, limit, totalPages: Math.ceil(total / limit) },
+    return replyPaginated(reply, rows, {
+      total,
+      page: query.page,
+      limit,
+      totalPages: Math.ceil(total / limit),
     });
   });
 
@@ -262,9 +274,9 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       },
     });
     if (!c) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Not found');
     }
-    return reply.send({ data: c });
+    return replyOk(reply, c);
   });
 
   fastify.patch('/complaints/:id/status', { preHandler: adminAuth }, async (request, reply) => {
@@ -278,7 +290,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       .parse(request.body);
     const current = await fastify.prisma.complaint.findUnique({ where: { id } });
     if (!current) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Not found');
     }
     const adminId = request.jwtUser.sub;
     const rel = new ReliabilityService(fastify.prisma, fastify.notificationService);
@@ -324,7 +336,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       data: { complaintId: id },
     });
     const updated = await fastify.prisma.complaint.findUniqueOrThrow({ where: { id } });
-    return reply.send({ data: updated });
+    return replyOk(reply, updated);
   });
 
   fastify.patch('/users/:id/unrestrict', { preHandler: adminAuth }, async (request, reply) => {
@@ -358,7 +370,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       body: 'Администратор снял ограничения с вашего аккаунта.',
       data: { unrestricted: true },
     });
-    return reply.send({ data: { success: true } });
+    return replyOk(reply, { success: true });
   });
 
   fastify.patch('/users/:id/ban', { preHandler: adminAuth }, async (request, reply) => {
@@ -368,12 +380,15 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       .parse(request.body ?? {});
 
     if (userId === request.jwtUser.sub) {
-      return reply.status(400).send({ error: { code: 'INVALID', message: 'Cannot ban yourself' } });
+      return replyFail(reply, 400, 'INVALID', 'Cannot ban yourself');
     }
 
-    const user = await fastify.prisma.user.findUnique({ where: { id: userId } });
+    const user = await fastify.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, status: true },
+    });
     if (!user) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'User not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'User not found');
     }
 
     const updated = await fastify.prisma.user.update({
@@ -404,7 +419,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       data: { banned: true },
     });
 
-    return reply.send({ data: updated });
+    return replyOk(reply, updated);
   });
 
   fastify.patch('/users/:id/unban', { preHandler: adminAuth }, async (request, reply) => {
@@ -413,9 +428,12 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       .object({ reason: z.string().max(2000).optional() })
       .parse(request.body ?? {});
 
-    const user = await fastify.prisma.user.findUnique({ where: { id: userId } });
+    const user = await fastify.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, status: true },
+    });
     if (!user) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'User not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'User not found');
     }
 
     const updated = await fastify.prisma.user.update({
@@ -442,7 +460,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       data: { unbanned: true },
     });
 
-    return reply.send({ data: updated });
+    return replyOk(reply, updated);
   });
 
   fastify.get('/email-logs', { preHandler: adminAuth }, async (request, reply) => {
@@ -489,9 +507,11 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ]);
 
-    return reply.send({
-      data: rows,
-      meta: { total, page: query.page, limit, totalPages: Math.ceil(total / limit) },
+    return replyPaginated(reply, rows, {
+      total,
+      page: query.page,
+      limit,
+      totalPages: Math.ceil(total / limit),
     });
   });
 
@@ -501,14 +521,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       try {
         await fastify.emailService.retrySend(request.params.id);
-        return reply.send({ data: { success: true } });
+        return replyOk(reply, { success: true });
       } catch (e) {
         const code = (e as { statusCode?: number }).statusCode;
         if (code === 404) {
-          return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Log not found' } });
+          return replyFail(reply, 404, 'NOT_FOUND', 'Log not found');
         }
         if (code === 400) {
-          return reply.status(400).send({ error: { code: 'INVALID', message: (e as Error).message } });
+          return replyFail(reply, 400, 'INVALID', (e as Error).message);
         }
         throw e;
       }
@@ -539,7 +559,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
               m.user.id,
       },
     }));
-    return reply.send({ data });
+    return replyOk(reply, data);
   });
 
   fastify.patch<{ Params: { id: string } }>(
@@ -566,14 +586,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           body: `Модератор одобрил ваш файл (${media.type}).`,
           data: { mediaId: media.id },
         });
-        return reply.send({ data: { success: true } });
+        return replyOk(reply, { success: true });
       } catch (e) {
         const code = (e as { statusCode?: number }).statusCode;
         if (code === 404) {
-          return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Не найдено' } });
+          return replyFail(reply, 404, 'NOT_FOUND', 'Не найдено');
         }
         if (code === 400) {
-          return reply.status(400).send({ error: { code: 'INVALID', message: (e as Error).message } });
+          return replyFail(reply, 400, 'INVALID', (e as Error).message);
         }
         throw e;
       }
@@ -610,14 +630,14 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
             data: { mediaId: id },
           });
         }
-        return reply.send({ data: { success: true } });
+        return replyOk(reply, { success: true });
       } catch (e) {
         const code = (e as { statusCode?: number }).statusCode;
         if (code === 404) {
-          return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Не найдено' } });
+          return replyFail(reply, 404, 'NOT_FOUND', 'Не найдено');
         }
         if (code === 400) {
-          return reply.status(400).send({ error: { code: 'INVALID', message: (e as Error).message } });
+          return replyFail(reply, 400, 'INVALID', (e as Error).message);
         }
         throw e;
       }
@@ -647,9 +667,11 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         include: { admin: { select: { id: true, email: true } } },
       }),
     ]);
-    return reply.send({
-      data: rows,
-      meta: { total, page: q.page, limit, totalPages: Math.ceil(total / limit) },
+    return replyPaginated(reply, rows, {
+      total,
+      page: q.page,
+      limit,
+      totalPages: Math.ceil(total / limit),
     });
   });
 
@@ -665,13 +687,11 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.prisma.individualRequest.count({ where: { status: 'NEW' } }),
       fastify.prisma.userReliabilityScore.count({ where: { isRestricted: true } }),
     ]);
-    return reply.send({
-      data: {
-        newComplaints,
-        pendingMedia,
-        newIndividualRequests,
-        restrictedUsers,
-      },
+    return replyOk(reply, {
+      newComplaints,
+      pendingMedia,
+      newIndividualRequests,
+      restrictedUsers,
     });
   });
 
@@ -738,9 +758,11 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         },
       }),
     ]);
-    return reply.send({
-      data: rows,
-      meta: { total, page: q.page, limit, totalPages: Math.ceil(total / limit) },
+    return replyPaginated(reply, rows, {
+      total,
+      page: q.page,
+      limit,
+      totalPages: Math.ceil(total / limit),
     });
   });
 
@@ -748,9 +770,9 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params as { id: string };
     const row = await fastify.prisma.individualRequest.findUnique({ where: { id } });
     if (!row) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Not found');
     }
-    return reply.send({ data: row });
+    return replyOk(reply, row);
   });
 
   fastify.patch('/individual-requests/:id', { preHandler: adminAuth }, async (request, reply) => {
@@ -763,7 +785,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       .parse(request.body ?? {});
     const cur = await fastify.prisma.individualRequest.findUnique({ where: { id } });
     if (!cur) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Not found');
     }
     const updated = await fastify.prisma.individualRequest.update({
       where: { id },
@@ -782,7 +804,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         ip: request.ip,
       },
     });
-    return reply.send({ data: updated });
+    return replyOk(reply, updated);
   });
 
   // ─── Disputed Shifts ──────────────────────────────────────────────────────
@@ -818,9 +840,11 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ]);
 
-    return reply.send({
-      data: shifts,
-      meta: { total, page: query.page, limit, totalPages: Math.ceil(total / limit) },
+    return replyPaginated(reply, shifts, {
+      total,
+      page: query.page,
+      limit,
+      totalPages: Math.ceil(total / limit),
     });
   });
 
@@ -842,10 +866,10 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     if (!shift) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Смена не найдена' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Смена не найдена');
     }
     if (shift.status !== ShiftStatus.DISPUTED) {
-      return reply.status(400).send({ error: { code: 'INVALID_STATE', message: 'Смена не является спорной' } });
+      return replyFail(reply, 400, 'INVALID_STATE', 'Смена не является спорной');
     }
 
     const reliabilityService = new ReliabilityService(fastify.prisma, fastify.notificationService);
@@ -879,6 +903,52 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       await reliabilityService.recalculate(shift.booking.worker.userId).catch(() => {});
     }
 
-    return reply.send({ data: updated });
+    return replyOk(reply, updated);
+  });
+
+  // GET /admin/contact-requests
+  fastify.get('/contact-requests', { preHandler: adminAuth }, async (request, reply) => {
+    const query = z.object({
+      status: z.enum(['new', 'read', 'replied']).optional(),
+      page: z.coerce.number().default(1),
+      limit: z.coerce.number().min(1).max(100).default(20),
+    }).parse(request.query);
+
+    const where = query.status ? { status: query.status } : {};
+    const [total, items] = await fastify.prisma.$transaction([
+      fastify.prisma.contactRequest.count({ where }),
+      fastify.prisma.contactRequest.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+    ]);
+
+    return replyPaginated(reply, items, {
+      total,
+      page: query.page,
+      limit: query.limit,
+      totalPages: Math.ceil(total / query.limit),
+    });
+  });
+
+  // PATCH /admin/contact-requests/:id
+  fastify.patch('/contact-requests/:id', { preHandler: adminAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = z.object({
+      status: z.enum(['new', 'read', 'replied']).optional(),
+      adminNote: z.string().max(2000).optional(),
+    }).parse(request.body);
+
+    const updated = await fastify.prisma.contactRequest.update({
+      where: { id },
+      data: {
+        ...(body.status ? { status: body.status } : {}),
+        ...(body.adminNote !== undefined ? { adminNote: body.adminNote } : {}),
+      },
+    });
+
+    return replyOk(reply, updated);
   });
 };

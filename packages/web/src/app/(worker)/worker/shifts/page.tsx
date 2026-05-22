@@ -322,7 +322,7 @@ function EmptyState({ tab }: { tab: string }) {
   };
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
-      <Briefcase className="mb-4 h-12 w-12 text-white/20" />
+      <Briefcase className="mb-4 h-12 w-12 text-white/40" />
       <p className="text-sm text-white/50">{messages[tab] ?? 'Нет смен'}</p>
       {tab === 'active' && (
         <Link
@@ -375,7 +375,7 @@ export default function WorkerShiftsPage() {
       })
       .catch(() => toast('Ошибка загрузки смен', 'error'))
       .finally(() => setLoading(false));
-  }, [tab, page]);
+  }, [tab, page, toast]);
 
   const handleTabChange = (newTab: Tab) => {
     setTab(newTab);

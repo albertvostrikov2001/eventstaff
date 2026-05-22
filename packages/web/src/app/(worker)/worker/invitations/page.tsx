@@ -15,6 +15,8 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
+import { useInvitationRespond } from '@/hooks/useApplyToVacancy';
+import { ScheduleConflictDialog } from '@/components/worker/ScheduleConflictDialog';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -204,9 +206,15 @@ export default function WorkerInvitationsPage() {
   const [meta, setMeta] = useState<Meta>({ total: 0, page: 1, totalPages: 1 });
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [decliningId, setDecliningId] = useState<string | null>(null);
   const [declineSaving, setDeclineSaving] = useState(false);
+  const {
+    acceptingId,
+    pendingConflict,
+    accept,
+    confirmConflict,
+    dismissConflict,
+  } = useInvitationRespond();
 
   const loadInvitations = () => {
     setLoading(true);
@@ -220,18 +228,12 @@ export default function WorkerInvitationsPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(loadInvitations, [page]);
+  useEffect(loadInvitations, [page, toast]);
 
   const handleAccept = async (id: string) => {
-    setAcceptingId(id);
-    try {
-      await apiClient.patch(`/worker/applications/${id}/respond`, { action: 'ACCEPT' });
-      toast('Приглашение принято. Работодатель получит уведомление.', 'success');
+    const ok = await accept(id);
+    if (ok) {
       setInvitations((prev) => prev.map((inv) => (inv.id === id ? { ...inv, status: 'confirmed' } : inv)));
-    } catch {
-      toast('Ошибка. Попробуйте ещё раз.', 'error');
-    } finally {
-      setAcceptingId(null);
     }
   };
 
@@ -271,9 +273,9 @@ export default function WorkerInvitationsPage() {
           </div>
         ) : invitations.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <Mail className="mb-4 h-12 w-12 text-white/20" />
+            <Mail className="mb-4 h-12 w-12 text-white/40" />
             <p className="text-sm text-white/50">У вас нет приглашений</p>
-            <p className="mt-1 text-xs text-white/30">
+            <p className="mt-1 text-xs text-white/50">
               Заполните профиль, чтобы работодатели могли вас найти
             </p>
           </div>
@@ -322,6 +324,24 @@ export default function WorkerInvitationsPage() {
           loading={declineSaving}
         />
       )}
+
+      <ScheduleConflictDialog
+        open={pendingConflict !== null}
+        message={pendingConflict?.message ?? ''}
+        conflicts={pendingConflict?.conflicts ?? []}
+        confirming={acceptingId !== null}
+        onConfirm={async () => {
+          const id = pendingConflict?.invitationId;
+          const ok = await confirmConflict();
+          if (ok && id) {
+            setInvitations((prev) =>
+              prev.map((inv) => (inv.id === id ? { ...inv, status: 'confirmed' } : inv)),
+            );
+          }
+        }}
+        onDismiss={dismissConflict}
+        confirmLabel="Всё равно принять"
+      />
     </div>
   );
 }

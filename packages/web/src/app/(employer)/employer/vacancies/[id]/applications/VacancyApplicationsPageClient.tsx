@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { apiClient } from '@/lib/api/client';
+import { apiClient, ApiError } from '@/lib/api/client';
 import { useToast } from '@/components/ui/toast-context';
 import { APPLICATION_STATUSES, STAFF_CATEGORIES } from '@unity/shared';
 import { ArrowLeft, MapPin, Check, X, User } from 'lucide-react';
-import { Breadcrumbs } from '@/components/common/Breadcrumbs';
+import { Breadcrumbs } from '@/components/ui/Breadcrumbs';
+import { Button } from '@/components/ui/button';
 import { OpenChatButton } from '@/components/chat/OpenChatButton';
 
 interface Application {
@@ -34,31 +35,53 @@ export function VacancyApplicationsPageClient() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
   const [vacancyTitle, setVacancyTitle] = useState('Вакансия');
+  const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
-  useEffect(() => {
+  const CHAT_READY = new Set(['confirmed', 'shift_started', 'completed', 'invited']);
+
+  const loadApplications = useCallback(() => {
+    if (!id) return;
+    setLoading(true);
+    setLoadError(false);
     apiClient
       .get<{ data: Application[] }>(`/employer/vacancies/${id}/applications`)
       .then((res) => {
         setApplications(res.data);
       })
-      .catch(() => toast('Ошибка загрузки откликов', 'error'))
+      .catch(() => {
+        setLoadError(true);
+        toast('Ошибка загрузки откликов', 'error');
+      })
       .finally(() => setLoading(false));
+  }, [id, toast]);
+
+  useEffect(() => {
+    loadApplications();
 
     apiClient
       .get<{ data: { title: string } }>(`/employer/vacancies/${id}`)
       .then((res) => setVacancyTitle(res.data.title))
       .catch(() => {});
-  }, [id, toast]);
+  }, [id, toast, loadApplications]);
 
   const updateStatus = async (appId: string, status: 'confirmed' | 'rejected') => {
+    setStatusUpdatingId(appId);
     try {
       await apiClient.patch(`/employer/applications/${appId}/status`, { status });
       setApplications((prev) =>
         prev.map((a) => (a.id === appId ? { ...a, status } : a)),
       );
-      toast(status === 'confirmed' ? 'Отклик принят' : 'Отклик отклонён', 'success');
-    } catch {
-      toast('Ошибка обновления статуса', 'error');
+      toast(
+        status === 'confirmed'
+          ? 'Отклик принят. Теперь вы можете начать общение.'
+          : 'Отклик отклонён',
+        'success',
+      );
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Ошибка обновления статуса', 'error');
+    } finally {
+      setStatusUpdatingId(null);
     }
   };
 
@@ -67,7 +90,10 @@ export function VacancyApplicationsPageClient() {
       <Breadcrumbs
         items={[
           { label: 'Мои вакансии', href: '/employer/vacancies' },
-          { label: vacancyTitle, href: `/employer/vacancies/${id}` },
+          {
+            label: loading && vacancyTitle === 'Вакансия' ? '…' : vacancyTitle,
+            href: loading && vacancyTitle === 'Вакансия' ? undefined : `/employer/vacancies/${id}`,
+          },
           { label: 'Отклики' },
         ]}
       />
@@ -81,22 +107,29 @@ export function VacancyApplicationsPageClient() {
         </div>
       </div>
 
-      {loading ? (
+      {loadError ? (
+        <div className="rounded-card border border-white/10 bg-white/[0.04] py-12 text-center">
+          <p className="text-sm text-white/60">Не удалось загрузить отклики</p>
+          <Button type="button" variant="primary" size="sm" className="mt-4" onClick={loadApplications}>
+            Повторить
+          </Button>
+        </div>
+      ) : loading ? (
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="h-24 animate-pulse rounded-card bg-gray-200" />
+            <div key={i} className="h-24 animate-pulse rounded-card bg-white/10" />
           ))}
         </div>
       ) : applications.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-card border border-gray-200 bg-white py-16 text-center">
-          <User className="h-10 w-10 text-gray-300" />
-          <h3 className="font-semibold text-gray-900">Откликов пока нет</h3>
-          <p className="text-sm text-gray-500">Когда кандидаты откликнутся — они появятся здесь</p>
+        <div className="flex flex-col items-center gap-3 rounded-card border border-white/10 bg-white/[0.04] py-16 text-center">
+          <User className="h-10 w-10 text-white/40" />
+          <h3 className="font-semibold text-white/90">Откликов пока нет</h3>
+          <p className="text-sm text-white/50">Когда кандидаты откликнутся — они появятся здесь</p>
         </div>
       ) : (
         <div className="space-y-3">
           {applications.map((app) => (
-            <div key={app.id} className="rounded-card border border-gray-200 bg-white p-5 shadow-sm">
+            <div key={app.id} className="rounded-card border border-white/10 bg-white/[0.04] p-5">
               <div className="flex items-start gap-4">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gray-100">
                   <User className="h-6 w-6 text-gray-400" />
@@ -143,32 +176,42 @@ export function VacancyApplicationsPageClient() {
                   {app.coverMessage && (
                     <p className="mt-2 text-sm text-gray-600">{app.coverMessage}</p>
                   )}
-                  {app.status === 'pending' && (
+                  {['pending', 'viewed', 'invited', 'interview'].includes(app.status) && (
                     <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-                      <button
-                        onClick={() => updateStatus(app.id, 'confirmed')}
-                        className="flex items-center justify-center gap-1 rounded-input bg-green-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-600"
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        disabled={statusUpdatingId === app.id}
+                        onClick={() => void updateStatus(app.id, 'confirmed')}
+                        leftIcon={<Check className="h-3 w-3" />}
+                        className="flex-1 rounded-input bg-green-600 hover:bg-green-700"
                       >
-                        <Check className="h-3 w-3" />
                         Принять
-                      </button>
-                      <button
-                        onClick={() => updateStatus(app.id, 'rejected')}
-                        className="flex items-center justify-center gap-1 rounded-input border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void updateStatus(app.id, 'rejected')}
+                        leftIcon={<X className="h-3 w-3" />}
+                        className="flex-1 rounded-input border-red-200 text-red-600 hover:bg-red-50"
                       >
-                        <X className="h-3 w-3" />
                         Отклонить
-                      </button>
+                      </Button>
                     </div>
                   )}
-                  <div className="mt-3">
-                    <OpenChatButton
-                      recipientUserId={app.worker.user.id}
-                      context={{ type: 'APPLICATION', id: app.id }}
-                      label="Написать"
-                      className="flex w-fit items-center gap-1.5 rounded-input border border-primary-400/40 bg-primary-500/10 px-3 py-1.5 text-xs font-medium text-primary-300 hover:bg-primary-500/20 disabled:opacity-60"
-                    />
-                  </div>
+                  {CHAT_READY.has(app.status) ? (
+                    <div className="mt-3">
+                      <OpenChatButton
+                        recipientUserId={app.worker.user.id}
+                        context={{ type: 'APPLICATION', id: app.id }}
+                        forceVisible
+                        label="Написать"
+                        className="flex w-fit items-center gap-1.5 rounded-input border border-emerald-500/35 bg-emerald-500/15 px-3 py-1.5 text-xs font-medium text-emerald-100 hover:bg-emerald-500/25 disabled:opacity-60"
+                      />
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>

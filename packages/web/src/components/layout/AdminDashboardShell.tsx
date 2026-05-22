@@ -12,6 +12,7 @@ import {
   ScrollText,
   Inbox,
   Swords,
+  MessagesSquare,
 } from 'lucide-react';
 import { DashboardSidebar } from '@/components/layout/DashboardSidebar';
 import { DashboardTopBar } from '@/components/layout/DashboardTopBar';
@@ -25,6 +26,7 @@ const SIDEBAR_ITEMS = [
   { href: '/admin/shifts/disputed', label: 'Спорные смены', icon: Swords },
   { href: '/admin/email-logs', label: 'Email-логи', icon: Mail },
   { href: '/admin/individual-requests', label: 'Персональные заявки', icon: Inbox },
+  { href: '/admin/contact-requests', label: 'Обращения с сайта', icon: MessagesSquare },
   { href: '/admin/audit-log', label: 'Журнал', icon: ScrollText },
   { href: '/admin/media/pending', label: 'Модерация медиа', icon: ImagePlus },
 ];

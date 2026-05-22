@@ -9,6 +9,7 @@ import {
   type VacancyMutationPartialInput,
 } from '@unity/shared';
 import { z } from 'zod';
+import { replyFail, replyOk, replyPaginated } from '@/lib/api-reply';
 import { getUserRestriction, restrictedReply } from '@/lib/restriction';
 import { publicSiteUrl } from '@/lib/public-site-url';
 import {
@@ -83,6 +84,38 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
     fastify.requireRole(['employer']),
   ];
 
+  // GET /dashboard/summary — ожидающие отклики (pending) и всего откликов по вакансиям работодателя
+  fastify.get('/dashboard/summary', { preHandler: employerAuth }, async (request, reply) => {
+    const profile = await fastify.prisma.employerProfile.findUnique({
+      where: { userId: request.jwtUser.sub },
+      select: { id: true },
+    });
+    if (!profile) {
+      return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
+    }
+
+    const vacancyRows = await fastify.prisma.vacancy.findMany({
+      where: { employerId: profile.id },
+      select: { id: true },
+    });
+    const vacancyIds = vacancyRows.map((v) => v.id);
+
+    if (vacancyIds.length === 0) {
+      return replyOk(reply, { pendingApplicationsCount: 0, totalApplicationsCount: 0 });
+    }
+
+    const baseWhere: Prisma.ApplicationWhereInput = { vacancyId: { in: vacancyIds } };
+
+    const [pendingApplicationsCount, totalApplicationsCount] = await fastify.prisma.$transaction([
+      fastify.prisma.application.count({
+        where: { ...baseWhere, status: ApplicationStatus.pending },
+      }),
+      fastify.prisma.application.count({ where: baseWhere }),
+    ]);
+
+    return replyOk(reply, { pendingApplicationsCount, totalApplicationsCount });
+  });
+
   // GET /profile
   fastify.get('/profile', { preHandler: employerAuth }, async (request, reply) => {
     const profile = await fastify.prisma.employerProfile.findUnique({
@@ -95,9 +128,9 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       },
     });
     if (!profile) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
     }
-    return reply.send({ data: profile });
+    return replyOk(reply, profile);
   });
 
   // PUT /profile
@@ -110,15 +143,13 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       select: { email: true, emailVerified: true },
     });
     if (!userRow) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'User not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'User not found');
     }
 
     const norm = (s: string) => s.trim().toLowerCase();
     if (userRow.emailVerified) {
       if (norm(body.email) !== norm(userRow.email ?? '')) {
-        return reply.status(403).send({
-          error: { code: 'FORBIDDEN', message: 'Email уже подтверждён и не может быть изменён' },
-        });
+        return replyFail(reply, 403, 'FORBIDDEN', 'Email уже подтверждён и не может быть изменён');
       }
     }
 
@@ -164,7 +195,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       },
     });
 
-    return reply.send({ data: updated });
+    return replyOk(reply, updated);
   });
 
   // GET /applications/recent — последние отклики по всем вакансиям работодателя
@@ -178,7 +209,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       select: { id: true },
     });
     if (!profile) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
     }
 
     const vacancyRows = await fastify.prisma.vacancy.findMany({
@@ -187,7 +218,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
     });
     const vacancyIds = vacancyRows.map((v) => v.id);
     if (vacancyIds.length === 0) {
-      return reply.send({ success: true, data: [], meta: { total: 0 } });
+      return replyPaginated(reply, [], { total: 0 });
     }
 
     const whereApp: Prisma.ApplicationWhereInput = { vacancyId: { in: vacancyIds } };
@@ -214,7 +245,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ]);
 
-    return reply.send({ success: true, data: applications, meta: { total } });
+    return replyPaginated(reply, applications, { total });
   });
 
   // GET /applications — все отклики с фильтрами и пагинацией
@@ -235,7 +266,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       select: { id: true },
     });
     if (!profile) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
     }
 
     const vacancyRows = await fastify.prisma.vacancy.findMany({
@@ -244,10 +275,11 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
     });
     const vacancyIds = vacancyRows.map((v) => v.id);
     if (vacancyIds.length === 0) {
-      return reply.send({
-        success: true,
-        data: [],
-        meta: { total: 0, page: q.page, perPage: q.perPage, totalPages: 0 },
+      return replyPaginated(reply, [], {
+        total: 0,
+        page: q.page,
+        perPage: q.perPage,
+        totalPages: 0,
       });
     }
 
@@ -305,15 +337,11 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ]);
 
-    return reply.send({
-      success: true,
-      data: applications,
-      meta: {
-        total,
-        page: q.page,
-        perPage: q.perPage,
-        totalPages: Math.ceil(total / q.perPage),
-      },
+    return replyPaginated(reply, applications, {
+      total,
+      page: q.page,
+      perPage: q.perPage,
+      totalPages: Math.ceil(total / q.perPage),
     });
   });
 
@@ -343,10 +371,11 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
         },
       }),
     ]);
-    return reply.send({
-      success: true,
-      data: rows,
-      meta: { total, page: q.page, limit, totalPages: Math.ceil(total / limit) },
+    return replyPaginated(reply, rows, {
+      total,
+      page: q.page,
+      limit,
+      totalPages: Math.ceil(total / limit),
     });
   });
 
@@ -358,7 +387,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       where: { userId: request.jwtUser.sub },
     });
     if (!profile) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
     }
 
     const searchNorm = query.search?.trim();
@@ -398,14 +427,11 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ]);
 
-    return reply.send({
-      data: vacancies,
-      meta: {
-        total,
-        page: query.page,
-        limit: query.perPage,
-        totalPages: Math.ceil(total / query.perPage),
-      },
+    return replyPaginated(reply, vacancies, {
+      total,
+      page: query.page,
+      limit: query.perPage,
+      totalPages: Math.ceil(total / query.perPage),
     });
   });
 
@@ -415,14 +441,20 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
 
     const rest = await getUserRestriction(fastify.prisma, request.jwtUser.sub);
     if (rest.restricted) {
-      return reply.status(restrictedReply().status).send(restrictedReply().body);
+      const r = restrictedReply();
+      return replyFail(
+        reply,
+        r.status,
+        String((r.body.error as { code?: string }).code ?? 'ACCOUNT_RESTRICTED'),
+        String((r.body.error as { message?: string }).message ?? ''),
+      );
     }
 
     const profile = await fastify.prisma.employerProfile.findUnique({
       where: { userId: request.jwtUser.sub },
     });
     if (!profile) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
     }
 
     const prismaStatus =
@@ -465,7 +497,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       include: { city: true, _count: { select: { applications: true } } },
     });
 
-    return reply.status(201).send({ data: vacancy });
+    return replyOk(reply, vacancy, 201);
   });
 
   // GET /vacancies/:id
@@ -476,7 +508,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       where: { userId: request.jwtUser.sub },
     });
     if (!profile) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
     }
 
     const vacancy = await fastify.prisma.vacancy.findFirst({
@@ -485,10 +517,10 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     if (!vacancy) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Vacancy not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Vacancy not found');
     }
 
-    return reply.send({ data: vacancy });
+    return replyOk(reply, vacancy);
   });
 
   // PUT /vacancies/:id
@@ -500,24 +532,23 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       where: { userId: request.jwtUser.sub },
     });
     if (!profile) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
     }
 
     const vacancy = await fastify.prisma.vacancy.findFirst({
       where: { id, employerId: profile.id },
     });
     if (!vacancy) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Vacancy not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Vacancy not found');
     }
 
     if (vacancy.status === 'archived') {
-      return reply.status(400).send({
-        error: {
-          code: 'ARCHIVED',
-          message:
-            'Архивную вакансию нужно вернуть из архива перед редактированием или используйте копирование.',
-        },
-      });
+      return replyFail(
+        reply,
+        400,
+        'ARCHIVED',
+        'Архивную вакансию нужно вернуть из архива перед редактированием или используйте копирование.',
+      );
     }
 
     const resultingStatus = statusFromBody ?? vacancy.status;
@@ -528,13 +559,13 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       const candidate = vacancyMergedActivationPayload(vacancy, patch);
       const chk = vacancyCreateSchema.safeParse({ ...candidate, status: 'active' });
       if (!chk.success) {
-        return reply.status(422).send({
-          error: {
-            code: 'VALIDATION',
-            message: chk.error.flatten().fieldErrors.dateStart?.[0] ?? 'Не выполнены условия публикации',
-            details: chk.error.flatten(),
-          },
-        });
+        return replyFail(
+          reply,
+          422,
+          'VALIDATION',
+          chk.error.flatten().fieldErrors.dateStart?.[0] ?? 'Не выполнены условия публикации',
+          chk.error.flatten(),
+        );
       }
     }
 
@@ -591,7 +622,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       include: { city: true, _count: { select: { applications: true } } },
     });
 
-    return reply.send({ data: updated });
+    return replyOk(reply, updated);
   });
 
   // PATCH /vacancies/:id/archive
@@ -602,20 +633,18 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       where: { userId: request.jwtUser.sub },
     });
     if (!profile) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
     }
 
     const vacancy = await fastify.prisma.vacancy.findFirst({
       where: { id, employerId: profile.id },
     });
     if (!vacancy) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Vacancy not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Vacancy not found');
     }
 
     if (vacancy.status === 'archived') {
-      return reply.status(400).send({
-        error: { code: 'INVALID_STATUS', message: 'Вакансия уже в архиве' },
-      });
+      return replyOk(reply, vacancy);
     }
 
     const mayArchive =
@@ -626,9 +655,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       vacancy.status === 'pending_moderation';
 
     if (!mayArchive) {
-      return reply.status(400).send({
-        error: { code: 'INVALID_TRANSITION', message: 'Нельзя отправить текущую вакансию в архив' },
-      });
+      return replyFail(reply, 400, 'INVALID_TRANSITION', 'Нельзя отправить текущую вакансию в архив');
     }
 
     const updated = await fastify.prisma.vacancy.update({
@@ -636,7 +663,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       data: { status: 'archived' },
     });
 
-    return reply.send({ data: updated });
+    return replyOk(reply, updated);
   });
 
   // PATCH /vacancies/:id/unarchive
@@ -647,30 +674,33 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       where: { userId: request.jwtUser.sub },
     });
     if (!profile) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
     }
 
     const vacancy = await fastify.prisma.vacancy.findFirst({
       where: { id, employerId: profile.id },
     });
     if (!vacancy) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Vacancy not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Vacancy not found');
     }
 
     if (vacancy.status !== 'archived') {
-      return reply.status(400).send({
-        error: { code: 'INVALID_STATUS', message: 'Из архива можно восстановить только архивированную вакансию' },
-      });
+      return replyFail(
+        reply,
+        400,
+        'INVALID_STATUS',
+        'Из архива можно восстановить только архивированную вакансию',
+      );
     }
 
     const startMs = vacancy.dateStart.getTime();
     if (startMs <= Date.now()) {
-      return reply.status(409).send({
-        error: {
-          code: 'START_AT_PAST',
-          message: 'Дата начала вакансии в прошлом. Отредактируйте и перенесите дату перед публикацией.',
-        },
-      });
+      return replyFail(
+        reply,
+        409,
+        'START_AT_PAST',
+        'Дата начала вакансии в прошлом. Отредактируйте и перенесите дату перед публикацией.',
+      );
     }
 
     const updated = await fastify.prisma.vacancy.update({
@@ -681,7 +711,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       },
     });
 
-    return reply.send({ data: updated });
+    return replyOk(reply, updated);
   });
 
   // PATCH /vacancies/:id/pause — только из active
@@ -691,17 +721,15 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       where: { userId: request.jwtUser.sub },
     });
     if (!profile) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
     }
 
     const vacancy = await fastify.prisma.vacancy.findFirst({ where: { id, employerId: profile.id } });
     if (!vacancy) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Vacancy not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Vacancy not found');
     }
     if (vacancy.status !== 'active') {
-      return reply
-        .status(400)
-        .send({ error: { code: 'INVALID_TRANSITION', message: 'Пауза доступна только для активной вакансии' } });
+      return replyFail(reply, 400, 'INVALID_TRANSITION', 'Пауза доступна только для активной вакансии');
     }
 
     const updated = await fastify.prisma.vacancy.update({
@@ -709,7 +737,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       data: { status: 'paused' },
     });
 
-    return reply.send({ data: updated });
+    return replyOk(reply, updated);
   });
 
   // PATCH /vacancies/:id/resume — из paused обратно в active (с теми же проверками, что PUT → active)
@@ -719,30 +747,28 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       where: { userId: request.jwtUser.sub },
     });
     if (!profile) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
     }
 
     const vacancy = await fastify.prisma.vacancy.findFirst({ where: { id, employerId: profile.id } });
     if (!vacancy) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Vacancy not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Vacancy not found');
     }
 
     if (vacancy.status !== 'paused') {
-      return reply
-        .status(400)
-        .send({ error: { code: 'INVALID_TRANSITION', message: 'Возможно только для вакансии на паузе' } });
+      return replyFail(reply, 400, 'INVALID_TRANSITION', 'Возможно только для вакансии на паузе');
     }
 
     const candidate = vacancyMergedActivationPayload(vacancy, {});
     const chk = vacancyCreateSchema.safeParse({ ...candidate, status: 'active' });
     if (!chk.success) {
-      return reply.status(422).send({
-        error: {
-          code: 'VALIDATION',
-          message: chk.error.flatten().fieldErrors.dateStart?.[0] ?? 'Не выполнены условия активации',
-          details: chk.error.flatten(),
-        },
-      });
+      return replyFail(
+        reply,
+        422,
+        'VALIDATION',
+        chk.error.flatten().fieldErrors.dateStart?.[0] ?? 'Не выполнены условия активации',
+        chk.error.flatten(),
+      );
     }
 
     const updated = await fastify.prisma.vacancy.update({
@@ -754,7 +780,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       include: { city: true, _count: { select: { applications: true } } },
     });
 
-    return reply.send({ data: updated });
+    return replyOk(reply, updated);
   });
 
   // POST /vacancies/duplicate — копия (черновик)
@@ -765,7 +791,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       where: { userId: request.jwtUser.sub },
     });
     if (!profile) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
     }
 
     const src = await fastify.prisma.vacancy.findFirst({
@@ -773,7 +799,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     if (!src) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Vacancy not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Vacancy not found');
     }
 
     const title = `${src.title} (копия)`.slice(0, 100);
@@ -821,7 +847,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       include: { city: true, _count: { select: { applications: true } } },
     });
 
-    return reply.status(201).send({ data: duplicate });
+    return replyOk(reply, duplicate, 201);
   });
 
   // GET /vacancies/:id/applications
@@ -832,14 +858,14 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       where: { userId: request.jwtUser.sub },
     });
     if (!profile) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
     }
 
     const vacancy = await fastify.prisma.vacancy.findFirst({
       where: { id, employerId: profile.id },
     });
     if (!vacancy) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Vacancy not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Vacancy not found');
     }
 
     const applications = await fastify.prisma.application.findMany({
@@ -856,7 +882,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       orderBy: { createdAt: 'desc' },
     });
 
-    return reply.send({ data: applications });
+    return replyOk(reply, applications);
   });
 
   // PATCH /applications/:id/status
@@ -870,7 +896,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       where: { userId: request.jwtUser.sub },
     });
     if (!profile) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
     }
 
     const application = await fastify.prisma.application.findFirst({
@@ -878,7 +904,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       include: { vacancy: true },
     });
     if (!application || application.vacancy.employerId !== profile.id) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Application not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Application not found');
     }
 
     const updated = await fastify.prisma.application.update({
@@ -941,7 +967,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
-    return reply.send({ data: updated });
+    return replyOk(reply, updated);
   });
 
   // POST /invite — employer invites worker to vacancy
@@ -954,7 +980,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       where: { userId: request.jwtUser.sub },
     });
     if (!profile) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
     }
 
     const vacancy = await fastify.prisma.vacancy.findFirst({
@@ -962,7 +988,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       include: { city: true },
     });
     if (!vacancy) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Vacancy not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Vacancy not found');
     }
 
     const existing = await fastify.prisma.application.findUnique({
@@ -971,9 +997,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       },
     });
     if (existing) {
-      return reply
-        .status(409)
-        .send({ error: { code: 'DUPLICATE', message: 'Приглашение уже отправлено' } });
+      return replyFail(reply, 409, 'DUPLICATE', 'Приглашение уже отправлено');
     }
 
     const application = await fastify.prisma.application.create({
@@ -1022,7 +1046,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       }
     }
 
-    return reply.status(201).send({ data: application });
+    return replyOk(reply, application, 201);
   });
 
   // GET /favorites/target-ids — лёгкий список id для синхронизации избранного на фронте
@@ -1032,11 +1056,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       select: { targetId: true },
       orderBy: { createdAt: 'desc' },
     });
-    return reply.send({
-      success: true,
-      data: rows.map((r) => r.targetId),
-      meta: { total: rows.length },
-    });
+    return replyPaginated(reply, rows.map((r) => r.targetId), { total: rows.length });
   });
 
   // GET /favorites + GET /favorites/workers — избранные работники с пагинацией
@@ -1076,10 +1096,11 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       q.page,
       q.perPage,
     );
-    return reply.send({
-      success: true,
-      data: workers,
-      meta: { total, page, perPage, totalPages: Math.ceil(total / perPage) },
+    return replyPaginated(reply, workers, {
+      total,
+      page,
+      perPage,
+      totalPages: Math.ceil(total / perPage),
     });
   };
 
@@ -1102,7 +1123,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       update: {},
     });
 
-    return reply.status(201).send({ success: true, data: { success: true } });
+    return replyOk(reply, { success: true }, 201);
   });
 
   // DELETE /favorites/:workerId
@@ -1113,7 +1134,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       where: { userId: request.jwtUser.sub, targetId: workerId, type: 'worker' },
     });
 
-    return reply.send({ success: true, data: { success: true } });
+    return replyOk(reply, { success: true });
   });
 
   // POST /favorites/workers/:workerId (legacy alias)
@@ -1132,7 +1153,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       update: {},
     });
 
-    return reply.status(201).send({ data: { success: true } });
+    return replyOk(reply, { success: true }, 201);
   });
 
   // DELETE /favorites/workers/:workerId (legacy alias)
@@ -1143,7 +1164,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       where: { userId: request.jwtUser.sub, targetId: workerId, type: 'worker' },
     });
 
-    return reply.send({ data: { success: true } });
+    return replyOk(reply, { success: true });
   });
 
   // GET /shifts — вкладки, фильтры, счётчики по табам
@@ -1360,22 +1381,18 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ]);
 
-    return reply.send({
-      success: true,
-      data: shifts,
-      meta: {
-        total,
-        page: q.page,
-        perPage: q.perPage,
-        totalPages: Math.ceil(total / q.perPage),
-        tabCounts: {
-          active: cActive,
-          pending_confirm: cPendingConfirm,
-          completed: cCompleted,
-          needs_payment: cNeedsPay,
-          archive: cArchive,
-          disputed: cDisputed,
-        },
+    return replyPaginated(reply, shifts, {
+      total,
+      page: q.page,
+      perPage: q.perPage,
+      totalPages: Math.ceil(total / q.perPage),
+      tabCounts: {
+        active: cActive,
+        pending_confirm: cPendingConfirm,
+        completed: cCompleted,
+        needs_payment: cNeedsPay,
+        archive: cArchive,
+        disputed: cDisputed,
       },
     });
   });
@@ -1389,7 +1406,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       select: { id: true },
     });
     if (!owned) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Смена не найдена' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Смена не найдена');
     }
     try {
       const shift = await confirmShiftParticipation(
@@ -1397,10 +1414,10 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
         id,
         uid,
       );
-      return reply.send({ success: true, data: shift });
+      return replyOk(reply, shift);
     } catch (e) {
       if (e instanceof ShiftConfirmationError) {
-        return reply.status(e.statusCode).send({ error: { code: e.code, message: e.messageRu } });
+        return replyFail(reply, e.statusCode, e.code, e.messageRu);
       }
       throw e;
     }
@@ -1419,13 +1436,13 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
 
     const shift = await fastify.prisma.shift.findUnique({ where: { id } });
     if (!shift || shift.employerId !== uid) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Смена не найдена' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Смена не найдена');
     }
     if (shift.status === ShiftStatus.COMPLETED || shift.status === ShiftStatus.CANCELLED) {
-      return reply.status(400).send({ error: { code: 'INVALID', message: 'Смена уже закрыта' } });
+      return replyFail(reply, 400, 'INVALID', 'Смена уже закрыта');
     }
     if (!(WORKER_FAILURE_CODES as readonly string[]).includes(body.reason)) {
-      return reply.status(400).send({ error: { code: 'INVALID', message: 'Некорректная причина' } });
+      return replyFail(reply, 400, 'INVALID', 'Некорректная причина');
     }
 
     const failed = await fastify.prisma.shift.update({
@@ -1441,7 +1458,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
     const rel = new ReliabilityService(fastify.prisma, fastify.notificationService);
     await rel.recalculate(shift.workerId);
     await rel.recalculate(shift.employerId);
-    return reply.send({ success: true, data: failed });
+    return replyOk(reply, failed);
   });
 
   // PATCH /shifts/:id/cancel — только PENDING, работодатель
@@ -1456,12 +1473,15 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       },
     });
     if (!shift || shift.employerId !== uid) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Смена не найдена' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Смена не найдена');
     }
     if (shift.status !== ShiftStatus.PENDING) {
-      return reply.status(400).send({
-        error: { code: 'INVALID_STATE', message: 'Отмена доступна только для смены в статусе «ожидание»' },
-      });
+      return replyFail(
+        reply,
+        400,
+        'INVALID_STATE',
+        'Отмена доступна только для смены в статусе «ожидание»',
+      );
     }
 
     const updated = await fastify.prisma.shift.update({
@@ -1483,7 +1503,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       data: { shiftId: id, bookingId: shift.bookingId },
     });
 
-    return reply.send({ success: true, data: updated });
+    return replyOk(reply, updated);
   });
 
   // GET /invitations — sent invitations history
@@ -1496,7 +1516,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       where: { userId: request.jwtUser.sub },
     });
     if (!profile) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Profile not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
     }
 
     const limit = 20;
@@ -1519,9 +1539,11 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ]);
 
-    return reply.send({
-      data: rows,
-      meta: { total, page: query.page, limit, totalPages: Math.ceil(total / limit) },
+    return replyPaginated(reply, rows, {
+      total,
+      page: query.page,
+      limit,
+      totalPages: Math.ceil(total / limit),
     });
   });
 
@@ -1554,10 +1576,11 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
         }),
       ]);
 
-      return reply.send({
-        success: true,
-        data: shifts,
-        meta: { total, page, perPage, totalPages: Math.ceil(total / perPage) },
+      return replyPaginated(reply, shifts, {
+        total,
+        page,
+        perPage,
+        totalPages: Math.ceil(total / perPage),
       });
     },
   );

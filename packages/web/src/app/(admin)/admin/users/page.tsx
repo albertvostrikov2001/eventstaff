@@ -240,7 +240,7 @@ export default function AdminUsersPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, [roleFilter, page]);
+  useEffect(load, [roleFilter, page, search, toast]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();

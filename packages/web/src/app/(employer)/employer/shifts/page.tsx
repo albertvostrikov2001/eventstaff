@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   Briefcase,
@@ -11,7 +11,6 @@ import {
   Clock,
   CreditCard,
   Star,
-  User,
   XCircle,
   AlertTriangle,
 } from 'lucide-react';
@@ -23,6 +22,9 @@ import { formatDateTimeRu } from '@/lib/dates/formatDateTime';
 import { employerShiftsFiltersSchema } from '@/lib/filters/schemas';
 import type { EmployerShiftsFilters } from '@/lib/filters/schemas';
 import { useFilters } from '@/lib/filters/useFilters';
+import { ResponsiveTable, type Column } from '@/components/ui/ResponsiveTable';
+import { UserAvatar } from '@/components/ui/UserAvatar';
+import { Button } from '@/components/ui/button';
 
 type ShiftTab =
   | 'active'
@@ -126,17 +128,18 @@ function StarRating({ value, onChange }: { value: number; onChange: (v: number) 
   return (
     <div className="flex gap-1">
       {[1, 2, 3, 4, 5].map((n) => (
-        <button
+        <Button
           key={n}
           type="button"
+          variant="ghostInverse"
           onClick={() => onChange(n)}
           className={cn(
-            'text-xl transition',
+            'h-9 w-9 min-h-0 border-0 p-0 text-xl font-normal shadow-none',
             n <= value ? 'text-amber-300' : 'text-white/20 hover:text-amber-200/70',
           )}
         >
           ★
-        </button>
+        </Button>
       ))}
     </div>
   );
@@ -209,21 +212,19 @@ function ReviewModal({
           </div>
         </div>
         <div className="mt-6 flex gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 rounded-[12px] border border-white/[0.14] py-2.5 text-sm text-white/85 hover:bg-white/[0.05]"
-          >
+          <Button type="button" variant="muted" onClick={onClose} className="flex-1 rounded-[12px]">
             Отмена
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="primary"
             onClick={() => void handleSubmit()}
             disabled={saving || !allFilled}
-            className="flex-1 rounded-[12px] bg-gradient-to-r from-emerald-600 to-teal-500 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-900/30 disabled:opacity-45"
+            isLoading={saving}
+            className="flex-1 rounded-[12px]"
           >
             Сохранить
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -288,21 +289,19 @@ function FailModal({
           />
         </label>
         <div className="mt-6 flex gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 rounded-[12px] border border-white/[0.14] py-2.5 text-sm"
-          >
+          <Button type="button" variant="muted" onClick={onClose} className="flex-1 rounded-[12px]">
             Отмена
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="danger"
             disabled={busy}
+            isLoading={busy}
             onClick={() => void submit()}
-            className="flex-1 rounded-[12px] border border-red-500/35 bg-red-500/25 py-2.5 text-sm font-semibold text-red-50 disabled:opacity-50"
+            className="flex-1 rounded-[12px]"
           >
             Отметить
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -318,7 +317,51 @@ const STATUS_VISUAL: Record<string, { label: string; cls: string }> = {
   DISPUTED: { label: 'Спор', cls: 'bg-amber-500/15 text-amber-50 ring-1 ring-amber-400/40' },
 };
 
-function ShiftCardCabinet(props: {
+function getShiftPresentation(shift: Shift, currentUserId: string) {
+  const worker = shift.booking.worker;
+  const workerName = worker ? `${worker.firstName} ${worker.lastName}`.trim() || 'Работник' : 'Работник';
+  const vacancy = shift.booking.linkedVacancy;
+  const payment = shift.payments?.[0];
+  const hasPaid = shift.payments.some((p) => p.status === 'COMPLETED');
+  const alreadyReviewed = shift.reviews.some((r) => r.reviewerId === currentUserId);
+  const st = STATUS_VISUAL[shift.status] ?? {
+    label: shift.status,
+    cls: 'bg-white/[0.06] text-white/70 ring-1 ring-white/[0.1]',
+  };
+  let whenRu: string | null = null;
+  if (shift.booking.date) {
+    const base = `${shift.booking.date}${shift.booking.timeStart ? `T${shift.booking.timeStart}` : ''}`;
+    const d = new Date(base.includes('T') ? base : `${shift.booking.date}T12:00:00`);
+    if (!Number.isNaN(d.getTime())) whenRu = formatDateTimeRu(d.toISOString(), 'datetime');
+  } else if (vacancy?.dateStart) {
+    whenRu = formatDateTimeRu(vacancy.dateStart, 'datetime');
+  }
+  const canEmployerConfirm =
+    ['ACTIVE', 'PENDING', 'DISPUTED'].includes(shift.status) && !shift.employerConfirmed;
+  const awaitingBoth =
+    shift.status === 'ACTIVE' && shift.workerConfirmed && !shift.employerConfirmed;
+  const needsPay =
+    shift.status === 'COMPLETED' && !hasPaid && payment?.status !== 'PROCESSING';
+  const canReview = shift.status === 'COMPLETED' && !alreadyReviewed && hasPaid;
+  const workerUid = worker?.userId;
+  return {
+    worker,
+    workerName,
+    vacancy,
+    payment,
+    hasPaid,
+    alreadyReviewed,
+    st,
+    whenRu,
+    canEmployerConfirm,
+    awaitingBoth,
+    needsPay,
+    canReview,
+    workerUid,
+  };
+}
+
+function ShiftRowActionsBar(props: {
   shift: Shift;
   currentUserId: string;
   onConfirm: (id: string) => void;
@@ -342,187 +385,88 @@ function ShiftCardCabinet(props: {
     payingId,
     cancellingId,
   } = props;
-  const worker = shift.booking.worker;
-  const workerName = worker ? `${worker.firstName} ${worker.lastName}`.trim() || 'Работник' : 'Работник';
-  const vacancy = shift.booking.linkedVacancy;
-  const payment = shift.payments?.[0];
-  const hasPaid = shift.payments.some((p) => p.status === 'COMPLETED');
-  const alreadyReviewed = shift.reviews.some((r) => r.reviewerId === currentUserId);
-
-  const st = STATUS_VISUAL[shift.status] ?? {
-    label: shift.status,
-    cls: 'bg-white/[0.06] text-white/70 ring-1 ring-white/[0.1]',
-  };
-
-  let whenRu: string | null = null;
-  if (shift.booking.date) {
-    const base = `${shift.booking.date}${shift.booking.timeStart ? `T${shift.booking.timeStart}` : ''}`;
-    const d = new Date(base.includes('T') ? base : `${shift.booking.date}T12:00:00`);
-    if (!Number.isNaN(d.getTime())) whenRu = formatDateTimeRu(d.toISOString(), 'datetime');
-  } else if (vacancy?.dateStart) {
-    whenRu = formatDateTimeRu(vacancy.dateStart, 'datetime');
-  }
-
-  const canEmployerConfirm =
-    ['ACTIVE', 'PENDING', 'DISPUTED'].includes(shift.status) && !shift.employerConfirmed;
-  const awaitingBoth =
-    shift.status === 'ACTIVE' && shift.workerConfirmed && !shift.employerConfirmed;
-  const needsPay =
-    shift.status === 'COMPLETED' && !hasPaid && payment?.status !== 'PROCESSING';
-  const canReview = shift.status === 'COMPLETED' && !alreadyReviewed && hasPaid;
-
-  const workerUid = worker?.userId;
-
+  const { workerUid, canEmployerConfirm, awaitingBoth, needsPay, canReview } = getShiftPresentation(
+    shift,
+    currentUserId,
+  );
   return (
-    <div className="rounded-[18px] border border-white/[0.08] bg-white/[0.04] p-5 shadow-inner shadow-black/40">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 gap-4">
-          <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-emerald-500/15 ring-1 ring-emerald-500/30">
-            {worker?.photoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={worker.photoUrl} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-white/40">
-                <User className="h-7 w-7" />
-              </div>
-            )}
-          </div>
-          <div className="min-w-0">
-            <p className="truncate font-semibold text-white">{workerName}</p>
-            <p className="mt-1 truncate text-sm text-white/55">
-              {vacancy?.title ?? 'Смена'}{' '}
-              {vacancy?.id ? (
-                <Link href={`/employer/vacancies/${vacancy.id}`} className="text-emerald-300 underline-offset-4 hover:text-emerald-100 hover:underline">
-                  Открыть
-                </Link>
-              ) : null}
-            </p>
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/48">
-              {whenRu ? (
-                <span className="inline-flex items-center gap-1">
-                  <Calendar className="h-3.5 w-3.5" aria-hidden /> {whenRu}
-                </span>
-              ) : null}
-              {worker?.ratingScore != null && (
-                <span>
-                  ★ {Number(worker.ratingScore).toFixed(1)}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-        <span
+    <div className="flex flex-wrap gap-2">
+      {workerUid ? (
+        <OpenChatButton
+          recipientUserId={workerUid}
+          context={{ type: 'SHIFT', id: shift.id }}
+          label="Чат"
+          className="inline-flex items-center gap-1 rounded-[11px] border border-white/[0.12] bg-white/[0.05] px-3 py-2 text-[12px] font-semibold text-white/90 hover:bg-white/[0.08] disabled:opacity-45"
+        />
+      ) : null}
+      {shift.status === 'PENDING' ? (
+        <Button
+          type="button"
+          variant="muted"
+          size="sm"
+          disabled={cancellingId === shift.id}
+          onClick={() => onCancel(shift.id)}
+          leftIcon={<XCircle className="h-3.5 w-3.5" />}
+          className="rounded-[11px] px-3 py-2 text-[12px]"
+        >
+          Отменить
+        </Button>
+      ) : null}
+      {shift.status === 'ACTIVE' ? (
+        <Button
+          type="button"
+          variant="ghostInverse"
+          size="sm"
+          onClick={() => onFail(shift.id)}
+          className="rounded-[11px] border border-red-500/35 px-3 py-2 text-[12px] text-red-200 hover:bg-red-500/15"
+        >
+          Провал работника…
+        </Button>
+      ) : null}
+      {canEmployerConfirm ? (
+        <Button
+          type="button"
+          variant="primary"
+          size="sm"
+          disabled={confirmingId === shift.id}
+          onClick={() => onConfirm(shift.id)}
+          isLoading={confirmingId === shift.id}
           className={cn(
-            'shrink-0 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide',
-            st.cls,
+            'rounded-[11px] px-3 py-2 text-[12px] shadow-md shadow-emerald-900/35',
+            awaitingBoth
+              ? 'bg-gradient-to-r from-amber-500 to-orange-600 hover:brightness-105'
+              : '',
           )}
         >
-          {st.label}
-        </span>
-      </div>
-
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-[12px] text-white/52">
-        {hasPaid ? (
-          <span className="inline-flex items-center gap-1 text-emerald-200">
-            <CheckCircle className="h-4 w-4" /> Оплачено ✓
-          </span>
-        ) : null}
-        {payment?.status === 'PROCESSING' ? (
-          <span className="inline-flex items-center gap-1 text-amber-100">
-            <Clock className="h-4 w-4" /> Оплата в процессе
-          </span>
-        ) : null}
-      </div>
-
-      {shift.status === 'DISPUTED' ? (
-        <div className="mt-4 flex gap-3 rounded-[12px] border border-amber-400/35 bg-amber-500/10 px-4 py-3 text-xs text-amber-50">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <div>
-            Спорная ситуация. Свяжитесь с поддержкой — мы поможем урегулировать конфликт.
-            <button
-              type="button"
-              className="ml-3 font-semibold text-white underline underline-offset-2 hover:text-emerald-200"
-              onClick={() => window.open('mailto:support@unity.ru', '_blank')}
-            >
-              Связаться с поддержкой
-            </button>
-          </div>
-        </div>
+          Подтвердить
+        </Button>
       ) : null}
-
-      <div className="mt-5 flex flex-wrap gap-2">
-        {workerUid ? (
-          <OpenChatButton
-            recipientUserId={workerUid}
-            context={{ type: 'SHIFT', id: shift.id }}
-            label="Чат"
-            className="inline-flex items-center gap-1 rounded-[11px] border border-white/[0.12] bg-white/[0.05] px-3 py-2 text-[12px] font-semibold text-white/90 hover:bg-white/[0.08] disabled:opacity-45"
-          />
-        ) : null}
-
-        {shift.status === 'PENDING' ? (
-          <button
-            type="button"
-            disabled={cancellingId === shift.id}
-            onClick={() => onCancel(shift.id)}
-            className="inline-flex items-center gap-1 rounded-[11px] border border-white/[0.12] px-3 py-2 text-[12px] font-semibold text-white/80 hover:bg-white/[0.05] disabled:opacity-45"
-          >
-            <XCircle className="h-3.5 w-3.5" />
-            Отменить
-          </button>
-        ) : null}
-
-        {shift.status === 'ACTIVE' ? (
-          <button
-            type="button"
-            onClick={() => onFail(shift.id)}
-            className="inline-flex items-center gap-1 rounded-[11px] border border-red-500/35 px-3 py-2 text-[12px] font-semibold text-red-200 hover:bg-red-500/15"
-          >
-            Провал работника…
-          </button>
-        ) : null}
-
-        {canEmployerConfirm ? (
-          <button
-            type="button"
-            disabled={confirmingId === shift.id}
-            onClick={() => onConfirm(shift.id)}
-            className={cn(
-              'inline-flex items-center gap-1 rounded-[11px] px-3 py-2 text-[12px] font-semibold shadow-md shadow-emerald-900/35 disabled:opacity-45',
-              awaitingBoth
-                ? 'bg-gradient-to-r from-amber-500 to-orange-600 text-white'
-                : 'bg-gradient-to-r from-emerald-600 to-teal-500 text-white',
-            )}
-          >
-            Подтвердить завершение
-          </button>
-        ) : null}
-
-        {needsPay ? (
-          <button
-            type="button"
-            disabled={payingId === shift.id}
-            onClick={() => onPay(shift.id)}
-            className="inline-flex items-center gap-1 rounded-[11px] bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 px-3 py-2 text-[12px] font-semibold text-white shadow-lg shadow-teal-900/40 disabled:opacity-45"
-          >
-            <CreditCard className="h-3.5 w-3.5" /> Оплатить
-          </button>
-        ) : null}
-
-        {canReview ? (
-          <button
-            type="button"
-            onClick={() => onReview(shift)}
-            className="inline-flex items-center gap-1 rounded-[11px] border border-amber-400/35 bg-amber-500/10 px-3 py-2 text-[12px] font-semibold text-amber-50 hover:bg-amber-500/20"
-          >
-            <Star className="h-3.5 w-3.5" /> Оценить
-          </button>
-        ) : null}
-      </div>
-
-      {shift.status === 'ACTIVE' && shift.employerConfirmed && (
-        <p className="mt-3 text-[11px] text-white/40">Вы подтвердили завершение, ожидаем вторую сторону.</p>
-      )}
+      {needsPay ? (
+        <Button
+          type="button"
+          variant="primary"
+          size="sm"
+          disabled={payingId === shift.id}
+          isLoading={payingId === shift.id}
+          onClick={() => onPay(shift.id)}
+          leftIcon={<CreditCard className="h-3.5 w-3.5" />}
+          className="rounded-[11px] bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 px-3 py-2 text-[12px] shadow-lg shadow-teal-900/40"
+        >
+          Оплатить
+        </Button>
+      ) : null}
+      {canReview ? (
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={() => onReview(shift)}
+          leftIcon={<Star className="h-3.5 w-3.5" />}
+          className="rounded-[11px] border-amber-400/35 bg-amber-500/10 text-amber-50 hover:bg-amber-500/20"
+        >
+          Оценить
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -600,7 +544,7 @@ function EmployerShiftsInner() {
     return () => window.clearTimeout(t);
   }, [workerDraft, filters.workerSearch, setFilters]);
 
-  async function fetchShifts() {
+  const fetchShifts = useCallback(async () => {
     setLoading(true);
     try {
       const res = await apiClient.get<{
@@ -634,11 +578,6 @@ function EmployerShiftsInner() {
     } finally {
       setLoading(false);
     }
-  }
-
-  useEffect(() => {
-    void fetchShifts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch when URL-driven filters change
   }, [
     filters.tab,
     filters.page,
@@ -647,30 +586,38 @@ function EmployerShiftsInner() {
     filters.workerSearch,
     filters.dateFrom,
     filters.dateTo,
+    toast,
   ]);
 
-  const handleConfirm = async (shiftId: string) => {
-    setConfirmingId(shiftId);
-    try {
-      const res = await apiClient.patch<{ data: Shift }>(`/employer/shifts/${shiftId}/confirm`);
-      setShifts((prev) =>
-        prev.map((s) => (s.id === shiftId ? { ...s, ...res.data } : s)),
-      );
-      toast(
-        res.data.workerConfirmed && res.data.employerConfirmed
-          ? 'Смена завершена. Можно оплатить.'
-          : 'Подтверждено вашей стороной.',
-        'success',
-      );
-      await fetchShifts();
-    } catch {
-      toast('Подтвердить завершение не удалось', 'error');
-    } finally {
-      setConfirmingId(null);
-    }
-  };
+  useEffect(() => {
+    void fetchShifts();
+  }, [fetchShifts]);
 
-  const handlePay = async (shiftId: string) => {
+  const handleConfirm = useCallback(
+    async (shiftId: string) => {
+      setConfirmingId(shiftId);
+      try {
+        const res = await apiClient.patch<{ data: Shift }>(`/employer/shifts/${shiftId}/confirm`);
+        setShifts((prev) =>
+          prev.map((s) => (s.id === shiftId ? { ...s, ...res.data } : s)),
+        );
+        toast(
+          res.data.workerConfirmed && res.data.employerConfirmed
+            ? 'Смена завершена. Можно оплатить.'
+            : 'Подтверждено вашей стороной.',
+          'success',
+        );
+        await fetchShifts();
+      } catch {
+        toast('Подтвердить завершение не удалось', 'error');
+      } finally {
+        setConfirmingId(null);
+      }
+    },
+    [fetchShifts, toast],
+  );
+
+  const handlePay = useCallback(async (shiftId: string) => {
     setPayingId(shiftId);
     try {
       const res = await apiClient.post<{ data: { paymentUrl: string } }>('/payments/create', {
@@ -681,20 +628,204 @@ function EmployerShiftsInner() {
       toast('Не удалось создать платёж', 'error');
       setPayingId(null);
     }
-  };
+  }, [toast]);
 
-  const handleCancel = async (shiftId: string) => {
-    setCancellingId(shiftId);
-    try {
-      await apiClient.patch(`/employer/shifts/${shiftId}/cancel`);
-      toast('Смена отменена', 'success');
-      await fetchShifts();
-    } catch {
-      toast('Отменить смену не удалось', 'error');
-    } finally {
-      setCancellingId(null);
-    }
-  };
+  const handleCancel = useCallback(
+    async (shiftId: string) => {
+      setCancellingId(shiftId);
+      try {
+        await apiClient.patch(`/employer/shifts/${shiftId}/cancel`);
+        toast('Смена отменена', 'success');
+        await fetchShifts();
+      } catch {
+        toast('Отменить смену не удалось', 'error');
+      } finally {
+        setCancellingId(null);
+      }
+    },
+    [fetchShifts, toast],
+  );
+
+  const shiftColumns = useMemo((): Column<Shift>[] => {
+    const cid = currentUserId;
+    return [
+      {
+        key: 'worker',
+        header: 'Работник',
+        render: (shift) => {
+          const { worker, workerName } = getShiftPresentation(shift, cid);
+          return (
+            <div className="flex items-center gap-3">
+              <UserAvatar src={worker?.photoUrl ?? null} name={workerName} size={48} />
+              <div className="min-w-0">
+                <div className="truncate font-medium text-[rgba(255,255,255,0.92)]">{workerName}</div>
+                {worker?.ratingScore != null ? (
+                  <div className="text-xs text-white/45">★ {Number(worker.ratingScore).toFixed(1)}</div>
+                ) : null}
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        key: 'vacancy',
+        header: 'Вакансия · дата',
+        render: (shift) => {
+          const { vacancy, whenRu } = getShiftPresentation(shift, cid);
+          return (
+            <div className="max-w-[min(100%,300px)]">
+              <div className="text-[rgba(255,255,255,0.9)]">
+                {vacancy?.title ?? 'Смена'}{' '}
+                {vacancy?.id ? (
+                  <Link
+                    href={`/employer/vacancies/${vacancy.id}`}
+                    className="text-emerald-300 underline-offset-4 hover:text-emerald-100 hover:underline"
+                  >
+                    Открыть
+                  </Link>
+                ) : null}
+              </div>
+              {whenRu ? (
+                <div className="mt-1 inline-flex items-center gap-1 text-xs text-white/48">
+                  <Calendar className="h-3.5 w-3.5" aria-hidden /> {whenRu}
+                </div>
+              ) : null}
+              {shift.status === 'DISPUTED' ? (
+                <div className="mt-2 flex flex-wrap items-start gap-2 rounded-lg border border-amber-400/35 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-50">
+                  <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>Спор — свяжитесь с поддержкой</span>
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="inline h-auto min-h-0 p-0 font-semibold text-white underline shadow-none"
+                    onClick={() => window.open('mailto:support@unity.ru', '_blank')}
+                  >
+                    support@unity.ru
+                  </Button>
+                </div>
+              ) : null}
+              {shift.status === 'ACTIVE' && shift.employerConfirmed ? (
+                <p className="mt-2 text-[11px] text-white/40">Ожидаем подтверждение второй стороны.</p>
+              ) : null}
+            </div>
+          );
+        },
+      },
+      {
+        key: 'status',
+        header: 'Статус',
+        render: (shift) => {
+          const { st } = getShiftPresentation(shift, cid);
+          return (
+            <span
+              className={cn(
+                'inline-flex rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-wide',
+                st.cls,
+              )}
+            >
+              {st.label}
+            </span>
+          );
+        },
+      },
+      {
+        key: 'pay',
+        header: 'Оплата',
+        render: (shift) => {
+          const { payment, hasPaid } = getShiftPresentation(shift, cid);
+          const amount = payment?.amount ?? shift.payments[0]?.amount;
+          if (hasPaid) {
+            return (
+              <span className="inline-flex items-center gap-1 text-sm text-emerald-200">
+                <CheckCircle className="h-4 w-4" /> Оплачено
+              </span>
+            );
+          }
+          if (payment?.status === 'PROCESSING') {
+            return (
+              <span className="inline-flex items-center gap-1 text-sm text-amber-100">
+                <Clock className="h-4 w-4" /> В процессе
+              </span>
+            );
+          }
+          if (amount != null && amount > 0) {
+            return (
+              <span className="text-sm text-white/75">{Number(amount).toLocaleString('ru-RU')} ₽</span>
+            );
+          }
+          return <span className="text-white/50">—</span>;
+        },
+      },
+      {
+        key: 'actions',
+        header: 'Действия',
+        render: (shift) => (
+          <ShiftRowActionsBar
+            shift={shift}
+            currentUserId={cid}
+            onConfirm={handleConfirm}
+            onReview={setReviewShift}
+            onPay={handlePay}
+            onCancel={handleCancel}
+            onFail={(id) => setFailShiftId(id)}
+            confirmingId={confirmingId}
+            payingId={payingId}
+            cancellingId={cancellingId}
+          />
+        ),
+      },
+    ];
+  }, [currentUserId, confirmingId, payingId, cancellingId, handleConfirm, handlePay, handleCancel]);
+
+  const shiftMobileCard = useMemo(
+    () => ({
+      title: (s: Shift) => {
+        const { workerName } = getShiftPresentation(s, currentUserId);
+        return <span className="font-medium">{workerName}</span>;
+      },
+      subtitle: (s: Shift) => {
+        const { vacancy, whenRu } = getShiftPresentation(s, currentUserId);
+        return (
+          <span>
+            {vacancy?.title ?? 'Смена'}
+            {whenRu ? ` · ${whenRu}` : ''}
+          </span>
+        );
+      },
+      badge: (s: Shift) => {
+        const { st } = getShiftPresentation(s, currentUserId);
+        return (
+          <span className={cn('rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase', st.cls)}>
+            {st.label}
+          </span>
+        );
+      },
+      meta: (s: Shift) => {
+        const { payment, hasPaid } = getShiftPresentation(s, currentUserId);
+        const amount = payment?.amount ?? s.payments[0]?.amount;
+        const parts: string[] = [];
+        if (hasPaid) parts.push('Оплачено');
+        else if (payment?.status === 'PROCESSING') parts.push('Оплата в процессе');
+        else if (amount != null && amount > 0) parts.push(`${Number(amount).toLocaleString('ru-RU')} ₽`);
+        return <span>{parts.join(' · ') || '—'}</span>;
+      },
+      actions: (s: Shift) => (
+        <ShiftRowActionsBar
+          shift={s}
+          currentUserId={currentUserId}
+          onConfirm={handleConfirm}
+          onReview={setReviewShift}
+          onPay={handlePay}
+          onCancel={handleCancel}
+          onFail={(id) => setFailShiftId(id)}
+          confirmingId={confirmingId}
+          payingId={payingId}
+          cancellingId={cancellingId}
+        />
+      ),
+    }),
+    [currentUserId, confirmingId, payingId, cancellingId, handleConfirm, handlePay, handleCancel],
+  );
 
   return (
     <div className="min-w-0">
@@ -720,9 +851,11 @@ function EmployerShiftsInner() {
                         ? counts?.disputed
                         : counts?.active;
             return (
-              <button
+              <Button
                 key={k}
                 type="button"
+                variant="ghostInverse"
+                size="sm"
                 onClick={() =>
                   setFilters({
                     tab: k,
@@ -730,7 +863,7 @@ function EmployerShiftsInner() {
                   })
                 }
                 className={cn(
-                  'relative flex items-center whitespace-nowrap rounded-t-[11px] px-3 py-2 text-[13px] font-semibold transition sm:px-4 sm:py-2.5',
+                  'relative inline-flex items-center whitespace-nowrap rounded-t-[11px] px-3 py-2 text-[13px] font-semibold shadow-none sm:px-4 sm:py-2.5',
                   active ? 'bg-white/[0.1] text-white' : 'text-white/50 hover:bg-white/[0.04]',
                 )}
               >
@@ -740,7 +873,7 @@ function EmployerShiftsInner() {
                     {n > 99 ? '99+' : n}
                   </span>
                 ) : null}
-              </button>
+              </Button>
             );
           })}
         </div>
@@ -794,37 +927,21 @@ function EmployerShiftsInner() {
       </div>
 
       <div className="mt-8 space-y-4">
-        {loading ? (
-          <div className="space-y-4">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div
-                key={i}
-                className="h-[210px] animate-pulse rounded-[18px] border border-white/[0.06] bg-white/[0.04]"
-              />
-            ))}
-          </div>
-        ) : shifts.length === 0 ? (
-          <div className="flex flex-col items-center gap-5 rounded-[18px] border border-dashed border-white/[0.12] px-8 py-20 text-center">
-            <Briefcase className="h-14 w-14 text-white/25" aria-hidden />
-            <p className="max-w-sm text-sm text-white/60">{emptyRu(tab)}</p>
-          </div>
-        ) : (
-          shifts.map((s) => (
-            <ShiftCardCabinet
-              key={s.id}
-              shift={s}
-              currentUserId={currentUserId}
-              onConfirm={handleConfirm}
-              onReview={setReviewShift}
-              onPay={handlePay}
-              onCancel={handleCancel}
-              onFail={(id) => setFailShiftId(id)}
-              confirmingId={confirmingId}
-              payingId={payingId}
-              cancellingId={cancellingId}
-            />
-          ))
-        )}
+        <ResponsiveTable
+          data={shifts}
+          columns={shiftColumns}
+          mobileCard={shiftMobileCard}
+          keyExtractor={(s) => s.id}
+          isLoading={loading}
+          variant="dark"
+          skeletonRows={5}
+          emptyState={
+            <div className="flex flex-col items-center gap-5 rounded-[18px] border border-dashed border-white/[0.12] px-8 py-20 text-center">
+              <Briefcase className="h-14 w-14 text-white/25" aria-hidden />
+              <p className="max-w-sm text-sm text-white/60">{emptyRu(tab)}</p>
+            </div>
+          }
+        />
       </div>
 
       {pageMeta.totalPages > 1 ? (
@@ -833,26 +950,30 @@ function EmployerShiftsInner() {
             Стр. {filters.page ?? 1} / {pageMeta.totalPages} · {total} всего
           </span>
           <div className="flex shrink-0 gap-2">
-            <button
+            <Button
               type="button"
+              variant="muted"
+              size="sm"
               disabled={(filters.page ?? 1) <= 1}
               onClick={() => setFilters({ page: Math.max(1, (filters.page ?? 1) - 1) })}
-              className="inline-flex items-center gap-1 rounded-[12px] border border-white/[0.14] px-4 py-2 text-white/85 hover:bg-white/[0.06] disabled:opacity-35"
+              leftIcon={<ChevronLeft className="h-4 w-4" aria-hidden />}
             >
-              <ChevronLeft className="h-4 w-4" /> Назад
-            </button>
-            <button
+              Назад
+            </Button>
+            <Button
               type="button"
+              variant="muted"
+              size="sm"
               disabled={(filters.page ?? 1) >= pageMeta.totalPages}
               onClick={() =>
                 setFilters({
                   page: Math.min(pageMeta.totalPages, (filters.page ?? 1) + 1),
                 })
               }
-              className="inline-flex items-center gap-1 rounded-[12px] border border-white/[0.14] px-4 py-2 text-white/85 hover:bg-white/[0.06] disabled:opacity-35"
+              rightIcon={<ChevronRight className="h-4 w-4" aria-hidden />}
             >
-              Далее <ChevronRight className="h-4 w-4" />
-            </button>
+              Далее
+            </Button>
           </div>
         </div>
       ) : null}

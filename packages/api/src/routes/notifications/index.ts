@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { replyFail, replyOk, replyPaginated } from '@/lib/api-reply';
 
 const preferencesBody = z.object({
   emailInvitation: z.boolean().optional(),
@@ -31,20 +32,17 @@ export const notificationRoutes: FastifyPluginAsync = async (fastify) => {
       unreadOnly: q.unreadOnly,
     });
 
-    return reply.send({
-      data: result.items,
-      meta: {
-        total: result.total,
-        page: result.page,
-        limit: result.limit,
-        totalPages: result.totalPages,
-      },
+    return replyPaginated(reply, result.items, {
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+      totalPages: result.totalPages,
     });
   });
 
   fastify.get('/notifications/unread-count', { preHandler: auth }, async (request, reply) => {
     const count = await fastify.notificationService.getUnreadCount(request.jwtUser.sub);
-    return reply.send({ data: { count } });
+    return replyOk(reply, { count });
   });
 
   fastify.patch<{ Params: { id: string } }>(
@@ -53,11 +51,11 @@ export const notificationRoutes: FastifyPluginAsync = async (fastify) => {
     async (request, reply) => {
       try {
         await fastify.notificationService.markRead(request.params.id, request.jwtUser.sub);
-        return reply.send({ data: { success: true } });
+        return replyOk(reply, { success: true });
       } catch (e) {
         const code = (e as { statusCode?: number }).statusCode;
         if (code === 404) {
-          return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Notification not found' } });
+          return replyFail(reply, 404, 'NOT_FOUND', 'Notification not found');
         }
         throw e;
       }
@@ -66,7 +64,7 @@ export const notificationRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.post('/notifications/read-all', { preHandler: auth }, async (request, reply) => {
     await fastify.notificationService.markAllRead(request.jwtUser.sub);
-    return reply.send({ data: { success: true } });
+    return replyOk(reply, { success: true });
   });
 
   fastify.get('/notifications/preferences', { preHandler: auth }, async (request, reply) => {
@@ -74,15 +72,13 @@ export const notificationRoutes: FastifyPluginAsync = async (fastify) => {
     const prefs = await fastify.prisma.notificationPreferences.findUniqueOrThrow({
       where: { userId: request.jwtUser.sub },
     });
-    return reply.send({
-      data: {
-        emailInvitation: prefs.emailInvitation,
-        emailCancellation: prefs.emailCancellation,
-        emailReview: prefs.emailReview,
-        emailComplaint: prefs.emailComplaint,
-        emailNewApplication: prefs.emailNewApplication,
-        emailApplicationReply: prefs.emailApplicationReply,
-      },
+    return replyOk(reply, {
+      emailInvitation: prefs.emailInvitation,
+      emailCancellation: prefs.emailCancellation,
+      emailReview: prefs.emailReview,
+      emailComplaint: prefs.emailComplaint,
+      emailNewApplication: prefs.emailNewApplication,
+      emailApplicationReply: prefs.emailApplicationReply,
     });
   });
 
@@ -93,15 +89,13 @@ export const notificationRoutes: FastifyPluginAsync = async (fastify) => {
       where: { userId: request.jwtUser.sub },
       data: body,
     });
-    return reply.send({
-      data: {
-        emailInvitation: prefs.emailInvitation,
-        emailCancellation: prefs.emailCancellation,
-        emailReview: prefs.emailReview,
-        emailComplaint: prefs.emailComplaint,
-        emailNewApplication: prefs.emailNewApplication,
-        emailApplicationReply: prefs.emailApplicationReply,
-      },
+    return replyOk(reply, {
+      emailInvitation: prefs.emailInvitation,
+      emailCancellation: prefs.emailCancellation,
+      emailReview: prefs.emailReview,
+      emailComplaint: prefs.emailComplaint,
+      emailNewApplication: prefs.emailNewApplication,
+      emailApplicationReply: prefs.emailApplicationReply,
     });
   });
 };

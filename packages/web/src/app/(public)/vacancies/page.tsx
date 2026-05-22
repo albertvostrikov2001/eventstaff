@@ -9,10 +9,11 @@ import { useAuthStore } from '@/stores/authStore';
 import { apiClient } from '@/lib/api/client';
 import { SlidersHorizontal, X, Briefcase, RotateCcw, Search } from 'lucide-react';
 import { VacancyCardSkeleton } from '@/components/catalog/VacancyCardSkeleton';
+import { config } from '@/lib/config';
+import { useApplyToVacancy } from '@/hooks/useApplyToVacancy';
+import { ScheduleConflictDialog } from '@/components/worker/ScheduleConflictDialog';
 
-import { MOCK_VACANCIES } from '@/lib/mockData';
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+const API = config.apiUrl;
 
 interface VacancyItem {
   id: string;
@@ -41,7 +42,7 @@ function VacanciesCatalog() {
   const [error, setError] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [showFilters, setShowFilters] = useState(false);
-  const [applyingId, setApplyingId] = useState<string | null>(null);
+  const { applyingId, pendingConflict, submit, confirmConflict, dismissConflict } = useApplyToVacancy();
 
   useEffect(() => {
     fetch(`${API}/catalog/cities`, { credentials: 'include' })
@@ -89,8 +90,9 @@ function VacanciesCatalog() {
         setTotal(j.meta?.total ?? 0);
       })
       .catch(() => {
-        setVacancies(MOCK_VACANCIES);
-        setTotal(MOCK_VACANCIES.length);
+        setVacancies([]);
+        setTotal(0);
+        setError(true);
       })
       .finally(() => setLoading(false));
   };
@@ -122,14 +124,7 @@ function VacanciesCatalog() {
 
   const apply = async (vacancyId: string) => {
     if (!isAuthenticated) return;
-    setApplyingId(vacancyId);
-    try {
-      await apiClient.post('/worker/applications', { vacancyId });
-    } catch {
-      // error handled silently
-    } finally {
-      setApplyingId(null);
-    }
+    await submit(vacancyId);
   };
 
   const hasActiveFilters =
@@ -335,6 +330,16 @@ function VacanciesCatalog() {
           )}
         </>
       )}
+
+      <ScheduleConflictDialog
+        open={pendingConflict !== null}
+        message={pendingConflict?.message ?? ''}
+        conflicts={pendingConflict?.conflicts ?? []}
+        confirming={applyingId !== null}
+        onConfirm={() => void confirmConflict()}
+        onDismiss={dismissConflict}
+        confirmLabel="Всё равно откликнуться"
+      />
     </div>
   );
 }

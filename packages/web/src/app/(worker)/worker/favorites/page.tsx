@@ -38,7 +38,7 @@ export default function WorkerFavoritesPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, []);
+  useEffect(load, [toast]);
 
   const remove = async (id: string) => {
     setVacancies((prev) => prev.filter((v) => v.id !== id));
@@ -52,21 +52,21 @@ export default function WorkerFavoritesPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900">Избранные вакансии</h1>
-      <p className="mt-1 text-sm text-gray-500">Вакансии, которые вы сохранили</p>
+      <h1 className="text-2xl font-bold text-white">Избранные вакансии</h1>
+      <p className="mt-1 text-sm text-white/50">Вакансии, которые вы сохранили</p>
 
       <div className="mt-6">
         {loading ? (
           <div className="grid gap-4 sm:grid-cols-2">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-36 animate-pulse rounded-card bg-gray-200" />
+              <div key={i} className="h-36 animate-pulse rounded-card bg-white/10" />
             ))}
           </div>
         ) : vacancies.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 rounded-card border border-gray-200 bg-white py-16 text-center">
-            <Heart className="h-10 w-10 text-gray-300" />
-            <h3 className="font-semibold text-gray-900">Нет избранных вакансий</h3>
-            <p className="text-sm text-gray-500">Добавляйте вакансии в избранное при просмотре каталога</p>
+          <div className="flex flex-col items-center gap-3 rounded-card border border-white/10 bg-white/[0.04] py-16 text-center">
+            <Heart className="h-10 w-10 text-white/40" />
+            <h3 className="font-semibold text-white/90">Нет избранных вакансий</h3>
+            <p className="text-sm text-white/50">Добавляйте вакансии в избранное при просмотре каталога</p>
             <Link
               href="/vacancies"
               className="mt-2 rounded-input bg-primary-500 px-5 py-2 text-sm font-semibold text-white hover:bg-primary-600"
@@ -77,19 +77,19 @@ export default function WorkerFavoritesPage() {
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             {vacancies.map((v) => (
-              <div key={v.id} className="rounded-card border border-gray-200 bg-white p-5 shadow-sm">
+              <div key={v.id} className="rounded-card border border-white/10 bg-white/[0.04] p-5">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <Link href={`/vacancies/${v.id}`} className="font-semibold text-gray-900 hover:text-primary-600">
+                    <Link href={`/vacancies/${v.id}`} className="font-semibold text-white/90 hover:text-primary-300">
                       {v.title}
                     </Link>
-                    <p className="mt-0.5 text-sm text-gray-500">
+                    <p className="mt-0.5 text-sm text-white/50">
                       {v.employer.companyName ?? v.employer.contactName}
                       {v.employer.isVerified && (
                         <span className="ml-1 text-xs text-primary-600">✓</span>
                       )}
                     </p>
-                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-gray-500">
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-white/45">
                       <span className="flex items-center gap-1">
                         <Briefcase className="h-3 w-3" />
                         {STAFF_CATEGORIES[v.category as keyof typeof STAFF_CATEGORIES] ?? v.category}
@@ -100,7 +100,7 @@ export default function WorkerFavoritesPage() {
                           {v.city.name}
                         </span>
                       )}
-                      <span className="font-medium text-gray-700">
+                      <span className="font-medium text-white/70">
                         {Number(v.rate).toLocaleString('ru-RU')} ₽/ч
                       </span>
                     </div>

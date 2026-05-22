@@ -99,13 +99,13 @@ export function EmployerCatalogWorkerCard({
           )}
           <p className="mt-2 text-xs text-emerald-200/90">
             ★ <span className="font-semibold">{stars}</span>
-            <span className="text-white/35">{' · '}</span>
+            <span className="text-white/50">{' · '}</span>
             <span className="text-white/50">
               {worker.totalReviews} {worker.totalReviews === 1 ? 'отзыв' : 'отзывов'}
             </span>
-            <span className="text-white/35">{' · '}</span>
+            <span className="text-white/50">{' · '}</span>
             {worker.city?.name ?? 'Город не указан'}
-            <span className="text-white/35">{' · '}</span>
+            <span className="text-white/50">{' · '}</span>
             опыт{' '}
             {worker.experienceYears === 0 ? 'нет' : `${worker.experienceYears} ${worker.experienceYears >= 5 ? 'лет' : 'г.'}`}
           </p>

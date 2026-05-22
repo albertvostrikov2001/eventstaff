@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from '@prisma/client';
-import { BookingStatus, type ChatRoomContextType, MessageType } from '@prisma/client';
+import { BookingStatus, type ChatRoomContextType, MessageType, type ChatMessage } from '@prisma/client';
 import { buildSystemOpeningText, suggestOpenContextForPair } from '@/lib/chat-open-context';
 import { hasLinkingContext, type WorkerEmployerIds } from '@/lib/can-chat';
 
@@ -126,11 +126,22 @@ export class ChatService {
     return this.openOrUpdateRoom(pair, normalized);
   }
 
-  async sendMessage(roomId: string, senderId: string, text: string) {
-    const trimmed = text?.trim() ?? '';
-    if (!trimmed) {
-      throw new Error('EMPTY_MESSAGE');
-    }
+  async sendMessage(
+    roomId: string,
+    senderId: string,
+    options: {
+      text?: string | null;
+      fileUrl?: string | null;
+      fileName?: string | null;
+      replyToId?: string | null;
+      replyToText?: string | null;
+      replyToSenderName?: string | null;
+    },
+  ): Promise<ChatMessage> {
+    const trimmed = options.text?.trim() ?? null;
+    const fileUrl = options.fileUrl?.trim() ?? null;
+    if (!trimmed && !fileUrl) throw new Error('EMPTY_MESSAGE');
+
     const ok = await this.isRoomParticipant(roomId, senderId);
     if (!ok) throw new Error('FORBIDDEN');
 
@@ -139,8 +150,13 @@ export class ChatService {
         data: {
           roomId,
           senderId,
-          type: MessageType.TEXT,
+          type: fileUrl ? MessageType.FILE : MessageType.TEXT,
           text: trimmed,
+          fileUrl: fileUrl,
+          fileName: options.fileName?.trim() ?? null,
+          replyToId: options.replyToId ?? null,
+          replyToText: options.replyToText?.slice(0, 500) ?? null,
+          replyToSenderName: options.replyToSenderName?.slice(0, 100) ?? null,
           isRead: false,
           isSystem: false,
         },

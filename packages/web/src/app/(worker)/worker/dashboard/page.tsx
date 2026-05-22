@@ -44,15 +44,22 @@ export default function WorkerDashboardPage() {
       apiClient.get<{ data: Application[] }>('/worker/applications', { limit: 5 }),
       apiClient.get<{ data: { visibility: string } }>('/worker/profile'),
       apiClient.get<{ data: PendingInvitation[] }>('/worker/applications', { status: 'invited', page: 1 }),
+      apiClient.get<{
+        data: {
+          applicationsCount: number;
+          activeShiftsCount: number;
+          pendingInvitationsCount: number;
+        };
+      }>('/worker/dashboard/summary'),
     ])
-      .then(([appRes, profileRes, invRes]) => {
+      .then(([appRes, profileRes, invRes, summaryRes]) => {
         const apps = appRes.data;
         setApplications(apps.slice(0, 5));
         setVisibility(profileRes.data.visibility);
         setStats({
-          total: apps.length,
-          confirmed: apps.filter((a) => a.status === 'confirmed').length,
-          pending: apps.filter((a) => a.status === 'pending').length,
+          total: summaryRes.data.applicationsCount,
+          confirmed: summaryRes.data.activeShiftsCount,
+          pending: summaryRes.data.pendingInvitationsCount,
         });
         setPendingInvitations((invRes.data ?? []).slice(0, 3));
       })

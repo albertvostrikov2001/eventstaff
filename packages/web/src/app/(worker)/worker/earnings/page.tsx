@@ -81,7 +81,7 @@ export default function WorkerEarningsPage() {
               <tr>
                 <td colSpan={3} className="px-3 py-10 text-center text-white/50">
                   <div className="mx-auto max-w-sm">
-                    <Wallet className="mx-auto h-10 w-10 text-white/20" />
+                    <Wallet className="mx-auto h-10 w-10 text-white/40" />
                     <p className="mt-3 text-white/80">Пока нет оплат</p>
                     <p className="mt-1 text-sm text-white/50">
                       После завершения смены и оплаты работодателем вы увидите её здесь

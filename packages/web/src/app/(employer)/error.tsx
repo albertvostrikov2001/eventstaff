@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
 export default function EmployerErrorPage({
   error: _error,
@@ -17,12 +18,9 @@ export default function EmployerErrorPage({
         Мы уже знаем о проблеме и работаем над её устранением
       </p>
       <div className="flex flex-col gap-3 sm:flex-row">
-        <button
-          onClick={reset}
-          className="rounded-input bg-primary-500 px-6 py-2.5 text-sm font-semibold text-white hover:bg-primary-600"
-        >
+        <Button type="button" variant="primary" onClick={reset} className="rounded-input">
           Попробовать снова
-        </button>
+        </Button>
         <Link
           href="/employer/dashboard"
           className="rounded-input border border-white/20 px-6 py-2.5 text-sm font-medium text-white/70 hover:border-white/40 hover:text-white"

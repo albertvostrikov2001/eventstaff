@@ -1,5 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { replyFail, replyOk } from '@/lib/api-reply';
+import { safeUserSelect } from '@/lib/safe-user-select';
 
 export const messagesRoutes: FastifyPluginAsync = async (fastify) => {
   const auth = [fastify.authenticate];
@@ -27,7 +29,8 @@ export const messagesRoutes: FastifyPluginAsync = async (fastify) => {
         const otherIds = conv.participantIds.filter((id) => id !== userId);
         const otherUsers = await fastify.prisma.user.findMany({
           where: { id: { in: otherIds } },
-          include: {
+          select: {
+            ...safeUserSelect,
             workerProfile: { select: { firstName: true, lastName: true, photoUrl: true } },
             employerProfile: { select: { companyName: true, contactName: true, logoUrl: true } },
           },
@@ -36,7 +39,7 @@ export const messagesRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     );
 
-    return reply.send({ data: enriched });
+    return replyOk(reply, enriched);
   });
 
   // POST /conversations — find or create
@@ -45,9 +48,7 @@ export const messagesRoutes: FastifyPluginAsync = async (fastify) => {
     const userId = request.jwtUser.sub;
 
     if (userId === body.recipientId) {
-      return reply
-        .status(400)
-        .send({ error: { code: 'INVALID', message: 'Cannot message yourself' } });
+      return replyFail(reply, 400, 'INVALID', 'Cannot message yourself');
     }
 
     const existing = await fastify.prisma.conversation.findFirst({
@@ -57,7 +58,7 @@ export const messagesRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     if (existing) {
-      return reply.send({ data: existing });
+      return replyOk(reply, existing);
     }
 
     const conv = await fastify.prisma.conversation.create({
@@ -66,7 +67,7 @@ export const messagesRoutes: FastifyPluginAsync = async (fastify) => {
       },
     });
 
-    return reply.status(201).send({ data: conv });
+    return replyOk(reply, conv, 201);
   });
 
   // GET /conversations/:id
@@ -83,9 +84,7 @@ export const messagesRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     if (!conv) {
-      return reply
-        .status(404)
-        .send({ error: { code: 'NOT_FOUND', message: 'Conversation not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Conversation not found');
     }
 
     const messages = await fastify.prisma.message.findMany({
@@ -116,7 +115,7 @@ export const messagesRoutes: FastifyPluginAsync = async (fastify) => {
       data: { readAt: new Date() },
     });
 
-    return reply.send({ data: { conversation: conv, messages } });
+    return replyOk(reply, { conversation: conv, messages });
   });
 
   // POST /conversations/:id/messages
@@ -133,9 +132,7 @@ export const messagesRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     if (!conv) {
-      return reply
-        .status(404)
-        .send({ error: { code: 'NOT_FOUND', message: 'Conversation not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Conversation not found');
     }
 
     const receiverId = conv.participantIds.find((pid) => pid !== userId)!;
@@ -154,6 +151,6 @@ export const messagesRoutes: FastifyPluginAsync = async (fastify) => {
       data: { lastMessageAt: new Date() },
     });
 
-    return reply.status(201).send({ data: message });
+    return replyOk(reply, message, 201);
   });
 };

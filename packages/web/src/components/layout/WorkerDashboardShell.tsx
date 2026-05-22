@@ -14,14 +14,17 @@ import {
   Banknote,
   Briefcase,
   Mail,
+  Settings,
 } from 'lucide-react';
 import { DashboardSidebar } from '@/components/layout/DashboardSidebar';
 import { DashboardTopBar } from '@/components/layout/DashboardTopBar';
 import { useChatInboxStore } from '@/stores/chatInboxStore';
+import { useNotificationUnreadCount } from '@/hooks/useNotificationUnreadCount';
 import { RestrictionBanner } from '@/components/layout/RestrictionBanner';
 
 export function WorkerDashboardShell({ children }: { children: React.ReactNode }) {
   const chatUnread = useChatInboxStore((s) => s.unreadTotal);
+  const notifUnread = useNotificationUnreadCount();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const sidebarItems = useMemo(
     () => [
@@ -35,10 +38,12 @@ export function WorkerDashboardShell({ children }: { children: React.ReactNode }
       { href: '/worker/calendar', label: 'Календарь', icon: Calendar },
       { href: '/worker/reviews', label: 'Отзывы', icon: Star },
       { href: '/worker/earnings', label: 'Заработок', icon: Banknote },
-      { href: '/worker/settings/notifications', label: 'Уведомления', icon: Bell },
+      { href: '/worker/notifications', label: 'Уведомления', icon: Bell, badge: notifUnread || undefined },
+      { href: '/worker/settings', label: 'Настройки', icon: Settings },
+      { href: '/worker/settings/notifications', label: 'Email-рассылка', icon: Mail },
       { href: '/worker/profile/media', label: 'Медиа', icon: ImagePlus },
     ],
-    [chatUnread],
+    [chatUnread, notifUnread],
   );
   return (
     <div className="flex min-h-screen bg-[linear-gradient(160deg,#0d1f17_0%,#122a1e_40%,#0a1810_100%)] text-gray-100">

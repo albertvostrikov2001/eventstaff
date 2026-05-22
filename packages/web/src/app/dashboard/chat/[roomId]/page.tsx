@@ -1,10 +1,12 @@
 import { LegacyChatRoomRedirectClient } from './LegacyChatRoomRedirectClient';
 
-/** Placeholder for static export (GitHub Pages); real rooms load client-side after redirect. */
-export function generateStaticParams() {
-  return [{ roomId: 'placeholder' }];
-}
+export const dynamic = 'force-dynamic';
 
-export default function LegacyChatRoomRedirectPage() {
-  return <LegacyChatRoomRedirectClient />;
+/** @deprecated Legacy /dashboard/chat/[roomId] — redirects to role messages. */
+export default function LegacyChatRoomRedirectPage({
+  params,
+}: {
+  params: { roomId: string };
+}) {
+  return <LegacyChatRoomRedirectClient roomId={params.roomId} />;
 }

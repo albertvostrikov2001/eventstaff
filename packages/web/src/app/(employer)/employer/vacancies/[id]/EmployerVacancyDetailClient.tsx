@@ -2,6 +2,7 @@
 
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter, useParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
@@ -11,7 +12,6 @@ import {
   VACANCY_STATUSES,
 } from '@unity/shared';
 import {
-  ArrowLeft,
   Calendar,
   Copy,
   Loader2,
@@ -33,6 +33,8 @@ import {
 import { ApiError, apiClient } from '@/lib/api/client';
 import { formatDateTimeRu } from '@/lib/dates/formatDateTime';
 import { useToast } from '@/components/ui/toast-context';
+import { Breadcrumbs } from '@/components/ui/Breadcrumbs';
+import { Button } from '@/components/ui/button';
 
 interface VacancyDetail {
   id: string;
@@ -188,13 +190,12 @@ export function EmployerVacancyDetailClient() {
 
   return (
     <div className="min-w-0">
-      <Link
-        href="/employer/vacancies"
-        className="mb-8 inline-flex items-center gap-2 text-sm font-medium text-white/55 hover:text-white"
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden />
-        К списку вакансий
-      </Link>
+      <Breadcrumbs
+        items={[
+          { label: 'Мои вакансии', href: '/employer/vacancies' },
+          { label: vacancy.title },
+        ]}
+      />
 
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-white/[0.08] pb-8">
             <div className="min-w-0">
@@ -225,15 +226,17 @@ export function EmployerVacancyDetailClient() {
 
             <DropdownMenu.Root>
               <DropdownMenu.Trigger asChild>
-                <button
+                <Button
                   type="button"
-                  className="rounded-[10px] border border-white/[0.1] bg-white/[0.04] px-4 py-2 text-sm font-medium text-white/80 hover:border-white/[0.18]"
+                  variant="muted"
+                  size="md"
+                  className="rounded-[10px] px-4 py-2 text-sm"
                 >
                   <span className="inline-flex items-center gap-2">
                     Ещё
                     <MoreHorizontal className="h-4 w-4 opacity-65" aria-hidden />
                   </span>
-                </button>
+                </Button>
               </DropdownMenu.Trigger>
               <DropdownMenu.Portal>
                 <DropdownMenu.Content
@@ -324,14 +327,17 @@ export function EmployerVacancyDetailClient() {
 
       <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
             <article className="space-y-6">
-              <div className="overflow-hidden rounded-[16px] border border-white/[0.08] bg-white/[0.03]">
+              <div className="relative w-full overflow-hidden rounded-[16px] border border-white/[0.08] bg-white/[0.03]">
                 {cover ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    alt=""
-                    src={cover}
-                    className="max-h-[320px] w-full object-cover"
-                  />
+                  <div className="relative aspect-video w-full max-h-[320px]">
+                    <Image
+                      src={cover}
+                      alt={vacancy.title}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                    />
+                  </div>
                 ) : (
                   <div className="flex aspect-[21/9] items-center justify-center gap-3 border-b border-white/[0.06] bg-white/[0.02] text-sm text-white/35">
                     <Calendar className="h-10 w-10" aria-hidden />
@@ -423,14 +429,16 @@ export function EmployerVacancyDetailClient() {
             <ModalClose className="inline-flex items-center rounded-[10px] border border-white/[0.12] px-4 py-2 text-sm hover:bg-white/[0.04]">
               Отмена
             </ModalClose>
-            <button
+            <Button
               type="button"
+              variant="primary"
               disabled={archiveWorking}
+              isLoading={archiveWorking}
               onClick={archiveFromModalConfirm}
-              className="inline-flex items-center rounded-[10px] bg-emerald-800/95 px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+              className="inline-flex min-h-[40px] items-center rounded-[10px] px-4 py-2 text-sm"
             >
-              {archiveWorking ? <Loader2 className="h-4 w-4 animate-spin" /> : 'В архив'}
-            </button>
+              В архив
+            </Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

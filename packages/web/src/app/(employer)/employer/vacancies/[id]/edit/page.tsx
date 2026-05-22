@@ -1,8 +1,6 @@
 import { EditVacancyPageClient } from './EditVacancyPageClient';
 
-export function generateStaticParams() {
-  return [{ id: 'placeholder' }];
-}
+export const dynamic = 'force-dynamic';
 
 export default function EditVacancyPage() {
   return <EditVacancyPageClient />;

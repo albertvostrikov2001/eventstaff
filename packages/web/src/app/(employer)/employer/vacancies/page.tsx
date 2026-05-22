@@ -3,6 +3,7 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
   RATE_TYPES,
@@ -13,7 +14,6 @@ import {
   Calendar,
   ClipboardList,
   Copy,
-  Loader2,
   MapPin,
   MoreHorizontal,
   Pause,
@@ -34,6 +34,7 @@ import {
 import { ApiError, apiClient } from '@/lib/api/client';
 import { formatDateTimeRu } from '@/lib/dates/formatDateTime';
 import { useToast } from '@/components/ui/toast-context';
+import { Button } from '@/components/ui/button';
 
 type VacancyTab = EmployerVacancyListQuery['tab'];
 type InnerStatusFilter = Exclude<EmployerVacancyListQuery['vacancyStatus'], undefined>;
@@ -215,20 +216,23 @@ export default function EmployerVacanciesPage() {
   };
 
   const tabBtn = (k: VacancyTab, label: string) => (
-    <button
+    <Button
+      key={k}
       type="button"
+      variant="ghostInverse"
+      size="sm"
       onClick={() => {
         setTab(k);
         setPage(1);
       }}
       className={
         tab === k
-          ? 'border-b-[3px] border-[color:var(--u-emerald,#2d6a4a)] px-1 pb-3 text-[15px] font-semibold text-white'
-          : 'border-b-[3px] border-transparent px-1 pb-3 text-[15px] font-medium text-white/50 transition hover:text-white/80'
+          ? 'border-b-[3px] border-[color:var(--u-emerald,#2d6a4a)] px-1 pb-3 text-[15px] font-semibold text-white h-auto min-h-0 rounded-none shadow-none'
+          : 'border-b-[3px] border-transparent px-1 pb-3 text-[15px] font-medium text-white/50 transition hover:text-white/80 h-auto min-h-0 rounded-none shadow-none'
       }
     >
       {label}
-    </button>
+    </Button>
   );
 
   const emptyCopy =
@@ -273,7 +277,7 @@ export default function EmployerVacanciesPage() {
 
       <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="relative min-w-[220px] flex-1 max-w-xl">
-          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-white/50" />
           <input
             value={search}
             onChange={(e) => {
@@ -281,12 +285,12 @@ export default function EmployerVacanciesPage() {
               setPage(1);
             }}
             placeholder="Поиск по названию"
-            className="w-full rounded-[12px] border border-white/[0.08] bg-white/[0.04] py-2.5 pl-11 pr-4 text-sm text-white placeholder:text-white/35 outline-none transition focus:border-[#2d6a4a]/45"
+            className="w-full rounded-[12px] border border-white/[0.08] bg-white/[0.04] py-2.5 pl-11 pr-4 text-sm text-white placeholder:text-white/30 outline-none transition focus:border-[#2d6a4a]/45"
           />
         </div>
         {tab === 'live' && (
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs uppercase tracking-wide text-white/38">Статус</span>
+            <span className="text-xs uppercase tracking-wide text-white/50">Статус</span>
             <select
               value={innerStatus}
               onChange={(e) => {
@@ -304,7 +308,7 @@ export default function EmployerVacanciesPage() {
           </div>
         )}
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs uppercase tracking-wide text-white/38">Сортировка</span>
+          <span className="text-xs uppercase tracking-wide text-white/50">Сортировка</span>
           <select
             value={sort}
             onChange={(e) => {
@@ -325,13 +329,14 @@ export default function EmployerVacanciesPage() {
       {error && (
         <div className="mt-8 rounded-[14px] border border-red-400/35 bg-red-500/15 px-4 py-3 text-sm text-red-50">
           {error}{' '}
-          <button
+          <Button
             type="button"
+            variant="ghostInverse"
             onClick={load}
-            className="ml-2 font-semibold text-white underline underline-offset-2 hover:text-white/85"
+            className="ml-2 h-auto min-h-0 p-0 font-semibold text-white underline underline-offset-2 shadow-none hover:bg-transparent hover:text-white/85"
           >
             Повторить
-          </button>
+          </Button>
         </div>
       )}
 
@@ -347,7 +352,7 @@ export default function EmployerVacanciesPage() {
           </div>
         ) : list.length === 0 ? (
           <div className="flex flex-col items-center rounded-[18px] border border-white/[0.08] bg-white/[0.03] py-16 text-center">
-            <ClipboardList className="mb-3 h-10 w-10 text-white/28" aria-hidden />
+            <ClipboardList className="mb-3 h-10 w-10 text-white/40" aria-hidden />
             <p className="text-[15px] font-semibold text-white/82">{emptyCopy}</p>
             {tab === 'live' && (
               <Link
@@ -373,11 +378,13 @@ export default function EmployerVacanciesPage() {
                     className="relative h-[120px] w-[120px] shrink-0 overflow-hidden rounded-[14px] border border-white/[0.08] bg-white/[0.04]"
                   >
                     {cover ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        alt=""
+                      <Image
+                        alt={v.title ? `Обложка: ${v.title}` : 'Обложка вакансии'}
                         src={cover}
+                        width={120}
+                        height={120}
                         className="h-full w-full object-cover transition group-hover:scale-[1.02]"
+                        sizes="120px"
                       />
                     ) : (
                       <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[11px] font-medium uppercase tracking-wide text-white/25">
@@ -404,13 +411,15 @@ export default function EmployerVacanciesPage() {
                       </div>
                       <DropdownMenu.Root>
                         <DropdownMenu.Trigger asChild>
-                          <button
+                          <Button
                             type="button"
-                            className="rounded-[10px] border border-white/[0.08] bg-white/[0.04] p-2 text-white/70 transition hover:border-white/[0.16] hover:bg-white/[0.07]"
+                            variant="muted"
+                            size="icon"
+                            className="rounded-[10px]"
                             aria-label="Действия"
                           >
                             <MoreHorizontal className="h-4 w-4" aria-hidden />
-                          </button>
+                          </Button>
                         </DropdownMenu.Trigger>
                         <DropdownMenu.Portal>
                           <DropdownMenu.Content
@@ -505,17 +514,17 @@ export default function EmployerVacanciesPage() {
                         {STAFF_CATEGORIES[v.category as keyof typeof STAFF_CATEGORIES] ?? v.category}
                       </span>
                       <span className="inline-flex items-center gap-1.5">
-                        <Calendar className="h-3.5 w-3.5 shrink-0 text-white/35" aria-hidden />
+                        <Calendar className="h-3.5 w-3.5 shrink-0 text-white/50" aria-hidden />
                         {formatDateTimeRu(v.dateStart, 'short')}
                       </span>
                       {v.city && (
                         <span className="inline-flex items-center gap-1">
-                          <MapPin className="h-3.5 w-3.5 shrink-0 text-white/35" aria-hidden />
+                          <MapPin className="h-3.5 w-3.5 shrink-0 text-white/50" aria-hidden />
                           {v.city.name}
                         </span>
                       )}
                       <span className="inline-flex items-center gap-1">
-                        <Users className="h-3.5 w-3.5 shrink-0 text-white/35" aria-hidden />
+                        <Users className="h-3.5 w-3.5 shrink-0 text-white/50" aria-hidden />
                         {v._count.applications}
                       </span>
                       <span className="font-medium text-white/78">
@@ -533,25 +542,27 @@ export default function EmployerVacanciesPage() {
 
       {meta && meta.totalPages > 1 && (
         <div className="mt-8 flex items-center justify-center gap-4 text-sm text-white/60">
-          <button
+          <Button
             type="button"
+            variant="muted"
+            size="sm"
             disabled={page <= 1 || loading}
             onClick={() => setPage((p) => Math.max(1, p - 1))}
-            className="rounded-[10px] border border-white/12 px-4 py-2 disabled:opacity-35"
           >
             Назад
-          </button>
+          </Button>
           <span>
             Стр. {page} / {meta.totalPages}
           </span>
-          <button
+          <Button
             type="button"
+            variant="muted"
+            size="sm"
             disabled={page >= meta.totalPages || loading}
             onClick={() => setPage((p) => p + 1)}
-            className="rounded-[10px] border border-white/12 px-4 py-2 disabled:opacity-35"
           >
             Вперёд
-          </button>
+          </Button>
         </div>
       )}
 
@@ -582,14 +593,16 @@ export default function EmployerVacanciesPage() {
             <ModalClose className="inline-flex min-h-[40px] items-center justify-center rounded-[10px] border border-white/[0.12] px-5 text-sm text-white/82 hover:bg-white/[0.05]">
               Отмена
             </ModalClose>
-            <button
+            <Button
               type="button"
+              variant="primary"
               disabled={archiveWorking}
+              isLoading={archiveWorking}
               onClick={archiveConfirm}
-              className="inline-flex min-h-[40px] items-center justify-center rounded-[10px] bg-emerald-800/95 px-5 text-sm font-semibold text-white hover:brightness-110 disabled:opacity-45"
+              className="inline-flex min-h-[40px] items-center justify-center rounded-[10px] px-5"
             >
-              {archiveWorking ? <Loader2 className="h-4 w-4 animate-spin" /> : 'В архив'}
-            </button>
+              В архив
+            </Button>
           </ModalFooter>
         </ModalContent>
       </Modal>

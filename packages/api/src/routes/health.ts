@@ -1,69 +1,31 @@
 import type { FastifyInstance } from 'fastify';
 
 export async function healthRoutes(fastify: FastifyInstance) {
-  fastify.get('/health', {
-    schema: {
-      description: 'Health check endpoint',
-      tags: ['System'],
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            status: { type: 'string' },
-            timestamp: { type: 'string' },
-            services: {
-              type: 'object',
-              properties: {
-                database: { type: 'string' },
-                redis: { type: 'string' },
-              },
-            },
-          },
-        },
-        503: {
-          type: 'object',
-          properties: {
-            status: { type: 'string' },
-            timestamp: { type: 'string' },
-            services: {
-              type: 'object',
-              properties: {
-                database: { type: 'string' },
-                redis: { type: 'string' },
-              },
-            },
-          },
-        },
-      },
-    },
-    handler: async (_request, reply) => {
-      let dbStatus = 'disconnected';
-      let redisStatus = 'disconnected';
+  fastify.get('/health', async (_request, reply) => {
+    const checks: Record<string, 'ok' | 'error'> = {};
 
-      try {
-        await fastify.prisma.$queryRaw`SELECT 1`;
-        dbStatus = 'connected';
-      } catch {
-        dbStatus = 'error';
-      }
+    try {
+      await fastify.prisma.$queryRaw`SELECT 1`;
+      checks.db = 'ok';
+    } catch {
+      checks.db = 'error';
+    }
 
-      try {
-        const pong = await fastify.redis.ping();
-        redisStatus = pong === 'PONG' ? 'connected' : 'error';
-      } catch {
-        redisStatus = 'error';
-      }
+    try {
+      const pong = await fastify.redis.ping();
+      checks.redis = pong === 'PONG' ? 'ok' : 'error';
+    } catch {
+      checks.redis = 'error';
+    }
 
-      const allHealthy = dbStatus === 'connected' && redisStatus === 'connected';
+    const allOk = Object.values(checks).every((v) => v === 'ok');
 
-      return reply.status(allHealthy ? 200 : 503).send({
-        status: allHealthy ? 'ok' : 'degraded',
-        timestamp: new Date().toISOString(),
-        services: {
-          database: dbStatus,
-          redis: redisStatus,
-        },
-      });
-    },
+    return reply.status(allOk ? 200 : 503).send({
+      status: allOk ? 'ok' : 'degraded',
+      checks,
+      uptime: process.uptime(),
+      version: process.env.npm_package_version ?? '1.0.0',
+      timestamp: new Date().toISOString(),
+    });
   });
 }

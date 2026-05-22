@@ -144,7 +144,7 @@ export function EmployerRecentApplicationsSection({ hasVacancies }: { hasVacanci
           </Link>
         </div>
         <div className="flex flex-col items-center gap-3 py-10 text-center">
-          <Inbox className="h-10 w-10 text-white/25" aria-hidden />
+          <Inbox className="h-10 w-10 text-white/40" aria-hidden />
           <p className="text-sm text-white/55">
             {hasVacancies
               ? 'Пока нет откликов. Разместите вакансию на главной странице — кандидаты появятся здесь.'
@@ -249,7 +249,7 @@ export function EmployerRecentApplicationsSection({ hasVacancies }: { hasVacanci
                     </>
                   ) : null}
                 </div>
-                <time className="block text-[11px] text-white/35" dateTime={a.createdAt}>
+                <time className="block text-[11px] text-white/50" dateTime={a.createdAt}>
                   {formatRelativeTimeRu(a.createdAt)}
                 </time>
               </div>

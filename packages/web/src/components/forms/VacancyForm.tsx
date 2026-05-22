@@ -11,10 +11,10 @@ import {
   EVENT_TYPES,
   type VacancyCreateInput,
   RATE_TYPES,
-  vacancyCreateSchema,
   STAFF_CATEGORIES,
   VACANCY_QUICK_TAGS,
 } from '@unity/shared';
+import { VacancyCreateSchema } from '@/lib/validations/employer';
 import { FormCheckbox } from '@/components/forms/FormCheckbox';
 import { FormDateTimePicker } from '@/components/forms/FormDateTimePicker';
 import { FormField } from '@/components/forms/FormField';
@@ -66,7 +66,7 @@ export function VacancyForm({
   const minStartLead = useMemo(() => addHours(startOfMinute(new Date()), 1), []);
 
   const form = useForm<VacancyCreateInput>({
-    resolver: zodResolver(vacancyCreateSchema) as unknown as Resolver<VacancyCreateInput>,
+    resolver: zodResolver(VacancyCreateSchema) as unknown as Resolver<VacancyCreateInput>,
     defaultValues: {
       workersNeeded: 1,
       foodProvided: false,

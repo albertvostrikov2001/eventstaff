@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { MediaType } from '@prisma/client';
+import { replyFail, replyOk } from '@/lib/api-reply';
 
 function mediaStatus(m: { isApproved: boolean; isRejected: boolean }) {
   if (m.isRejected) return 'rejected' as const;
@@ -53,12 +54,12 @@ export const mediaRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     if (!buffer?.length) {
-      return reply.status(400).send({ error: { code: 'NO_FILE', message: 'Файл не передан' } });
+      return replyFail(reply, 400, 'NO_FILE', 'Файл не передан');
     }
 
     const typeParse = z.nativeEnum(MediaType).safeParse(uploadTypeRaw);
     if (!typeParse.success) {
-      return reply.status(400).send({ error: { code: 'INVALID_TYPE', message: 'Некорректный type' } });
+      return replyFail(reply, 400, 'INVALID_TYPE', 'Некорректный type');
     }
 
     try {
@@ -69,15 +70,15 @@ export const mediaRoutes: FastifyPluginAsync = async (fastify) => {
         mimeType,
         type: typeParse.data,
       });
-      return reply.status(201).send({ data: serializeMedia(media) });
+      return replyOk(reply, serializeMedia(media), 201);
     } catch (e) {
       const code = (e as { statusCode?: number }).statusCode;
       const msg = e instanceof Error ? e.message : 'Ошибка загрузки';
       if (code === 400) {
-        return reply.status(400).send({ error: { code: 'VALIDATION', message: msg } });
+        return replyFail(reply, 400, 'VALIDATION', msg);
       }
       if (code === 403) {
-        return reply.status(403).send({ error: { code: 'FORBIDDEN', message: msg } });
+        return replyFail(reply, 403, 'FORBIDDEN', msg);
       }
       throw e;
     }
@@ -86,11 +87,11 @@ export const mediaRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.delete<{ Params: { id: string } }>('/:id', { preHandler: auth }, async (request, reply) => {
     try {
       await fastify.mediaService.delete(request.params.id, request.jwtUser.sub);
-      return reply.send({ data: { success: true } });
+      return replyOk(reply, { success: true });
     } catch (e) {
       const code = (e as { statusCode?: number }).statusCode;
       if (code === 404) {
-        return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Не найдено' } });
+        return replyFail(reply, 404, 'NOT_FOUND', 'Не найдено');
       }
       throw e;
     }
@@ -105,29 +106,25 @@ export const mediaRoutes: FastifyPluginAsync = async (fastify) => {
 
     const role = request.jwtUser.activeRole;
     if (role === 'employer') {
-      return reply.send({
-        data: {
-          logo: pickFirst('COMPANY_LOGO'),
-          banner: pickFirst('COMPANY_BANNER'),
-          gallery: pickAll('COMPANY_GALLERY'),
-          avatar: null,
-          portfolio: [],
-          documents: [],
-          videos: null,
-        },
+      return replyOk(reply, {
+        logo: pickFirst('COMPANY_LOGO'),
+        banner: pickFirst('COMPANY_BANNER'),
+        gallery: pickAll('COMPANY_GALLERY'),
+        avatar: null,
+        portfolio: [],
+        documents: [],
+        videos: null,
       });
     }
 
-    return reply.send({
-      data: {
-        avatar: pickFirst('AVATAR'),
-        portfolio: pickAll('PORTFOLIO_PHOTO'),
-        documents: pickAll('DOCUMENT'),
-        videos: pickFirst('VIDEO_CARD'),
-        logo: null,
-        banner: null,
-        gallery: [],
-      },
+    return replyOk(reply, {
+      avatar: pickFirst('AVATAR'),
+      portfolio: pickAll('PORTFOLIO_PHOTO'),
+      documents: pickAll('DOCUMENT'),
+      videos: pickFirst('VIDEO_CARD'),
+      logo: null,
+      banner: null,
+      gallery: [],
     });
   });
 };

@@ -1,8 +1,6 @@
 import { VacancyApplicationsPageClient } from './VacancyApplicationsPageClient';
 
-export function generateStaticParams() {
-  return [{ id: 'placeholder' }];
-}
+export const dynamic = 'force-dynamic';
 
 export default function VacancyApplicationsPage() {
   return <VacancyApplicationsPageClient />;

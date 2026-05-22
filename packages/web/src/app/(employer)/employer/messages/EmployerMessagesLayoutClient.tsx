@@ -15,7 +15,7 @@ export default function EmployerMessagesLayoutClient({
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 lg:h-[calc(100vh-5.5rem)] lg:flex-row lg:gap-0">
       <aside
-        className={`flex min-h-0 shrink-0 flex-col border-gray-100 lg:w-[400px] lg:border-r lg:pr-4 ${
+        className={`flex min-h-0 shrink-0 flex-col border-white/[0.08] lg:w-[400px] lg:border-r lg:pr-4 ${
           isConversation ? 'hidden lg:flex' : 'flex'
         }`}
       >

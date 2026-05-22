@@ -12,6 +12,8 @@ import {
   ShiftConfirmationError,
   confirmShiftParticipation,
 } from '@/lib/shift-confirmation';
+import { replyFail, replyOk } from '@/lib/api-reply';
+import { safeUserSelect } from '@/lib/safe-user-select';
 
 const REVIEW_WINDOW_MS = 72 * 60 * 60 * 1000;
 
@@ -25,9 +27,9 @@ export const shiftActionRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post(
     '/shifts/escalation/run',
     { preHandler: [fastify.authenticate, fastify.requireRole(['admin'])] },
-    async () => {
+    async (_request, reply) => {
       const n = await processStaleShiftConfirmations(fastify.prisma, fastify.notificationService);
-      return { data: { processed: n } };
+      return replyOk(reply, { processed: n });
     },
   );
 
@@ -41,10 +43,10 @@ export const shiftActionRoutes: FastifyPluginAsync = async (fastify) => {
         id,
         uid,
       );
-      return reply.send({ data: shift });
+      return replyOk(reply, shift);
     } catch (e) {
       if (e instanceof ShiftConfirmationError) {
-        return reply.status(e.statusCode).send({ error: { code: e.code, message: e.messageRu } });
+        return replyFail(reply, e.statusCode, String(e.code), e.messageRu);
       }
       throw e;
     }
@@ -63,27 +65,27 @@ export const shiftActionRoutes: FastifyPluginAsync = async (fastify) => {
     const uid = request.jwtUser.sub;
     const shift = await fastify.prisma.shift.findUnique({ where: { id } });
     if (!shift) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Смена не найдена' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Смена не найдена');
     }
     if (shift.status === ShiftStatus.COMPLETED || shift.status === ShiftStatus.CANCELLED) {
-      return reply.status(400).send({ error: { code: 'INVALID', message: 'Смена уже закрыта' } });
+      return replyFail(reply, 400, 'INVALID', 'Смена уже закрыта');
     }
     const isEmp = shift.employerId === uid;
     const isWork = shift.workerId === uid;
     const isAdmin = request.jwtUser.roles?.includes('admin');
     if (body.failedBy === 'WORKER' && !isEmp && !isAdmin) {
-      return reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Только работодатель' } });
+      return replyFail(reply, 403, 'FORBIDDEN', 'Только работодатель');
     }
     if (body.failedBy === 'EMPLOYER' && !isWork && !isAdmin) {
-      return reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Только работник' } });
+      return replyFail(reply, 403, 'FORBIDDEN', 'Только работник');
     }
     if (body.failedBy === 'BOTH' && !isAdmin) {
-      return reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Только администратор' } });
+      return replyFail(reply, 403, 'FORBIDDEN', 'Только администратор');
     }
     const allowCodes =
       body.failedBy === 'WORKER' ? WORKER_FAILURE_CODES : EMPLOYER_FAILURE_CODES;
     if (!([...allowCodes] as string[]).includes(body.reason)) {
-      return reply.status(400).send({ error: { code: 'INVALID', message: 'Некорректная причина' } });
+      return replyFail(reply, 400, 'INVALID', 'Некорректная причина');
     }
     const failed = await fastify.prisma.shift.update({
       where: { id },
@@ -98,7 +100,7 @@ export const shiftActionRoutes: FastifyPluginAsync = async (fastify) => {
     const svc = rel();
     await svc.recalculate(shift.workerId);
     await svc.recalculate(shift.employerId);
-    return reply.send({ data: failed });
+    return replyOk(reply, failed);
   });
 
   // POST /shifts/:id/review
@@ -121,28 +123,26 @@ export const shiftActionRoutes: FastifyPluginAsync = async (fastify) => {
         booking: {
           include: {
             linkedVacancy: true,
-            worker: { include: { user: true } },
-            employer: { include: { user: true } },
+            worker: { include: { user: { select: safeUserSelect } } },
+            employer: { include: { user: { select: safeUserSelect } } },
           },
         },
       },
     });
     if (!shift) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Смена не найдена' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Смена не найдена');
     }
     if (shift.status !== ShiftStatus.COMPLETED) {
-      return reply.status(400).send({ error: { code: 'INVALID', message: 'Смена не завершена' } });
+      return replyFail(reply, 400, 'INVALID', 'Смена не завершена');
     }
     if (!shift.completedAt) {
-      return reply.status(400).send({ error: { code: 'INVALID', message: 'Нет даты завершения' } });
+      return replyFail(reply, 400, 'INVALID', 'Нет даты завершения');
     }
     if (Date.now() - shift.completedAt.getTime() > REVIEW_WINDOW_MS) {
-      return reply
-        .status(400)
-        .send({ error: { code: 'REVIEW_WINDOW', message: 'Срок оценки (72ч) истёк' } });
+      return replyFail(reply, 400, 'REVIEW_WINDOW', 'Срок оценки (72ч) истёк');
     }
     if (shift.workerId !== uid && shift.employerId !== uid) {
-      return reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Нет доступа' } });
+      return replyFail(reply, 403, 'FORBIDDEN', 'Нет доступа');
     }
     const revieweeId = uid === shift.workerId ? shift.employerId : shift.workerId;
     const dim =
@@ -169,7 +169,7 @@ export const shiftActionRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
     } catch {
-      return reply.status(409).send({ error: { code: 'DUPLICATE', message: 'Оценка уже оставлена' } });
+      return replyFail(reply, 409, 'DUPLICATE', 'Оценка уже оставлена');
     }
     const reviewerName =
       uid === shift.workerId
@@ -206,6 +206,6 @@ export const shiftActionRoutes: FastifyPluginAsync = async (fastify) => {
         },
       });
     }
-    return reply.status(201).send({ data: review });
+    return replyOk(reply, review, 201);
   });
 };

@@ -1,13 +1,23 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { apiClient } from '@/lib/api/client';
 import { useToast } from '@/components/ui/toast-context';
-import { ChevronLeft, ChevronRight, Save } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Save, AlertTriangle, Briefcase } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface AvailabilitySlot {
   date: string;
   isBlocked: boolean;
+}
+
+interface ShiftRow {
+  id: string;
+  status: string;
+  booking: {
+    date: string;
+    linkedVacancy?: { title: string; dateStart: string | null } | null;
+  };
 }
 
 type DayState = 'available' | 'blocked' | 'unset';
@@ -17,7 +27,7 @@ function getDaysInMonth(year: number, month: number) {
 }
 
 function getFirstDayOfMonth(year: number, month: number) {
-  return (new Date(year, month, 1).getDay() + 6) % 7; // Monday = 0
+  return (new Date(year, month, 1).getDay() + 6) % 7;
 }
 
 function toDateString(date: Date): string {
@@ -30,32 +40,46 @@ const MONTH_NAMES = [
   'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
 ];
 
+const BOOKED_STATUSES = new Set(['PENDING', 'ACTIVE', 'DISPUTED', 'COMPLETED']);
+
 export default function WorkerCalendarPage() {
   const { toast } = useToast();
-  const today = new Date();
-  const [year, setYear] = useState(today.getFullYear());
-  const [month, setMonth] = useState(today.getMonth());
+  const [year, setYear] = useState(() => new Date().getFullYear());
+  const [month, setMonth] = useState(() => new Date().getMonth());
   const [slots, setSlots] = useState<Map<string, DayState>>(new Map());
+  const [bookedDates, setBookedDates] = useState<Map<string, ShiftRow>>(new Map());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [conflictDate, setConflictDate] = useState<string | null>(null);
 
   const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`;
 
   const loadMonth = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await apiClient.get<{ data: AvailabilitySlot[] }>(
-        '/worker/availability',
-        { month: monthStr },
-      );
+      const [availRes, shiftsRes] = await Promise.all([
+        apiClient.get<{ data: AvailabilitySlot[] }>('/worker/availability', { month: monthStr }),
+        apiClient.get<{ data: ShiftRow[] }>('/worker/shifts', { page: 1 }),
+      ]);
       const map = new Map<string, DayState>();
-      res.data.forEach((slot) => {
+      availRes.data.forEach((slot) => {
         const d = toDateString(new Date(slot.date));
         map.set(d, slot.isBlocked ? 'blocked' : 'available');
       });
       setSlots(map);
+
+      const booked = new Map<string, ShiftRow>();
+      for (const shift of shiftsRes.data ?? []) {
+        if (!BOOKED_STATUSES.has(shift.status)) continue;
+        const raw = shift.booking.linkedVacancy?.dateStart ?? shift.booking.date;
+        if (!raw) continue;
+        const d = toDateString(new Date(raw));
+        booked.set(d, shift);
+      }
+      setBookedDates(booked);
       setDirty(false);
+      setConflictDate(null);
     } catch {
       toast('Ошибка загрузки календаря', 'error');
     } finally {
@@ -64,12 +88,27 @@ export default function WorkerCalendarPage() {
   }, [monthStr, toast]);
 
   useEffect(() => {
-    loadMonth();
+    void loadMonth();
   }, [loadMonth]);
 
+  const todayStr = useMemo(() => toDateString(new Date()), []);
+
+  const upcomingShifts = useMemo(() => {
+    return Array.from(bookedDates.entries())
+      .filter(([d]) => d >= todayStr)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(0, 5);
+  }, [bookedDates, todayStr]);
+
   const toggleDay = (dateStr: string) => {
-    const past = new Date(dateStr) < new Date(toDateString(today));
+    const past = new Date(dateStr) < new Date(todayStr);
     if (past) return;
+    if (bookedDates.has(dateStr)) {
+      setConflictDate(dateStr);
+      toast('На эту дату уже запланирована смена', 'error');
+      return;
+    }
+    setConflictDate(null);
     setSlots((prev) => {
       const copy = new Map(prev);
       const current = copy.get(dateStr) ?? 'unset';
@@ -111,43 +150,48 @@ export default function WorkerCalendarPage() {
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDayOfMonth(year, month);
 
-  // TODO: интеграция с Application booking — блокировка занятых дат при приёме отклика (следующий этап)
-
   return (
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Календарь занятости</h1>
-          <p className="mt-1 text-sm text-gray-500">Отметьте дни, когда вы доступны для работы</p>
+          <h1 className="text-2xl font-bold text-white/90">Календарь занятости</h1>
+          <p className="mt-1 text-sm text-white/50">
+            Отметьте доступные дни. Подтверждённые смены отображаются отдельно.
+          </p>
         </div>
         {dirty && (
-          <button
-            onClick={save}
-            disabled={saving}
-            className="flex items-center gap-2 rounded-input bg-primary-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-600 disabled:opacity-60"
-          >
-            <Save className="h-4 w-4" />
-            {saving ? 'Сохраняем...' : 'Сохранить'}
-          </button>
+          <Button type="button" variant="primary" size="sm" disabled={saving} onClick={() => void save()}>
+            <Save className="mr-2 h-4 w-4" />
+            {saving ? 'Сохраняем…' : 'Сохранить'}
+          </Button>
         )}
       </div>
 
-      <div className="mt-6 rounded-card border border-gray-200 bg-white p-6 shadow-sm">
+      {conflictDate ? (
+        <div className="mt-4 flex items-start gap-2 rounded-[12px] border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-white/65">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+          <span>
+            {conflictDate}: дата занята подтверждённой сменой. Измените availability только если смена отменена.
+          </span>
+        </div>
+      ) : null}
+
+      <div className="mt-6 rounded-[14px] border border-white/[0.08] bg-white/[0.04] p-4 sm:p-6">
         <div className="flex items-center justify-between">
-          <button onClick={prevMonth} className="rounded-input p-1.5 hover:bg-gray-100">
+          <button type="button" onClick={prevMonth} className="rounded-input p-1.5 text-white/65 hover:bg-white/[0.06]">
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <h2 className="text-base font-semibold text-gray-900">
+          <h2 className="text-base font-semibold text-white/90">
             {MONTH_NAMES[month]} {year}
           </h2>
-          <button onClick={nextMonth} className="rounded-input p-1.5 hover:bg-gray-100">
+          <button type="button" onClick={nextMonth} className="rounded-input p-1.5 text-white/65 hover:bg-white/[0.06]">
             <ChevronRight className="h-5 w-5" />
           </button>
         </div>
 
         <div className="mt-4 grid grid-cols-7 gap-1">
           {WEEKDAYS.map((d) => (
-            <div key={d} className="py-1 text-center text-xs font-medium text-gray-400">
+            <div key={d} className="py-1 text-center text-xs font-medium text-white/50">
               {d}
             </div>
           ))}
@@ -160,21 +204,34 @@ export default function WorkerCalendarPage() {
             const day = i + 1;
             const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const state = slots.get(dateStr) ?? 'unset';
-            const isPast = new Date(dateStr) < new Date(toDateString(today));
+            const isBooked = bookedDates.has(dateStr);
+            const isPast = new Date(dateStr) < new Date(todayStr);
+            const isConflict = conflictDate === dateStr;
+
+            let cls =
+              'aspect-square rounded-[10px] text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-emerald-500/40';
+            if (isPast) {
+              cls += ' cursor-not-allowed text-white/40';
+            } else if (isBooked) {
+              cls += ' cursor-not-allowed bg-indigo-500/25 text-indigo-100 ring-1 ring-indigo-400/40';
+            } else if (isConflict) {
+              cls += ' bg-amber-500/20 text-amber-200 ring-2 ring-amber-400/50';
+            } else if (state === 'available') {
+              cls += ' bg-emerald-500/20 text-emerald-200 hover:bg-emerald-500/30';
+            } else if (state === 'blocked') {
+              cls += ' bg-white/10 text-white/50 hover:bg-white/15';
+            } else {
+              cls += ' text-white/65 hover:bg-white/[0.06]';
+            }
+
             return (
               <button
                 key={day}
+                type="button"
                 onClick={() => toggleDay(dateStr)}
-                disabled={isPast || loading}
-                className={`aspect-square rounded-card text-sm font-medium transition ${
-                  isPast
-                    ? 'cursor-not-allowed text-gray-300'
-                    : state === 'available'
-                    ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                    : state === 'blocked'
-                    ? 'bg-gray-200 text-gray-500 hover:bg-gray-300'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`}
+                disabled={isPast || isBooked || loading}
+                className={cls}
+                title={isBooked ? 'Подтверждённая смена' : undefined}
               >
                 {day}
               </button>
@@ -182,21 +239,49 @@ export default function WorkerCalendarPage() {
           })}
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-4 text-xs text-gray-500">
+        <div className="mt-4 flex flex-wrap gap-4 text-xs text-white/50">
           <span className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded bg-green-200" />
+            <span className="h-3 w-3 rounded bg-emerald-500/30" />
             Доступен
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded bg-gray-300" />
-            Занят
+            <span className="h-3 w-3 rounded bg-white/15" />
+            Занят (ручная блокировка)
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded border border-gray-200" />
-            Не указано
+            <span className="h-3 w-3 rounded bg-indigo-500/30 ring-1 ring-indigo-400/40" />
+            Смена
           </span>
         </div>
       </div>
+
+      {upcomingShifts.length > 0 ? (
+        <div className="mt-6 rounded-[14px] border border-white/[0.08] bg-white/[0.04] p-4">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-white/90">
+            <Briefcase className="h-4 w-4 text-emerald-400" />
+            Предстоящие смены
+          </h3>
+          <ul className="space-y-2">
+            {upcomingShifts.map(([date, shift]) => (
+              <li
+                key={shift.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] bg-white/[0.03] px-3 py-2 text-sm"
+              >
+                <span className="text-white/65">
+                  {new Date(date).toLocaleDateString('ru-RU', {
+                    day: 'numeric',
+                    month: 'long',
+                    weekday: 'short',
+                  })}
+                </span>
+                <span className="text-white/50">
+                  {shift.booking.linkedVacancy?.title ?? 'Смена'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }

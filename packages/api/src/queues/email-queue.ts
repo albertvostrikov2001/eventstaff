@@ -3,6 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import type { Booking } from '@prisma/client';
 import { bullmqConnectionFromEnv } from '@/lib/bullmq-redis';
 import { publicSiteUrl } from '@/lib/public-site-url';
+import { safeUserSelect } from '@/lib/safe-user-select';
 import type { EmailJob } from '@/services/email-service';
 
 const DLQ_NAME = 'email-dlq';
@@ -149,8 +150,8 @@ export async function startEmailWorkers(fastify: FastifyInstance): Promise<void>
             booking: {
               include: {
                 linkedVacancy: { select: { title: true } },
-                worker: { include: { user: true } },
-                employer: { include: { user: true } },
+                worker: { include: { user: { select: safeUserSelect } } },
+                employer: { include: { user: { select: safeUserSelect } } },
               },
             },
             payments: { where: { status: 'PENDING' } },

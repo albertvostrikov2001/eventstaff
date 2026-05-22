@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Upload, Trash2, ImagePlus } from 'lucide-react';
+import { Breadcrumbs } from '@/components/ui/Breadcrumbs';
 import { apiClient, ApiError } from '@/lib/api/client';
 import { useToast } from '@/components/ui/toast-context';
 import type { MediaItemDto } from '@/components/media/MediaUpload';
 import { EmployerLogoMark } from '@/components/employer/EmployerLogoMark';
+import { ImageCropModal } from '@/components/media/ImageCropModal';
 
 const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -66,6 +68,12 @@ export function EmployerProfileMediaClient() {
   const [logoProg, setLogoProg] = useState(0);
   const [bannerProg, setBannerProg] = useState(0);
   const [galleryProg, setGalleryProg] = useState(0);
+  const [cropState, setCropState] = useState<{
+    file: File;
+    type: 'COMPANY_LOGO' | 'COMPANY_BANNER' | 'COMPANY_GALLERY';
+    aspect: number | null;
+    setProg: (n: number) => void;
+  } | null>(null);
 
   const logoInput = useRef<HTMLInputElement>(null);
   const bannerInput = useRef<HTMLInputElement>(null);
@@ -122,6 +130,20 @@ export function EmployerProfileMediaClient() {
     }
   };
 
+  const handleFilePickForCrop = (
+    file: File,
+    type: 'COMPANY_LOGO' | 'COMPANY_BANNER' | 'COMPANY_GALLERY',
+    aspect: number | null,
+    setProg: (n: number) => void,
+  ) => {
+    if (!validate(file)) return;
+    if (file.type.startsWith('image/')) {
+      setCropState({ file, type, aspect, setProg });
+    } else {
+      void uploadKind(file, type, setProg);
+    }
+  };
+
   const deleteMedia = async (item: MediaItemDto | null, kind: 'logo' | 'banner' | 'gallery') => {
     if (!item?.id) return;
     if (kind === 'logo') {
@@ -153,6 +175,24 @@ export function EmployerProfileMediaClient() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-10 py-6">
+      {cropState && (
+        <ImageCropModal
+          file={cropState.file}
+          aspect={cropState.aspect}
+          onConfirm={(croppedFile) => {
+            const { type, setProg } = cropState;
+            setCropState(null);
+            void uploadKind(croppedFile, type, setProg);
+          }}
+          onCancel={() => setCropState(null)}
+        />
+      )}
+      <Breadcrumbs
+        items={[
+          { label: 'Профиль', href: '/employer/profile' },
+          { label: 'Медиафайлы' },
+        ]}
+      />
       <div>
         <h1 className="text-2xl font-bold text-white">Медиа компании</h1>
         <p className="mt-1 text-sm text-white/50">
@@ -188,7 +228,7 @@ export function EmployerProfileMediaClient() {
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 e.target.value = '';
-                if (f) void uploadKind(f, 'COMPANY_LOGO', setLogoProg);
+                if (f) handleFilePickForCrop(f, 'COMPANY_LOGO', 1, setLogoProg);
               }}
             />
             <button
@@ -245,7 +285,7 @@ export function EmployerProfileMediaClient() {
             onChange={(e) => {
               const f = e.target.files?.[0];
               e.target.value = '';
-              if (f) void uploadKind(f, 'COMPANY_BANNER', setBannerProg);
+              if (f) handleFilePickForCrop(f, 'COMPANY_BANNER', 16/9, setBannerProg);
             }}
           />
           <button

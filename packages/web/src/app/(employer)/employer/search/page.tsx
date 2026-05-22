@@ -16,6 +16,7 @@ import {
 } from '@/lib/filters/schemas';
 import { useFilters } from '@/lib/filters/useFilters';
 import { useToast } from '@/components/ui/toast-context';
+import { Button } from '@/components/ui/button';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
 
@@ -166,13 +167,16 @@ function EmployerSearchInner() {
               <option value="price_desc">Стоимость ↓</option>
             </select>
           </label>
-          <button
+          <Button
             type="button"
+            variant="muted"
+            size="sm"
             onClick={() => setMobileFiltersOpen((v) => !v)}
-            className="inline-flex items-center justify-center gap-2 rounded-[14px] border border-white/[0.12] bg-white/[0.06] px-4 py-2.5 text-sm font-semibold text-white/90 lg:hidden"
+            className="lg:hidden"
+            leftIcon={<SlidersHorizontal className="h-4 w-4" />}
           >
-            <SlidersHorizontal className="h-4 w-4" /> Фильтры
-          </button>
+            Фильтры
+          </Button>
         </div>
       </div>
 
@@ -185,9 +189,16 @@ function EmployerSearchInner() {
         >
           <div className="mb-4 flex items-center justify-between lg:hidden">
             <span className="text-sm font-semibold text-white">Фильтры</span>
-            <button type="button" className="p-2 text-white/60" onClick={() => setMobileFiltersOpen(false)}>
+            <Button
+              type="button"
+              variant="ghostInverse"
+              size="icon"
+              className="text-white/60 hover:text-white"
+              onClick={() => setMobileFiltersOpen(false)}
+              aria-label="Закрыть фильтры"
+            >
               <X className="h-5 w-5" />
-            </button>
+            </Button>
           </div>
 
           <div className="space-y-5 text-sm">
@@ -317,13 +328,15 @@ function EmployerSearchInner() {
             </label>
 
             <div className="space-y-2 border-t border-white/[0.08] pt-4">
-              <button
+              <Button
                 type="button"
+                variant="muted"
+                fullWidth
                 onClick={() => resetFilters()}
-                className="w-full rounded-[12px] border border-white/[0.12] py-2.5 text-xs font-semibold text-white/80 hover:bg-white/[0.06]"
+                className="text-xs font-semibold"
               >
                 Сбросить фильтры
-              </button>
+              </Button>
             </div>
           </div>
         </aside>
@@ -353,13 +366,9 @@ function EmployerSearchInner() {
           ) : workers.length === 0 ? (
             <div className="rounded-[16px] border border-dashed border-white/[0.12] bg-black/20 px-6 py-16 text-center">
               <p className="mb-6 text-white/65">По вашим фильтрам никто не найден</p>
-              <button
-                type="button"
-                onClick={() => resetFilters()}
-                className="inline-flex rounded-[12px] bg-gradient-to-r from-emerald-600 to-teal-500 px-6 py-2.5 text-sm font-semibold text-white shadow-md shadow-emerald-900/35"
-              >
+              <Button type="button" variant="primary" onClick={() => resetFilters()}>
                 Сбросить фильтры
-              </button>
+              </Button>
             </div>
           ) : (
             <>
@@ -385,24 +394,26 @@ function EmployerSearchInner() {
                     Стр. {filters.page ?? 1} / {totalPages}
                   </span>
                   <div className="flex gap-2">
-                    <button
+                    <Button
                       type="button"
+                      variant="muted"
+                      size="sm"
                       disabled={(filters.page ?? 1) <= 1}
                       onClick={() => setFilters({ page: Math.max(1, (filters.page ?? 1) - 1) })}
-                      className="rounded-[12px] border border-white/[0.1] px-4 py-2 text-white/85 disabled:opacity-40"
                     >
                       Назад
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
+                      variant="muted"
+                      size="sm"
                       disabled={(filters.page ?? 1) >= totalPages}
                       onClick={() =>
                         setFilters({ page: Math.min(totalPages, (filters.page ?? 1) + 1) })
                       }
-                      className="rounded-[12px] border border-white/[0.1] px-4 py-2 text-white/85 disabled:opacity-40"
                     >
                       Далее
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ) : null}

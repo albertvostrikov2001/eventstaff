@@ -17,6 +17,7 @@ import {
 } from '@/lib/chat-open-context';
 import { computeRoomContextLine } from '@/lib/chat-context-subtitle';
 import { serializeChatMessage } from '@/lib/chat-message-dto';
+import { replyFail, replyOk, replyPaginated } from '@/lib/api-reply';
 import { z } from 'zod';
 
 type ChatRoomRow = Prisma.ChatRoomGetPayload<{
@@ -226,18 +227,18 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
   }
 
   // GET /unread
-  fastify.get('/unread', { preHandler: pre }, async (request) => {
+  fastify.get('/unread', { preHandler: pre }, async (request, reply) => {
     const userId = request.jwtUser.sub;
     const svc = new ChatService(fastify.prisma);
     const total = await svc.getTotalUnreadForUser(userId);
-    return { data: { total } };
+    return replyOk(reply, { total });
   });
 
   fastify.get('/can-chat', { preHandler: pre }, async (request, reply) => {
     const query = request.query as { recipientId?: string };
     const recipientId = typeof query.recipientId === 'string' ? query.recipientId.trim() : '';
     if (!recipientId) {
-      return reply.status(400).send({ error: { code: 'BAD_REQUEST', message: 'recipientId' } });
+      return replyFail(reply, 400, 'BAD_REQUEST', 'recipientId');
     }
     const viewerId = request.jwtUser.sub;
     const allowed = await canChat(fastify.prisma, viewerId, recipientId);
@@ -251,7 +252,7 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
         suggested = { type: 'GENERAL' };
       }
     }
-    return { data: { canChat: allowed, suggestedContext: suggested } };
+    return replyOk(reply, { canChat: allowed, suggestedContext: suggested });
   });
 
   // GET /rooms/:id
@@ -261,7 +262,7 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
     const svc = new ChatService(fastify.prisma);
     const allowed = await svc.isRoomParticipant(id, userId);
     if (!allowed) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Чат не найден' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Чат не найден');
     }
     const r = await fastify.prisma.chatRoom.findUniqueOrThrow({
       where: { id },
@@ -280,15 +281,11 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
       },
     });
     const enriched = await enrichRoomPayloadWithUser(userId, r as ChatRoomRowDetail);
-    return {
-      data: {
-        room: enriched,
-      },
-    };
+    return replyOk(reply, { room: enriched });
   });
 
   // GET /rooms
-  fastify.get('/rooms', { preHandler: pre }, async (request) => {
+  fastify.get('/rooms', { preHandler: pre }, async (request, reply) => {
     const userId = request.jwtUser.sub;
     const svc = new ChatService(fastify.prisma);
     const rooms = await svc.getRoomsForUser(userId);
@@ -303,7 +300,7 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
     if (q) {
       filtered = out.filter((r) => r.peer.displayName.toLowerCase().includes(q));
     }
-    return { data: { rooms: filtered } };
+    return replyOk(reply, { rooms: filtered });
   });
 
   async function handleRoomOpen(body: OpenChatContextPayload | undefined | null, recipientId: string, userId: string) {
@@ -343,19 +340,15 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
     try {
       bodyParsed = openBodySchema.parse(request.body);
     } catch {
-      return reply.status(400).send({ error: { code: 'BAD_REQUEST', message: 'Тело запроса' } });
+      return replyFail(reply, 400, 'BAD_REQUEST', 'Тело запроса');
     }
 
     const res = await handleRoomOpen(bodyParsed.context ?? undefined, bodyParsed.recipientId, userId);
     if (!res.ok) {
       if (res.error === 'CHAT_PAIR' || res.error === 'CHAT_NOT_ALLOWED') {
-        return reply.status(403).send({
-          error: { code: 'CHAT_NOT_ALLOWED', message: 'Чат с этим пользователем недоступен' },
-        });
+        return replyFail(reply, 403, 'CHAT_NOT_ALLOWED', 'Чат с этим пользователем недоступен');
       }
-      return reply.status(400).send({
-        error: { code: 'BAD_CONTEXT', message: 'Указан неверный контекст диалога' },
-      });
+      return replyFail(reply, 400, 'BAD_CONTEXT', 'Указан неверный контекст диалога');
     }
 
     const { room, created } = res;
@@ -364,13 +357,15 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
     if (created && nsp) {
       await notifyRoomBootstrap(room.id, room.worker.userId, room.employer.userId);
     }
-    const status = created ? 201 : 200;
-    return reply.status(status).send({
-      data: {
+    const statusCode = created ? 201 : 200;
+    return replyOk(
+      reply,
+      {
         room: roomOpenResponse(room),
         created,
       },
-    });
+      statusCode,
+    );
   });
 
   // POST /rooms (legacy — suggests context internally)
@@ -380,9 +375,7 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
     const res = await handleRoomOpen(undefined, body.recipientId, userId);
 
     if (!res.ok) {
-      return reply.status(403).send({
-        error: { code: 'CHAT_NOT_ALLOWED', message: 'Чат с этим пользователем недоступен' },
-      });
+      return replyFail(reply, 403, 'CHAT_NOT_ALLOWED', 'Чат с этим пользователем недоступен');
     }
 
     const { room, created } = res;
@@ -390,28 +383,49 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
     if (created) {
       await notifyRoomBootstrap(room.id, room.worker.userId, room.employer.userId);
     }
-    return reply.status(created ? 201 : 200).send({
-      data: {
+    return replyOk(
+      reply,
+      {
         room: roomOpenResponse(room),
         created,
       },
-    });
+      created ? 201 : 200,
+    );
   });
 
   // POST /rooms/:id/messages
   fastify.post('/rooms/:id/messages', { preHandler: pre }, async (request, reply) => {
     const { id: roomId } = request.params as { id: string };
-    const body = z.object({ text: z.string().max(2000) }).parse(request.body);
+    const body = z
+      .object({
+        text: z.string().max(2000).nullish(),
+        fileUrl: z.string().max(2000).nullish(),
+        fileName: z.string().max(255).nullish(),
+        replyToId: z.string().nullish(),
+        replyToText: z.string().max(500).nullish(),
+        replyToSenderName: z.string().max(100).nullish(),
+      })
+      .refine((d) => (d.text?.trim() ?? '') !== '' || (d.fileUrl?.trim() ?? '') !== '', {
+        message: 'Нужен text или fileUrl',
+      })
+      .parse(request.body);
     const senderId = request.jwtUser.sub;
     const svc = new ChatService(fastify.prisma);
     let msg: ChatMessage;
     try {
-      msg = await svc.sendMessage(roomId, senderId, body.text);
+      msg = await svc.sendMessage(roomId, senderId, {
+        text: body.text ?? null,
+        fileUrl: body.fileUrl ?? null,
+        fileName: body.fileName ?? null,
+        replyToId: body.replyToId ?? null,
+        replyToText: body.replyToText ?? null,
+        replyToSenderName: body.replyToSenderName ?? null,
+      });
     } catch (e) {
       if (e instanceof Error && e.message === 'FORBIDDEN')
-        return reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Нет доступа' } });
+        return replyFail(reply, 403, 'FORBIDDEN', 'Нет доступа');
       if (e instanceof Error && e.message === 'EMPTY_MESSAGE')
-        return reply.status(400).send({ error: { code: 'EMPTY_MESSAGE', message: 'Пустое сообщение' } });
+        return replyFail(reply, 400, 'EMPTY_MESSAGE', 'Пустое сообщение');
       throw e;
     }
     const nsp = getNsp(fastify as FastifyChat);
@@ -436,7 +450,7 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
         await bumpUnreadTotals(nsp, fastify.prisma, peerId);
       }
     }
-    return { data: { message: serializeChatMessage(msg) } };
+    return replyOk(reply, { message: serializeChatMessage(msg) });
   });
 
   fastify.patch('/rooms/:id/read', { preHandler: pre }, async (request, reply) => {
@@ -448,7 +462,7 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
       result = await svc.markRead(roomId, userId);
     } catch (e) {
       if (e instanceof Error && e.message === 'FORBIDDEN')
-        return reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Нет доступа' } });
+        return replyFail(reply, 403, 'FORBIDDEN', 'Нет доступа');
       throw e;
     }
     const nsp = getNsp(fastify as FastifyChat);
@@ -472,7 +486,7 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
         await bumpUnreadTotals(nsp, fastify.prisma, peerId);
       }
     }
-    return reply.status(200).send({ data: { ok: true, count: result.count } });
+    return replyOk(reply, { ok: true, count: result.count });
   });
 
   fastify.get('/rooms/:id/messages', { preHandler: pre }, async (request, reply) => {
@@ -487,15 +501,14 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
     const svc = new ChatService(fastify.prisma);
     try {
       const { data, meta } = await svc.getMessages(roomId, userId, q.page, q.limit);
-      return {
-        data: {
-          messages: data.map((m) => serializeChatMessage(m)),
-        },
-        meta,
-      };
+      return replyPaginated(
+        reply,
+        { messages: data.map((m) => serializeChatMessage(m)) },
+        meta as Record<string, unknown>,
+      );
     } catch (e) {
       if (e instanceof Error && e.message === 'FORBIDDEN')
-        return reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Нет доступа' } });
+        return replyFail(reply, 403, 'FORBIDDEN', 'Нет доступа');
       throw e;
     }
   });

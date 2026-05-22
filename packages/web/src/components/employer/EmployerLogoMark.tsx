@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { resolveMediaUrl } from '@/lib/media/url';
 
 const SZ = {
   sm: 'h-10 w-10 text-sm rounded-lg',
@@ -38,7 +39,8 @@ export function EmployerLogoMark(props: {
   } = props;
   const initials = initialsFromCompany(companyName, contactName);
   const [broken, setBroken] = useState(false);
-  const showImg = logoUrl && !broken;
+  const resolvedUrl = resolveMediaUrl(logoUrl);
+  const showImg = resolvedUrl && !broken;
 
   return (
     <div
@@ -55,7 +57,7 @@ export function EmployerLogoMark(props: {
       {showImg ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={logoUrl}
+          src={resolvedUrl}
           alt={alt ?? initials}
           className="h-full w-full object-cover"
           onError={() => setBroken(true)}

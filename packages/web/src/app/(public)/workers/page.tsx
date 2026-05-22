@@ -7,12 +7,12 @@ import { useFilters } from '@/lib/filters/useFilters';
 import { WorkerCard } from '@/components/catalog/WorkerCard';
 import { useAuthStore } from '@/stores/authStore';
 import { apiClient, ApiError } from '@/lib/api/client';
-import { SlidersHorizontal, X, Users, RotateCcw, Search } from 'lucide-react';
+import { SlidersHorizontal, X, Users, RotateCcw, Search, AlertCircle } from 'lucide-react';
 import { WorkerCardSkeleton } from '@/components/catalog/WorkerCardSkeleton';
+import { config } from '@/lib/config';
+import { Button } from '@/components/ui/button';
 
-import { MOCK_WORKERS } from '@/lib/mockData';
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000/api/v1';
+const API = config.apiUrl;
 
 interface WorkerProfile {
   id: string;
@@ -91,8 +91,9 @@ function WorkersCatalog() {
         setTotal(j.meta?.total ?? 0);
       })
       .catch(() => {
-        setWorkers(MOCK_WORKERS as WorkerProfile[]);
-        setTotal(MOCK_WORKERS.length);
+        setWorkers([]);
+        setTotal(0);
+        setError(true);
       })
       .finally(() => setLoading(false));
   };

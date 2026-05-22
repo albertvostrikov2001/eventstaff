@@ -23,6 +23,7 @@ export async function hasLinkingContext(
     where: {
       workerId: pair.workerId,
       vacancy: { employerId: pair.employerId },
+      status: { in: ['confirmed', 'shift_started', 'completed', 'invited'] },
     },
   });
   if (appLink) return true;
@@ -66,11 +67,19 @@ export async function canChat(
   const [u1, u2] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
-      include: { workerProfile: { select: { id: true } }, employerProfile: { select: { id: true } } },
+      select: {
+        id: true,
+        workerProfile: { select: { id: true } },
+        employerProfile: { select: { id: true } },
+      },
     }),
     prisma.user.findUnique({
       where: { id: recipientId },
-      include: { workerProfile: { select: { id: true } }, employerProfile: { select: { id: true } } },
+      select: {
+        id: true,
+        workerProfile: { select: { id: true } },
+        employerProfile: { select: { id: true } },
+      },
     }),
   ]);
   if (!u1 || !u2) return false;
@@ -94,11 +103,19 @@ export async function resolveChatPair(
   const [u1, u2] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },
-      include: { workerProfile: { select: { id: true } }, employerProfile: { select: { id: true } } },
+      select: {
+        id: true,
+        workerProfile: { select: { id: true } },
+        employerProfile: { select: { id: true } },
+      },
     }),
     prisma.user.findUnique({
       where: { id: recipientId },
-      include: { workerProfile: { select: { id: true } }, employerProfile: { select: { id: true } } },
+      select: {
+        id: true,
+        workerProfile: { select: { id: true } },
+        employerProfile: { select: { id: true } },
+      },
     }),
   ]);
   if (!u1 || !u2) return null;

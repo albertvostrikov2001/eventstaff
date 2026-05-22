@@ -7,6 +7,7 @@
  */
 
 import type { FastifyReply } from 'fastify';
+import { normalizeMediaFieldsDeep } from '@/lib/media-url';
 
 export interface PaginationMeta {
   total: number;
@@ -16,11 +17,11 @@ export interface PaginationMeta {
 }
 
 export function ok<T>(reply: FastifyReply, data: T) {
-  return reply.send({ success: true, data });
+  return reply.send({ success: true, data: normalizeMediaFieldsDeep(data) });
 }
 
 export function paginated<T>(reply: FastifyReply, data: T[], meta: PaginationMeta) {
-  return reply.send({ success: true, data, meta });
+  return reply.send({ success: true, data: normalizeMediaFieldsDeep(data), meta });
 }
 
 export function fail(

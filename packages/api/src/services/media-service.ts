@@ -3,18 +3,33 @@ import { nanoid } from 'nanoid';
 import type { StorageAdapter } from '@/storage/storage-adapter';
 
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
+export const MAX_CHAT_FILE_BYTES = 10 * 1024 * 1024;
 
 const MIME_IMAGE = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const MIME_VIDEO = new Set(['video/mp4', 'video/webm']);
 const MIME_PDF = new Set(['application/pdf']);
+const MIME_CHAT_FILE = new Set([
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'video/mp4',
+]);
 
 const EXT: Record<string, string> = {
   'image/jpeg': '.jpg',
   'image/png': '.png',
   'image/webp': '.webp',
+  'image/gif': '.gif',
   'video/mp4': '.mp4',
   'video/webm': '.webm',
   'application/pdf': '.pdf',
+  'application/msword': '.doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/vnd.ms-excel': '.xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
 };
 
 const SINGLE_SLOT: MediaType[] = [
@@ -31,6 +46,7 @@ const AUTO_APPROVED_TYPES = new Set<MediaType>([
   'COMPANY_LOGO',
   'COMPANY_BANNER',
   'COMPANY_GALLERY',
+  'CHAT_FILE',
 ]);
 
 function allowedMimes(type: MediaType): Set<string> {
@@ -45,6 +61,8 @@ function allowedMimes(type: MediaType): Set<string> {
       return MIME_VIDEO;
     case 'DOCUMENT':
       return MIME_PDF;
+    case 'CHAT_FILE':
+      return MIME_CHAT_FILE;
     default:
       return new Set();
   }
@@ -69,6 +87,8 @@ function folderForType(userId: string, type: MediaType): string {
       return pathJoin(base, 'banner');
     case 'COMPANY_GALLERY':
       return pathJoin(base, 'gallery');
+    case 'CHAT_FILE':
+      return pathJoin(base, 'chat');
     default:
       return base;
   }
@@ -79,6 +99,13 @@ function pathJoin(...parts: string[]): string {
 }
 
 export function assertRoleForMediaType(activeRole: string, type: MediaType): void {
+  // CHAT_FILE is allowed for both worker and employer
+  if (type === 'CHAT_FILE') {
+    if (activeRole !== 'worker' && activeRole !== 'employer') {
+      throw Object.assign(new Error('Загрузка недоступна для этой роли'), { statusCode: 403 });
+    }
+    return;
+  }
   const workerTypes: MediaType[] = ['AVATAR', 'PORTFOLIO_PHOTO', 'VIDEO_CARD', 'DOCUMENT'];
   const employerTypes: MediaType[] = ['COMPANY_LOGO', 'COMPANY_BANNER', 'COMPANY_GALLERY'];
   if (activeRole === 'employer' && !employerTypes.includes(type)) {
@@ -110,8 +137,10 @@ export class MediaService {
   }): Promise<Media> {
     const { userId, activeRole, buffer, mimeType, type } = params;
 
-    if (buffer.length > MAX_FILE_BYTES) {
-      throw Object.assign(new Error('Файл больше 5 МБ'), { statusCode: 400 });
+    const maxBytes = type === 'CHAT_FILE' ? MAX_CHAT_FILE_BYTES : MAX_FILE_BYTES;
+    if (buffer.length > maxBytes) {
+      const mb = maxBytes / 1024 / 1024;
+      throw Object.assign(new Error(`Файл больше ${mb} МБ`), { statusCode: 400 });
     }
 
     assertRoleForMediaType(activeRole, type);

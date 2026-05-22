@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { Prisma, StaffCategory, EventType, EmploymentType, BusinessType } from '@prisma/client';
+import { replyFail, replyOk, replyPaginated } from '../../lib/api-reply';
 
 export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
   async function getVerifiedActiveEmployerPage(idOrSlug: string) {
@@ -47,7 +48,7 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
       where: { isActive: true },
       orderBy: { name: 'asc' },
     });
-    return reply.send({ data: cities });
+    return replyOk(reply, cities);
   });
 
   // GET /workers
@@ -177,15 +178,12 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ]);
 
-    return reply.send({
-      data: workers,
-      meta: {
-        total,
-        page,
-        limit,
-        perPage: limit,
-        totalPages: Math.ceil(total / limit),
-      },
+    return replyPaginated(reply, workers, {
+      total,
+      page,
+      limit,
+      perPage: limit,
+      totalPages: Math.ceil(total / limit),
     });
   });
 
@@ -208,14 +206,12 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     if (!worker) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Worker not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Worker not found');
     }
 
-    return reply.send({
-      data: {
-        ...worker,
-        userId: worker.userId,
-      },
+    return replyOk(reply, {
+      ...worker,
+      userId: worker.userId,
     });
   });
 
@@ -303,9 +299,11 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ]);
 
-    return reply.send({
-      data: vacancies,
-      meta: { total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) },
+    return replyPaginated(reply, vacancies, {
+      total,
+      page: query.page,
+      limit: query.limit,
+      totalPages: Math.ceil(total / query.limit),
     });
   });
 
@@ -328,7 +326,7 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     if (!vacancy) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Vacancy not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Vacancy not found');
     }
 
     await fastify.prisma.vacancy.update({
@@ -336,7 +334,7 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
       data: { viewsCount: { increment: 1 } },
     });
 
-    return reply.send({ data: vacancy });
+    return replyOk(reply, vacancy);
   });
 
   // GET /employers
@@ -354,6 +352,9 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
       .parse(request.query);
 
     const where: Prisma.EmployerProfileWhereInput = {
+      companyName: { not: null },
+      NOT: { companyName: '' },
+      user: { status: 'active' },
       ...(query.businessType ? { businessType: query.businessType as BusinessType } : {}),
       ...(query.cityId ? { cityId: query.cityId } : {}),
       ...(query.isVerified !== undefined ? { isVerified: query.isVerified } : {}),
@@ -376,9 +377,11 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ]);
 
-    return reply.send({
-      data: employers,
-      meta: { total, page: query.page, limit: query.limit, totalPages: Math.ceil(total / query.limit) },
+    return replyPaginated(reply, employers, {
+      total,
+      page: query.page,
+      limit: query.limit,
+      totalPages: Math.ceil(total / query.limit),
     });
   });
 
@@ -388,11 +391,11 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
     const pack = await getVerifiedActiveEmployerPage(id);
 
     if (!pack) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Employer not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Employer not found');
     }
 
     const { employer, gallery, totalShifts } = pack;
-    return reply.send({ data: { ...employer, gallery, totalShifts } });
+    return replyOk(reply, { ...employer, gallery, totalShifts });
   });
 
   // GET /employers/:id/profile — плоский объект для интеграций (те же ограничения видимости)
@@ -401,25 +404,23 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
     const pack = await getVerifiedActiveEmployerPage(id);
 
     if (!pack) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Employer not found' } });
+      return replyFail(reply, 404, 'NOT_FOUND', 'Employer not found');
     }
 
     const { employer, gallery, totalShifts } = pack;
 
-    return reply.send({
-      data: {
-        companyName: employer.companyName,
-        city: employer.city,
-        sphere: employer.businessType,
-        bio: employer.description,
-        logo: employer.logoUrl,
-        banner: employer.bannerUrl,
-        gallery,
-        verified: employer.isVerified,
-        rating: employer.ratingScore !== null ? String(employer.ratingScore) : null,
-        totalShifts,
-        vacancies: employer.vacancies,
-      },
+    return replyOk(reply, {
+      companyName: employer.companyName,
+      city: employer.city,
+      sphere: employer.businessType,
+      bio: employer.description,
+      logo: employer.logoUrl,
+      banner: employer.bannerUrl,
+      gallery,
+      verified: employer.isVerified,
+      rating: employer.ratingScore !== null ? String(employer.ratingScore) : null,
+      totalShifts,
+      vacancies: employer.vacancies,
     });
   });
 };
