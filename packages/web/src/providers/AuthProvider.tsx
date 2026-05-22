@@ -1,11 +1,18 @@
 'use client';
 
+import dynamic from 'next/dynamic';
 import { useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
-import { ChatInboxProvider } from '@/components/chat/ChatInboxProvider';
+
+const ChatInboxProvider = dynamic(
+  () => import('@/components/chat/ChatInboxProvider').then((m) => m.ChatInboxProvider),
+  { ssr: false },
+);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const initAuth = useAuthStore((s) => s.initAuth);
+  const user = useAuthStore((s) => s.user);
+  const isInitialized = useAuthStore((s) => s.isInitialized);
 
   useEffect(() => {
     const isMetaMaskStr = (val: unknown): boolean => {
@@ -46,5 +53,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [initAuth]);
 
-  return <ChatInboxProvider>{children}</ChatInboxProvider>;
+  const needsChat =
+    isInitialized &&
+    user != null &&
+    (user.activeRole === 'worker' || user.activeRole === 'employer');
+
+  if (needsChat) {
+    return <ChatInboxProvider>{children}</ChatInboxProvider>;
+  }
+
+  return <>{children}</>;
 }

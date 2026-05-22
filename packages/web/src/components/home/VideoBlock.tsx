@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { Play } from 'lucide-react';
+import { publicAssetUrl } from '@/lib/public-asset-url';
 
 interface VideoBlockProps {
   src?: string;
@@ -14,6 +15,8 @@ export function VideoBlock({
   poster = '/assets/video-poster.svg',
   caption = 'Узнать о платформе за 2 минуты',
 }: VideoBlockProps) {
+  const videoSrc = publicAssetUrl(src);
+  const posterSrc = publicAssetUrl(poster);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -37,7 +40,7 @@ export function VideoBlock({
         <video
           ref={videoRef}
           className="absolute inset-0 h-full w-full object-cover"
-          poster={poster}
+          poster={posterSrc}
           muted
           playsInline
           preload="none"
@@ -45,7 +48,7 @@ export function VideoBlock({
           onCanPlay={() => setIsLoaded(true)}
           onEnded={handleEnded}
         >
-          <source src={src} type="video/mp4" />
+          <source src={videoSrc} type="video/mp4" />
         </video>
 
         {!isPlaying && (

@@ -7,7 +7,12 @@ import { NetworkErrorBanner } from '@/components/common/NetworkErrorBanner';
 
 import { config } from '@/lib/config';
 
-const siteUrl = config.siteUrl;
+let metadataBaseUrl: URL;
+try {
+  metadataBaseUrl = new URL(config.siteUrl);
+} catch {
+  metadataBaseUrl = new URL('https://albertvostrikov2001.github.io/eventstaff');
+}
 
 const inter = Inter({
   subsets: ['latin', 'cyrillic'],
@@ -25,7 +30,7 @@ const playfair = Playfair_Display({
 import { QueryProvider } from '@/providers/QueryProvider';
 
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
+  metadataBase: metadataBaseUrl,
   title: {
     default: 'Юнити — Платформа event-персонала',
     template: '%s | Юнити',
