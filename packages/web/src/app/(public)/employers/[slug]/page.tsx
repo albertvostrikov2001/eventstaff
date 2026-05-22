@@ -2,8 +2,13 @@ import type { Metadata } from 'next';
 import { config } from '@/lib/config';
 import { fetchEmployerForMetadata } from '@/lib/api/server-catalog';
 import { EmployerDetailPageClient } from './EmployerDetailPageClient';
+import { PAGE_DYNAMIC, buildStaticParams } from '@/lib/static-export-routes';
 
-export const dynamic = 'force-dynamic';
+export const dynamic = PAGE_DYNAMIC;
+
+export function generateStaticParams() {
+  return buildStaticParams([{ slug: 'placeholder' }]);
+}
 
 type Props = { params: { slug: string } };
 

@@ -1,7 +1,7 @@
 function requireApiUrlInProduction(fallback: string): string {
   const fromEnv = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, '');
   if (fromEnv) return fromEnv;
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env.NODE_ENV === 'production' && process.env.STATIC_EXPORT !== 'true') {
     throw new Error('NEXT_PUBLIC_API_URL is required in production');
   }
   return fallback;
