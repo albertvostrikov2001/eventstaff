@@ -18,6 +18,7 @@ import {
 import { computeRoomContextLine } from '@/lib/chat-context-subtitle';
 import { serializeChatMessage } from '@/lib/chat-message-dto';
 import { replyFail, replyOk, replyPaginated } from '@/lib/api-reply';
+import { publicSiteUrl } from '@/lib/public-site-url';
 import { z } from 'zod';
 
 type ChatRoomRow = Prisma.ChatRoomGetPayload<{
@@ -103,7 +104,7 @@ function lastMessageBrief(m: {
 }
 
 export const chatRoutes: FastifyPluginAsync = async (fastify) => {
-  const pre = [fastify.authenticate, fastify.requireRole(['worker', 'employer'])];
+  const pre = [fastify.authenticate, fastify.requireRole(['worker', 'employer', 'admin'])];
 
   async function notifyRoomBootstrap(roomId: string, roomWorkerUserId: string, roomEmployerUserId: string) {
     const nsp = getNsp(fastify as FastifyChat);
@@ -433,23 +434,87 @@ export const chatRoutes: FastifyPluginAsync = async (fastify) => {
       roomId,
       message: serializeChatMessage(msg),
     };
+
+    // Load participants with user email & profile names for email notification
+    const roomParticipants = await fastify.prisma.chatRoom.findUnique({
+      where: { id: roomId },
+      select: {
+        worker: {
+          select: {
+            userId: true,
+            firstName: true,
+            lastName: true,
+            user: { select: { email: true } },
+          },
+        },
+        employer: {
+          select: {
+            userId: true,
+            companyName: true,
+            contactName: true,
+            user: { select: { email: true } },
+          },
+        },
+      },
+    });
+
     if (nsp) {
       nsp.to(`room:${roomId}`).emit('message:new', payload);
-      const participants = await fastify.prisma.chatRoom.findUnique({
-        where: { id: roomId },
-        select: {
-          worker: { select: { userId: true } },
-          employer: { select: { userId: true } },
-        },
-      });
-      if (participants) {
+      if (roomParticipants) {
         const peerId =
-          senderId === participants.worker.userId
-            ? participants.employer.userId
-            : participants.worker.userId;
+          senderId === roomParticipants.worker.userId
+            ? roomParticipants.employer.userId
+            : roomParticipants.worker.userId;
         await bumpUnreadTotals(nsp, fastify.prisma, peerId);
       }
     }
+
+    // Send email notification to recipient (with per-room throttle: 1 per 30 min)
+    if (roomParticipants) {
+      const isWorkerSender = senderId === roomParticipants.worker.userId;
+      const peer = isWorkerSender ? roomParticipants.employer : roomParticipants.worker;
+      const sender = isWorkerSender ? roomParticipants.worker : roomParticipants.employer;
+
+      const peerEmail = peer.user.email;
+      const peerId = peer.userId;
+
+      if (peerEmail) {
+        // Throttle: one email per chat room per recipient per 30 min
+        const throttleKey = `email:chat:throttle:${roomId}:${peerId}`;
+        const alreadySent = await fastify.redis.get(throttleKey);
+
+        if (!alreadySent) {
+          await fastify.redis.set(throttleKey, '1', 'EX', 1800);
+
+          const senderName = isWorkerSender
+            ? (`${(sender as typeof roomParticipants.worker).firstName} ${(sender as typeof roomParticipants.worker).lastName}`.trim() || 'Исполнитель')
+            : ((sender as typeof roomParticipants.employer).companyName?.trim() || (sender as typeof roomParticipants.employer).contactName?.trim() || 'Работодатель');
+
+          const messagePreview = msg.text?.trim() || (msg.fileUrl ? '📎 Файл' : '');
+
+          const site = publicSiteUrl();
+          const ctaUrl = isWorkerSender
+            ? `${site}/employer/messages`
+            : `${site}/worker/messages`;
+
+          try {
+            await fastify.emailService.queue({
+              userId: peerId,
+              to: peerEmail,
+              type: 'NEW_CHAT_MESSAGE',
+              templateData: {
+                senderName,
+                messagePreview,
+                ctaUrl,
+              },
+            });
+          } catch (err) {
+            fastify.log.warn({ err, roomId, peerId }, 'Failed to queue chat email notification');
+          }
+        }
+      }
+    }
+
     return replyOk(reply, { message: serializeChatMessage(msg) });
   });
 

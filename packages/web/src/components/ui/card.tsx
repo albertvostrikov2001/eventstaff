@@ -6,7 +6,11 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
     <div
       ref={ref}
       className={cn(
-        'rounded-card border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-card-hover',
+        'rounded-[var(--r-5)] border transition-shadow',
+        // adaptive: white on light pages, translucent on dark shell
+        'bg-[var(--card-bg,#ffffff)] border-[var(--card-border,rgba(0,0,0,.08))]',
+        'text-[var(--card-color,var(--ink-primary))]',
+        'shadow-[var(--card-shadow,0_1px_3px_rgba(0,0,0,.08),0_4px_16px_rgba(0,0,0,.06))]',
         className,
       )}
       {...props}
@@ -26,7 +30,7 @@ const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HT
   ({ className, ...props }, ref) => (
     <h3
       ref={ref}
-      className={cn('font-heading text-lg font-semibold leading-none tracking-tight', className)}
+      className={cn('font-display text-lg font-medium leading-none tracking-tight', className)}
       {...props}
     />
   ),
@@ -37,7 +41,11 @@ const CardDescription = React.forwardRef<
   HTMLParagraphElement,
   React.HTMLAttributes<HTMLParagraphElement>
 >(({ className, ...props }, ref) => (
-  <p ref={ref} className={cn('text-sm text-gray-500', className)} {...props} />
+  <p
+    ref={ref}
+    className={cn('text-sm text-[var(--ink-secondary)] [data-shell="dark"_&]:text-[var(--text-secondary)]', className)}
+    {...props}
+  />
 ));
 CardDescription.displayName = 'CardDescription';
 

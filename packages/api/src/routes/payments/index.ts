@@ -4,6 +4,7 @@ import { ShiftPayStatus, ShiftStatus } from '@prisma/client';
 import { YookassaAdapter } from '@/payment/yookassa-adapter';
 import { publicSiteUrl } from '@/lib/public-site-url';
 import { replyFail, replyOk, replyPaginated } from '@/lib/api-reply';
+import { SubscriptionService, type WorkerPlanKey, type EmployerPlanKey } from '@/services/subscription-service';
 
 function paymentAdapterFromEnv() {
   const shopId = process.env.YOOKASSA_SHOP_ID?.trim() ?? '';
@@ -27,6 +28,7 @@ function webhookSecret() {
 export const paymentRoutes: FastifyPluginAsync = async (fastify) => {
   const authEmployer = [fastify.authenticate, fastify.requireRole(['employer'])];
   const authAny = [fastify.authenticate];
+  const subSvc = new SubscriptionService(fastify.prisma);
 
   // POST /payments/create
   fastify.post('/create', { preHandler: authEmployer, config: { rateLimit: { max: 30 } } }, async (request, reply) => {
@@ -217,6 +219,53 @@ export const paymentRoutes: FastifyPluginAsync = async (fastify) => {
         return replyFail(reply, 502, 'VERIFY_FAILED', 'Не удалось проверить платёж');
       }
 
+      // Check if this is a subscription payment
+      const subscriptionPayment = await fastify.prisma.payment.findFirst({
+        where: { providerPaymentId: paymentId, type: 'subscription' },
+      });
+      if (subscriptionPayment) {
+        if (external.status === 'succeeded') {
+          const meta = (subscriptionPayment.metadata ?? {}) as Record<string, string>;
+          const role = meta.role;
+          const plan = meta.plan;
+          if (role === 'worker' && meta.workerId && plan) {
+            await subSvc.grantWorkerSubscription(meta.workerId, plan as WorkerPlanKey, 1, false);
+            await fastify.prisma.payment.update({
+              where: { id: subscriptionPayment.id },
+              data: { status: 'completed' },
+            });
+            await fastify.notificationService.create({
+              userId: subscriptionPayment.userId,
+              type: 'PAYMENT_RECEIVED',
+              title: 'Подписка активирована',
+              body: `Тариф Premium активирован на 1 месяц. Пользуйтесь всеми преимуществами!`,
+              data: { plan },
+            });
+          } else if (role === 'employer' && meta.employerId && plan) {
+            await subSvc.grantEmployerSubscription(meta.employerId, plan as EmployerPlanKey, 1, false);
+            await fastify.prisma.payment.update({
+              where: { id: subscriptionPayment.id },
+              data: { status: 'completed' },
+            });
+            const label = plan === 'basic' ? 'Бизнес' : plan === 'pro' ? 'Про' : plan;
+            await fastify.notificationService.create({
+              userId: subscriptionPayment.userId,
+              type: 'PAYMENT_RECEIVED',
+              title: 'Тариф активирован',
+              body: `Тариф ${label} активирован на 1 месяц. Все преимущества уже доступны.`,
+              data: { plan },
+            });
+          }
+        } else if (external.status === 'canceled') {
+          await fastify.prisma.payment.update({
+            where: { id: subscriptionPayment.id },
+            data: { status: 'failed' },
+          });
+        }
+        return replyOk(reply, { ok: true });
+      }
+
+      // Fall through to shift payment handling
       const shiftPay = await fastify.prisma.shiftPayment.findFirst({
         where: { providerPaymentId: paymentId },
         include: { shift: true },

@@ -3,18 +3,37 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const badgeVariants = cva(
-  'inline-flex items-center gap-1 rounded-badge px-2 py-0.5 text-xs font-medium transition-colors',
+  'inline-flex items-center gap-1 rounded-[var(--r-1)] px-2 py-0.5 font-mono text-[11px] font-medium tracking-[.04em] uppercase transition-colors',
   {
     variants: {
       variant: {
-        default: 'bg-gray-100 text-gray-700',
-        primary: 'bg-primary-50 text-primary-700',
-        secondary: 'bg-secondary-100 text-secondary-700',
-        success: 'bg-green-50 text-green-700',
-        warning: 'bg-amber-50 text-amber-700',
-        error: 'bg-red-50 text-red-700',
-        info: 'bg-blue-50 text-blue-700',
-        outline: 'border border-gray-300 text-gray-700',
+        /** Нейтральный */
+        default:
+          'bg-[rgba(106,118,112,.14)] text-[var(--text-muted)]',
+        /** Акцентный emerald */
+        primary:
+          'border border-[var(--border-emerald)] bg-[var(--accent-faint)] text-[var(--accent)]',
+        /** Для светлых страниц (deprecated alias → используй primary) */
+        secondary:
+          'bg-[rgba(106,118,112,.10)] text-[var(--ink-secondary)]',
+        /** Успех */
+        success:
+          'bg-[var(--state-success-bg)] text-[var(--state-success)]',
+        /** Предупреждение */
+        warning:
+          'bg-[var(--state-warning-bg)] text-[var(--state-warning)]',
+        /** Ошибка */
+        error:
+          'bg-[var(--state-danger-bg)] text-[var(--state-danger)]',
+        /** Информация */
+        info:
+          'bg-[var(--state-info-bg)] text-[var(--state-info)]',
+        /** Фиолетовый */
+        violet:
+          'bg-[rgba(160,120,200,.14)] text-[#c4a4d9]',
+        /** Обводка без фона */
+        outline:
+          'border border-[var(--border-default)] text-[var(--text-secondary)]',
       },
     },
     defaultVariants: {

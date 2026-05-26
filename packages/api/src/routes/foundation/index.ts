@@ -296,15 +296,6 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
 
   // POST /individual-requests — публичный; при Cookie с access_token связываем createdByUserId (работодатель)
   fastify.post('/individual-requests', async (request, reply) => {
-      const dayKey = `individual_req:${request.ip}`;
-      const n = await fastify.redis.incr(dayKey);
-      if (n === 1) {
-        await fastify.redis.expire(dayKey, 86_400);
-      }
-      if (n > 3) {
-        return replyFail(reply, 429, 'RATE_LIMIT', 'Вы уже отправляли запрос сегодня. Попробуйте завтра.');
-      }
-
       const ruPhone = z
         .string()
         .trim()
@@ -321,6 +312,7 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
         return cmp >= today;
       }
 
+      // Parse body first so we can rate-limit by email
       const body = z
         .union([
           z
@@ -352,14 +344,6 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
                   path: ['eventDate'],
                 });
               }
-              const composed = [val.staffNeeded, val.message?.trim()].filter(Boolean).join('\n\n');
-              if (composed.length < 10) {
-                ctx.addIssue({
-                  code: z.ZodIssueCode.custom,
-                  message: 'Опишите запрос или комментарий (не менее 10 символов суммарно)',
-                  path: ['message'],
-                });
-              }
             }),
           z.object({
             role: z.literal('worker'),
@@ -369,16 +353,23 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
             position: z.string().trim().min(1).max(500),
             experience: z.string().trim().min(1).max(4000),
             availability: z.string().max(2000).optional(),
-            message: z.string().trim().min(10).max(8000),
+            message: z.string().trim().max(8000).optional().default(''),
           }),
         ])
         .parse(request.body);
 
-      const adminEmail = process.env.ADMIN_EMAIL?.trim();
-      if (!adminEmail) {
-        fastify.log.error('ADMIN_EMAIL is not set');
-        return replyFail(reply, 503, 'CONFIG', 'Сервис временно недоступен');
+      // Rate-limit by email: 1 submission per email per day
+      const emailKey = `individual_req:${body.email.toLowerCase()}`;
+      const emailCount = await fastify.redis.incr(emailKey);
+      if (emailCount === 1) await fastify.redis.expire(emailKey, 86_400);
+      if (emailCount > 1) {
+        return replyFail(
+          reply, 429, 'RATE_LIMIT',
+          'Запрос с этого адреса уже был отправлен сегодня. Попробуйте завтра.',
+        );
       }
+
+      const adminEmail = process.env.ADMIN_EMAIL?.trim();
 
       const optionalUserId = await getOptionalUserId(request);
       let createdByUserId: string | null = null;
@@ -461,20 +452,24 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
           data: { requestId: created.id },
         });
       }
-      await fastify.emailService.queue({
-        userId: admins[0]?.id ?? null,
-        to: adminEmail,
-        type: 'INDIVIDUAL_REQUEST' as InAppNotificationType,
-        templateData: {
-          id: created.id,
-          body: `Роль: ${body.role}\nИмя: ${body.name}\nТелефон: ${body.phone}\nEmail: ${body.email}\n` +
-            (body.role === 'employer'
-              ? `Компания: ${companyStored}\nТип мероприятия: ${body.eventType}\n`
-              : `Должность: ${body.position}\n`) +
-            `Комментарий: ${messageStored}`,
-          ctaUrl: `${site}/admin/individual-requests/${created.id}`,
-        },
-      });
+      if (adminEmail) {
+        await fastify.emailService.queue({
+          userId: admins[0]?.id ?? null,
+          to: adminEmail,
+          type: 'INDIVIDUAL_REQUEST' as InAppNotificationType,
+          templateData: {
+            id: created.id,
+            body: `Роль: ${body.role}\nИмя: ${body.name}\nТелефон: ${body.phone}\nEmail: ${body.email}\n` +
+              (body.role === 'employer'
+                ? `Компания: ${companyStored}\nТип мероприятия: ${body.eventType}\n`
+                : `Должность: ${body.position}\n`) +
+              `Комментарий: ${messageStored}`,
+            ctaUrl: `${site}/admin/individual-requests/${created.id}`,
+          },
+        });
+      } else {
+        fastify.log.warn({ requestId: created.id }, 'ADMIN_EMAIL not set — skipping email notification for individual request');
+      }
       return replyOk(
         reply,
         {
@@ -488,18 +483,19 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
 
   // POST /contact — public contact form
   fastify.post('/contact', async (request, reply) => {
-    const dayKey = `contact_req:${request.ip}`;
-    const n = await fastify.redis.incr(dayKey);
-    if (n === 1) await fastify.redis.expire(dayKey, 86_400);
-    if (n > 5) {
-      return replyFail(reply, 429, 'RATE_LIMIT', 'Слишком много запросов сегодня. Попробуйте завтра.');
-    }
-
     const body = z.object({
       name: z.string().trim().min(2, 'Укажите имя').max(200),
       email: z.string().email('Некорректный email').max(320),
       message: z.string().trim().min(10, 'Сообщение слишком короткое').max(4000),
     }).parse(request.body);
+
+    // Rate-limit by email: 5 contact submissions per email per day
+    const contactKey = `contact_req:${body.email.toLowerCase()}`;
+    const n = await fastify.redis.incr(contactKey);
+    if (n === 1) await fastify.redis.expire(contactKey, 86_400);
+    if (n > 5) {
+      return replyFail(reply, 429, 'RATE_LIMIT', 'Слишком много запросов сегодня. Попробуйте завтра.');
+    }
 
     const created = await fastify.prisma.contactRequest.create({
       data: {

@@ -21,6 +21,7 @@ const EVENT_TYPES = [
   { value: 'Другое', label: 'Другое' },
 ] as const;
 
+// ── Employer schema ──────────────────────────────────────────────────────────
 const employerRequestFormSchema = z
   .object({
     companyName: z.string().trim().min(1, 'Укажите компанию'),
@@ -68,15 +69,27 @@ const employerRequestFormSchema = z
 
 export type EmployerIndividualRequestForm = z.infer<typeof employerRequestFormSchema>;
 
-function defaultsFromUser(user: AuthUser | null): EmployerIndividualRequestForm {
+// ── Worker schema ────────────────────────────────────────────────────────────
+const workerRequestFormSchema = z.object({
+  firstName: z.string().trim().min(1, 'Укажите имя'),
+  lastName: z.string().trim().min(1, 'Укажите фамилию'),
+  phone: z.string().trim().min(5, 'Укажите телефон').max(40),
+  email: z.string().trim().email('Некорректный email'),
+  position: z.string().trim().min(1, 'Укажите желаемую должность'),
+  experience: z.string().trim().min(10, 'Опишите опыт (минимум 10 символов)'),
+  message: z.string().trim().max(4000).optional(),
+});
+
+type WorkerIndividualRequestForm = z.infer<typeof workerRequestFormSchema>;
+
+// ── Default values ───────────────────────────────────────────────────────────
+function employerDefaultsFromUser(user: AuthUser | null): EmployerIndividualRequestForm {
   const contact = user?.employerProfile?.contactName?.trim() || '';
   const parts = contact.split(/\s+/).filter(Boolean);
-  const firstName = parts[0] ?? '';
-  const lastName = parts.slice(1).join(' ');
   return {
     companyName: user?.employerProfile?.companyName?.trim() || '',
-    firstName,
-    lastName,
+    firstName: parts[0] ?? '',
+    lastName: parts.slice(1).join(' '),
     phone: user?.phone?.trim() || '',
     email: user?.email?.trim() || '',
     eventType: 'Корпоратив',
@@ -87,29 +100,65 @@ function defaultsFromUser(user: AuthUser | null): EmployerIndividualRequestForm 
   };
 }
 
+function workerDefaultsFromUser(user: AuthUser | null): WorkerIndividualRequestForm {
+  return {
+    firstName: user?.workerProfile?.firstName?.trim() || '',
+    lastName: user?.workerProfile?.lastName?.trim() || '',
+    phone: user?.phone?.trim() || '',
+    email: user?.email?.trim() || '',
+    position: '',
+    experience: '',
+    message: '',
+  };
+}
+
+// ── Props ────────────────────────────────────────────────────────────────────
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  role?: 'employer' | 'worker';
 }
 
-export function EmployerIndividualRequestModal({ open, onOpenChange, onSuccess }: Props) {
+// ── Component ────────────────────────────────────────────────────────────────
+export function EmployerIndividualRequestModal({
+  open,
+  onOpenChange,
+  onSuccess,
+  role = 'employer',
+}: Props) {
   const { toast } = useToast();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
 
-  const form = useForm<EmployerIndividualRequestForm>({
+  const fieldClass =
+    'mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/35 focus:border-emerald-500/50';
+  const labelClass = 'text-xs font-medium text-white/60';
+
+  // ── Employer form ──────────────────────────────────────────────────────────
+  const employerForm = useForm<EmployerIndividualRequestForm>({
     resolver: zodResolver(employerRequestFormSchema),
-    defaultValues: defaultsFromUser(user),
+    defaultValues: employerDefaultsFromUser(user),
+  });
+
+  // ── Worker form ────────────────────────────────────────────────────────────
+  const workerForm = useForm<WorkerIndividualRequestForm>({
+    resolver: zodResolver(workerRequestFormSchema),
+    defaultValues: workerDefaultsFromUser(user),
   });
 
   useEffect(() => {
     if (open) {
-      form.reset(defaultsFromUser(useAuthStore.getState().user));
+      if (role === 'employer') {
+        employerForm.reset(employerDefaultsFromUser(useAuthStore.getState().user));
+      } else {
+        workerForm.reset(workerDefaultsFromUser(useAuthStore.getState().user));
+      }
     }
-  }, [open, form]);
+  }, [open, role, employerForm, workerForm]);
 
-  const onSubmit = form.handleSubmit(async (values) => {
+  // ── Submit: employer ───────────────────────────────────────────────────────
+  const onSubmitEmployer = employerForm.handleSubmit(async (values) => {
     try {
       await apiClient.post('/individual-requests', {
         role: 'employer',
@@ -141,12 +190,35 @@ export function EmployerIndividualRequestModal({ open, onOpenChange, onSuccess }
     }
   });
 
-  const submitting = form.formState.isSubmitting;
+  // ── Submit: worker ─────────────────────────────────────────────────────────
+  const onSubmitWorker = workerForm.handleSubmit(async (values) => {
+    try {
+      await apiClient.post('/individual-requests', {
+        role: 'worker',
+        name: `${values.firstName} ${values.lastName}`.trim(),
+        phone: values.phone.trim(),
+        email: values.email.trim(),
+        position: values.position.trim(),
+        experience: values.experience.trim(),
+        message: values.message?.trim() || '',
+      });
+      toast('Запрос отправлен. Мы свяжемся с вами в течение 24 часов', 'success');
+      onOpenChange(false);
+      onSuccess?.();
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 401) {
+        toast('Сессия истекла. Войдите снова.', 'error');
+        onOpenChange(false);
+        router.push('/auth/login');
+        return;
+      }
+      toast(e instanceof ApiError ? e.message : 'Не удалось отправить запрос', 'error');
+    }
+  });
 
-  const fieldClass =
-    'mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/35 focus:border-emerald-500/50';
-
-  const labelClass = 'text-xs font-medium text-white/60';
+  const submittingEmployer = employerForm.formState.isSubmitting;
+  const submittingWorker = workerForm.formState.isSubmitting;
+  const submitting = role === 'employer' ? submittingEmployer : submittingWorker;
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -174,7 +246,7 @@ export function EmployerIndividualRequestModal({ open, onOpenChange, onSuccess }
           <div className="mb-6 flex items-start justify-between gap-4">
             <div>
               <DialogPrimitive.Title className="text-xl font-semibold text-white">
-                Персональный подбор персонала
+                {role === 'worker' ? 'Персональный подбор вакансий' : 'Персональный подбор персонала'}
               </DialogPrimitive.Title>
               <p className="mt-2 text-sm text-white/55">Мы свяжемся с вами в течение 24 часов</p>
             </div>
@@ -187,119 +259,192 @@ export function EmployerIndividualRequestModal({ open, onOpenChange, onSuccess }
             </DialogPrimitive.Close>
           </div>
 
-          <form onSubmit={onSubmit} className="space-y-4">
-            <div>
-              <label className={labelClass}>Название компании *</label>
-              <input className={fieldClass} {...form.register('companyName')} autoComplete="organization" />
-              {form.formState.errors.companyName?.message && (
-                <p className="mt-1 text-xs text-red-300">{String(form.formState.errors.companyName.message)}</p>
-              )}
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {/* ── EMPLOYER form ── */}
+          {role === 'employer' && (
+            <form onSubmit={onSubmitEmployer} className="space-y-4">
               <div>
-                <label className={labelClass}>Имя *</label>
-                <input className={fieldClass} {...form.register('firstName')} />
-                {form.formState.errors.firstName?.message && (
-                  <p className="mt-1 text-xs text-red-300">{String(form.formState.errors.firstName.message)}</p>
+                <label className={labelClass}>Название компании *</label>
+                <input className={fieldClass} {...employerForm.register('companyName')} autoComplete="organization" />
+                {employerForm.formState.errors.companyName?.message && (
+                  <p className="mt-1 text-xs text-red-300">{String(employerForm.formState.errors.companyName.message)}</p>
+                )}
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className={labelClass}>Имя *</label>
+                  <input className={fieldClass} {...employerForm.register('firstName')} />
+                  {employerForm.formState.errors.firstName?.message && (
+                    <p className="mt-1 text-xs text-red-300">{String(employerForm.formState.errors.firstName.message)}</p>
+                  )}
+                </div>
+                <div>
+                  <label className={labelClass}>Фамилия *</label>
+                  <input className={fieldClass} {...employerForm.register('lastName')} />
+                  {employerForm.formState.errors.lastName?.message && (
+                    <p className="mt-1 text-xs text-red-300">{String(employerForm.formState.errors.lastName.message)}</p>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className={labelClass}>Телефон *</label>
+                  <input className={fieldClass} {...employerForm.register('phone')} placeholder="+79991234567" autoComplete="tel" />
+                  {employerForm.formState.errors.phone?.message && (
+                    <p className="mt-1 text-xs text-red-300">{String(employerForm.formState.errors.phone.message)}</p>
+                  )}
+                </div>
+                <div>
+                  <label className={labelClass}>Email *</label>
+                  <input className={fieldClass} type="email" {...employerForm.register('email')} autoComplete="email" />
+                  {employerForm.formState.errors.email?.message && (
+                    <p className="mt-1 text-xs text-red-300">{String(employerForm.formState.errors.email.message)}</p>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className={labelClass}>Тип мероприятия *</label>
+                  <select className={`${fieldClass} cursor-pointer appearance-none bg-white/[0.07]`} {...employerForm.register('eventType')}>
+                    {EVENT_TYPES.map((x) => (
+                      <option key={x.value} value={x.value} className="bg-[#0d1f17] text-white">{x.label}</option>
+                    ))}
+                  </select>
+                  {employerForm.formState.errors.eventType?.message && (
+                    <p className="mt-1 text-xs text-red-300">{String(employerForm.formState.errors.eventType.message)}</p>
+                  )}
+                </div>
+                <div>
+                  <label className={labelClass}>Дата мероприятия</label>
+                  <input className={`${fieldClass} [color-scheme:dark]`} type="date" {...employerForm.register('eventDate')} />
+                  {employerForm.formState.errors.eventDate?.message && (
+                    <p className="mt-1 text-xs text-red-300">{String(employerForm.formState.errors.eventDate.message)}</p>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className={labelClass}>Какой персонал нужен *</label>
+                <textarea className={`${fieldClass} min-h-[92px]`} rows={3} {...employerForm.register('staffNeeded')} />
+                {employerForm.formState.errors.staffNeeded?.message && (
+                  <p className="mt-1 text-xs text-red-300">{String(employerForm.formState.errors.staffNeeded.message)}</p>
                 )}
               </div>
               <div>
-                <label className={labelClass}>Фамилия *</label>
-                <input className={fieldClass} {...form.register('lastName')} />
-                {form.formState.errors.lastName?.message && (
-                  <p className="mt-1 text-xs text-red-300">{String(form.formState.errors.lastName.message)}</p>
-                )}
+                <label className={labelClass}>Количество человек</label>
+                <input className={fieldClass} inputMode="numeric" {...employerForm.register('quantity')} />
               </div>
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label className={labelClass}>Телефон *</label>
+                <label className={labelClass}>Комментарий</label>
+                <textarea className={`${fieldClass} min-h-[76px]`} rows={2} {...employerForm.register('comment')} />
+              </div>
+              <ModalFooter submitting={submitting} onClose={() => onOpenChange(false)} />
+            </form>
+          )}
+
+          {/* ── WORKER form ── */}
+          {role === 'worker' && (
+            <form onSubmit={onSubmitWorker} className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className={labelClass}>Имя *</label>
+                  <input className={fieldClass} {...workerForm.register('firstName')} />
+                  {workerForm.formState.errors.firstName?.message && (
+                    <p className="mt-1 text-xs text-red-300">{String(workerForm.formState.errors.firstName.message)}</p>
+                  )}
+                </div>
+                <div>
+                  <label className={labelClass}>Фамилия *</label>
+                  <input className={fieldClass} {...workerForm.register('lastName')} />
+                  {workerForm.formState.errors.lastName?.message && (
+                    <p className="mt-1 text-xs text-red-300">{String(workerForm.formState.errors.lastName.message)}</p>
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className={labelClass}>Телефон *</label>
+                  <input className={fieldClass} {...workerForm.register('phone')} placeholder="+79991234567" autoComplete="tel" />
+                  {workerForm.formState.errors.phone?.message && (
+                    <p className="mt-1 text-xs text-red-300">{String(workerForm.formState.errors.phone.message)}</p>
+                  )}
+                </div>
+                <div>
+                  <label className={labelClass}>Email *</label>
+                  <input className={fieldClass} type="email" {...workerForm.register('email')} autoComplete="email" />
+                  {workerForm.formState.errors.email?.message && (
+                    <p className="mt-1 text-xs text-red-300">{String(workerForm.formState.errors.email.message)}</p>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className={labelClass}>Желаемая должность / специализация *</label>
                 <input
                   className={fieldClass}
-                  {...form.register('phone')}
-                  placeholder="+79991234567"
-                  autoComplete="tel"
+                  placeholder="Например: официант, бармен, повар..."
+                  {...workerForm.register('position')}
                 />
-                {form.formState.errors.phone?.message && (
-                  <p className="mt-1 text-xs text-red-300">{String(form.formState.errors.phone.message)}</p>
+                {workerForm.formState.errors.position?.message && (
+                  <p className="mt-1 text-xs text-red-300">{String(workerForm.formState.errors.position.message)}</p>
                 )}
               </div>
               <div>
-                <label className={labelClass}>Email *</label>
-                <input className={fieldClass} type="email" {...form.register('email')} autoComplete="email" />
-                {form.formState.errors.email?.message && (
-                  <p className="mt-1 text-xs text-red-300">{String(form.formState.errors.email.message)}</p>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label className={labelClass}>Тип мероприятия *</label>
-                <select className={`${fieldClass} cursor-pointer appearance-none bg-white/[0.07]`} {...form.register('eventType')}>
-                  {EVENT_TYPES.map((x) => (
-                    <option key={x.value} value={x.value} className="bg-[#0d1f17] text-white">
-                      {x.label}
-                    </option>
-                  ))}
-                </select>
-                {form.formState.errors.eventType?.message && (
-                  <p className="mt-1 text-xs text-red-300">{String(form.formState.errors.eventType.message)}</p>
+                <label className={labelClass}>
+                  Опыт работы *{' '}
+                  <span className="font-normal text-white/35">(минимум 10 символов)</span>
+                </label>
+                <textarea
+                  className={`${fieldClass} min-h-[92px]`}
+                  rows={3}
+                  placeholder="Опишите ваш опыт, навыки и предыдущие места работы..."
+                  {...workerForm.register('experience')}
+                />
+                {workerForm.formState.errors.experience?.message && (
+                  <p className="mt-1 text-xs text-red-300">{String(workerForm.formState.errors.experience.message)}</p>
                 )}
               </div>
               <div>
-                <label className={labelClass}>Дата мероприятия</label>
-                <input className={`${fieldClass} [color-scheme:dark]`} type="date" {...form.register('eventDate')} />
-                {form.formState.errors.eventDate?.message && (
-                  <p className="mt-1 text-xs text-red-300">{String(form.formState.errors.eventDate.message)}</p>
-                )}
+                <label className={labelClass}>Дополнительно</label>
+                <textarea
+                  className={`${fieldClass} min-h-[76px]`}
+                  rows={2}
+                  placeholder="Пожелания по графику, локации и т.д."
+                  {...workerForm.register('message')}
+                />
               </div>
-            </div>
-
-            <div>
-              <label className={labelClass}>Какой персонал нужен *</label>
-              <textarea className={`${fieldClass} min-h-[92px]`} rows={3} {...form.register('staffNeeded')} />
-              {form.formState.errors.staffNeeded?.message && (
-                <p className="mt-1 text-xs text-red-300">{String(form.formState.errors.staffNeeded.message)}</p>
-              )}
-            </div>
-            <div>
-              <label className={labelClass}>Количество человек</label>
-              <input className={fieldClass} inputMode="numeric" {...form.register('quantity')} />
-            </div>
-            <div>
-              <label className={labelClass}>Комментарий</label>
-              <textarea className={`${fieldClass} min-h-[76px]`} rows={2} {...form.register('comment')} />
-            </div>
-
-            <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                disabled={submitting}
-                className={cn(
-                  'rounded-xl px-5 py-2.5 text-sm font-medium transition',
-                  'border border-transparent text-white/80 hover:bg-white/10 hover:text-white',
-                  submitting && 'pointer-events-none opacity-50',
-                )}
-                onClick={() => onOpenChange(false)}
-              >
-                Отмена
-              </button>
-              <button
-                type="submit"
-                disabled={submitting}
-                className={cn(
-                  'rounded-xl px-6 py-2.5 text-sm font-semibold text-gray-950',
-                  submitting && 'opacity-70',
-                  'bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500 shadow-lg shadow-black/35 transition hover:brightness-105 disabled:opacity-60',
-                )}
-              >
-                {submitting ? 'Отправляем…' : 'Отправить запрос'}
-              </button>
-            </div>
-          </form>
+              <ModalFooter submitting={submitting} onClose={() => onOpenChange(false)} />
+            </form>
+          )}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
+  );
+}
+
+function ModalFooter({ submitting, onClose }: { submitting: boolean; onClose: () => void }) {
+  return (
+    <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
+      <button
+        type="button"
+        disabled={submitting}
+        className={cn(
+          'rounded-xl px-5 py-2.5 text-sm font-medium transition',
+          'border border-transparent text-white/80 hover:bg-white/10 hover:text-white',
+          submitting && 'pointer-events-none opacity-50',
+        )}
+        onClick={onClose}
+      >
+        Отмена
+      </button>
+      <button
+        type="submit"
+        disabled={submitting}
+        className={cn(
+          'rounded-xl px-6 py-2.5 text-sm font-semibold text-gray-950',
+          submitting && 'opacity-70',
+          'bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500 shadow-lg shadow-black/35 transition hover:brightness-105 disabled:opacity-60',
+        )}
+      >
+        {submitting ? 'Отправляем…' : 'Отправить запрос'}
+      </button>
+    </div>
   );
 }

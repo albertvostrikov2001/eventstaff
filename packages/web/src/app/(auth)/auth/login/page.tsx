@@ -61,6 +61,16 @@ function LoginForm() {
       }
 
       if (!res.ok) {
+        // Handle unverified email — redirect to verification page
+        const errCode = (json as { error?: { code?: string; details?: { pendingUserId?: string; email?: string } } }).error?.code;
+        if (errCode === 'EMAIL_NOT_VERIFIED') {
+          const details = (json as { error?: { details?: { pendingUserId?: string; email?: string } } }).error?.details;
+          const uid = details?.pendingUserId ?? '';
+          const em = details?.email ?? '';
+          toast('Подтвердите email. Код отправлен на вашу почту.', 'info');
+          router.push(`/auth/verify-email?userId=${encodeURIComponent(uid)}&email=${encodeURIComponent(em)}`);
+          return;
+        }
         toast(json.error?.message ?? 'Неверный email или пароль', 'error');
         return;
       }

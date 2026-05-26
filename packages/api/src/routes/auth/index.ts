@@ -22,10 +22,14 @@ const nanoidToken = customAlphabet(
   'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789',
   64,
 );
+const nanoidCode = customAlphabet('0123456789', 6);
 
 const BCRYPT_ROUNDS = 12;
 const REFRESH_TTL = 60 * 60 * 24 * 30; // 30 days in seconds
 const RESET_TOKEN_TTL = 3600; // 1 hour in seconds
+const VERIFY_CODE_TTL = 600; // 10 minutes in seconds
+const VERIFY_RESEND_COOLDOWN = 60; // 1 minute cooldown between resends
+const MAX_VERIFY_ATTEMPTS = 5; // max wrong attempts before invalidation
 
 const nanoidSlug = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 6);
 
@@ -49,6 +53,20 @@ function generateSlug(prefix: string, id: string): string {
 
 
 export const authRoutes: FastifyPluginAsync = async (fastify) => {
+  // Helper: send (or re-send) an email verification code for a given user
+  async function sendVerificationCode(userId: string, email: string): Promise<void> {
+    const code = nanoidCode();
+    await fastify.redis.setex(`verify:email:code:${userId}`, VERIFY_CODE_TTL, code);
+    // Reset attempt counter
+    await fastify.redis.del(`verify:email:attempts:${userId}`);
+    await fastify.emailService.queue({
+      userId: null, // system email — skip preference checks
+      to: email,
+      type: 'EMAIL_VERIFICATION',
+      templateData: { code, email },
+    });
+  }
+
   // POST /register — max 5 per hour per IP
   fastify.post('/register', { config: { rateLimit: { max: 5, timeWindow: '1 hour', keyGenerator: (req) => `register:${req.ip}` } } }, async (request, reply) => {
     const body = registerSchema.parse(request.body);
@@ -60,11 +78,17 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
           body.phone ? { phone: body.phone } : {},
         ].filter((o) => Object.keys(o).length > 0),
       },
-      select: { id: true },
+      select: { id: true, emailVerified: true, createdAt: true },
     });
 
-    if (existing) {
+    // If a verified user already exists — conflict
+    if (existing && existing.emailVerified) {
       return fail(reply, 409, 'CONFLICT', 'Пользователь с таким email уже существует');
+    }
+
+    // If an unverified user exists — delete them and recreate (abandoned registration)
+    if (existing && !existing.emailVerified) {
+      await fastify.prisma.user.delete({ where: { id: existing.id } });
     }
 
     const passwordHash = await bcrypt.hash(body.password, BCRYPT_ROUNDS);
@@ -75,6 +99,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
           email: body.email,
           phone: body.phone,
           passwordHash,
+          emailVerified: false,
           activeRole: body.role as 'worker' | 'employer',
           consentGivenAt: new Date(),
           roles: {
@@ -112,18 +137,26 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       return newUser;
     });
 
+    // If user registered with email — send verification code (don't issue tokens yet)
+    if (user.email) {
+      await sendVerificationCode(user.id, user.email);
+      return ok(reply.status(201), {
+        pendingUserId: user.id,
+        email: user.email,
+      });
+    }
+
+    // Phone-only registration: skip email verification, issue tokens immediately
     const roles = [body.role];
     const accessToken = await fastify.signAccessToken({
       sub: user.id,
-      email: user.email ?? undefined,
+      email: undefined,
       phone: user.phone ?? undefined,
       roles,
       activeRole: body.role,
     });
     const refreshToken = nanoidToken();
-
     await storeRefreshToken(fastify.redis, user.id, refreshToken);
-
     reply
       .setCookie('access_token', accessToken, makeCookieOpts(15 * 60))
       .setCookie('refresh_token', refreshToken, makeCookieOpts(REFRESH_TTL));
@@ -137,6 +170,113 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
         activeRole: body.role,
       },
     });
+  });
+
+  // POST /verify-email — max 10 per hour per IP
+  fastify.post('/verify-email', { config: { rateLimit: { max: 10, timeWindow: '1 hour', keyGenerator: (req) => `verify-email:${req.ip}` } } }, async (request, reply) => {
+    const body = z.object({
+      userId: z.string().min(1),
+      code: z.string().length(6),
+    }).parse(request.body);
+
+    const user = await fastify.prisma.user.findUnique({
+      where: { id: body.userId },
+      select: { id: true, email: true, phone: true, emailVerified: true, activeRole: true, roles: true },
+    });
+
+    if (!user) {
+      return fail(reply, 404, 'NOT_FOUND', 'Пользователь не найден');
+    }
+
+    if (user.emailVerified) {
+      // Already verified — just log them in
+      const roles = user.roles.map((r) => r.role as string);
+      const activeRole = (user.activeRole as string) ?? roles[0] ?? 'worker';
+      const accessToken = await fastify.signAccessToken({ sub: user.id, email: user.email ?? undefined, phone: user.phone ?? undefined, roles, activeRole });
+      const refreshToken = nanoidToken();
+      await storeRefreshToken(fastify.redis, user.id, refreshToken);
+      reply
+        .setCookie('access_token', accessToken, makeCookieOpts(15 * 60))
+        .setCookie('refresh_token', refreshToken, makeCookieOpts(REFRESH_TTL));
+      return ok(reply, { user: { id: user.id, email: user.email, phone: user.phone, roles, activeRole } });
+    }
+
+    // Check attempt limit
+    const attemptsKey = `verify:email:attempts:${body.userId}`;
+    const attempts = await fastify.redis.incr(attemptsKey);
+    if (attempts === 1) await fastify.redis.expire(attemptsKey, VERIFY_CODE_TTL);
+    if (attempts > MAX_VERIFY_ATTEMPTS) {
+      await fastify.redis.del(`verify:email:code:${body.userId}`);
+      return fail(reply, 429, 'TOO_MANY_ATTEMPTS', 'Слишком много попыток. Запросите новый код.');
+    }
+
+    // Verify code
+    const stored = await fastify.redis.get(`verify:email:code:${body.userId}`);
+    if (!stored || stored !== body.code) {
+      const remaining = MAX_VERIFY_ATTEMPTS - attempts;
+      return fail(reply, 400, 'INVALID_CODE', remaining > 0
+        ? `Неверный код. Осталось попыток: ${remaining}`
+        : 'Неверный код. Лимит попыток исчерпан.');
+    }
+
+    // Mark verified
+    await fastify.prisma.user.update({
+      where: { id: body.userId },
+      data: { emailVerified: true },
+    });
+    await fastify.redis.del(`verify:email:code:${body.userId}`);
+    await fastify.redis.del(attemptsKey);
+
+    // Issue tokens
+    const roles = user.roles.map((r) => r.role as string);
+    const activeRole = (user.activeRole as string) ?? roles[0] ?? 'worker';
+    const accessToken = await fastify.signAccessToken({ sub: user.id, email: user.email ?? undefined, phone: user.phone ?? undefined, roles, activeRole });
+    const refreshToken = nanoidToken();
+    await storeRefreshToken(fastify.redis, user.id, refreshToken);
+
+    reply
+      .setCookie('access_token', accessToken, makeCookieOpts(15 * 60))
+      .setCookie('refresh_token', refreshToken, makeCookieOpts(REFRESH_TTL));
+
+    return ok(reply, {
+      user: {
+        id: user.id,
+        email: user.email,
+        phone: user.phone,
+        roles,
+        activeRole,
+      },
+    });
+  });
+
+  // POST /resend-verify — max 3 per 15 min per IP
+  fastify.post('/resend-verify', { config: { rateLimit: { max: 3, timeWindow: '15 minutes', keyGenerator: (req) => `resend-verify:${req.ip}` } } }, async (request, reply) => {
+    const body = z.object({ userId: z.string().min(1) }).parse(request.body);
+
+    const user = await fastify.prisma.user.findUnique({
+      where: { id: body.userId },
+      select: { id: true, email: true, emailVerified: true },
+    });
+
+    if (!user || !user.email) {
+      return fail(reply, 404, 'NOT_FOUND', 'Пользователь не найден');
+    }
+    if (user.emailVerified) {
+      return fail(reply, 400, 'ALREADY_VERIFIED', 'Email уже подтверждён');
+    }
+
+    // Per-user resend cooldown
+    const cooldownKey = `verify:email:resend:${body.userId}`;
+    const onCooldown = await fastify.redis.get(cooldownKey);
+    if (onCooldown) {
+      const ttl = await fastify.redis.ttl(cooldownKey);
+      return fail(reply, 429, 'RESEND_COOLDOWN', `Повторная отправка возможна через ${ttl} сек.`);
+    }
+    await fastify.redis.setex(cooldownKey, VERIFY_RESEND_COOLDOWN, '1');
+
+    await sendVerificationCode(user.id, user.email);
+
+    return ok(reply, { message: 'Код отправлен повторно' });
   });
 
   // POST /login — max 5 attempts per 15 min per IP
@@ -176,6 +316,18 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     const valid = await bcrypt.compare(body.password, user.passwordHash);
     if (!valid) {
       return fail(reply, 401, 'UNAUTHORIZED', 'Неверный email или пароль');
+    }
+
+    // Block login if email is not verified
+    if (user.email && !user.emailVerified) {
+      // Re-send verification code (if not on cooldown)
+      const cooldownKey = `verify:email:resend:${user.id}`;
+      const onCooldown = await fastify.redis.get(cooldownKey);
+      if (!onCooldown) {
+        await fastify.redis.setex(cooldownKey, VERIFY_RESEND_COOLDOWN, '1');
+        await sendVerificationCode(user.id, user.email);
+      }
+      return fail(reply, 403, 'EMAIL_NOT_VERIFIED', 'Подтвердите email. Код отправлен на вашу почту.', { pendingUserId: user.id, email: user.email });
     }
 
     await fastify.prisma.user.update({

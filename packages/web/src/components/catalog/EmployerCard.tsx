@@ -99,16 +99,16 @@ export function EmployerCard({
         )}
         <span className="flex items-center gap-1">
           <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
-          {Number(ratingScore).toFixed(1)}
+          {(isNaN(Number(ratingScore)) ? 0 : Number(ratingScore)).toFixed(1)}
         </span>
         <span className="flex items-center gap-1">
           <Briefcase className="h-3 w-3" />
           {_count.vacancies} {getVacancyWord(_count.vacancies)}
         </span>
-        {reliabilityScore && (
+        {reliabilityScore != null && Number(reliabilityScore) > 0 && (
           <span className="flex items-center gap-1 text-green-600">
             <ShieldCheck className="h-3 w-3" />
-            Надёжность {reliabilityScore}%
+            Надёжность {Math.round(Number(reliabilityScore))}%
           </span>
         )}
       </div>

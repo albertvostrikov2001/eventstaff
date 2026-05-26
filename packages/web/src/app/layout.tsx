@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter, Playfair_Display } from 'next/font/google';
+import { Onest, JetBrains_Mono } from 'next/font/google';
 import '@/styles/globals.css';
 import { AuthProvider } from '@/providers/AuthProvider';
 import { ToastProvider } from '@/components/ui/toast-context';
@@ -14,16 +14,17 @@ try {
   metadataBaseUrl = new URL('https://albertvostrikov2001.github.io/eventstaff');
 }
 
-const inter = Inter({
+const onest = Onest({
   subsets: ['latin', 'cyrillic'],
-  variable: '--font-inter',
+  variable: '--font-onest',
+  weight: ['300', '400', '500', '600', '700'],
   display: 'swap',
 });
 
-const playfair = Playfair_Display({
-  subsets: ['latin', 'cyrillic'],
-  variable: '--font-playfair',
-  weight: ['400', '500', '600'],
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  variable: '--font-jetbrains',
+  weight: ['400', '500'],
   display: 'swap',
 });
 
@@ -59,8 +60,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="ru" className={`${inter.variable} ${playfair.variable}`}>
-      <body className="min-h-screen bg-white font-sans text-gray-900 antialiased">
+    <html lang="ru" className={`${onest.variable} ${jetbrainsMono.variable}`}>
+      <body className="min-h-screen font-sans antialiased">
         <ToastProvider>
           <NetworkErrorBanner />
           <QueryProvider>

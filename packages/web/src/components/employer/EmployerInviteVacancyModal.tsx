@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { AlertCircle, RefreshCw, X } from 'lucide-react';
-import { apiClient } from '@/lib/api/client';
+import { apiClient, ApiError } from '@/lib/api/client';
 import { useToast } from '@/components/ui/toast-context';
 import { Button } from '@/components/ui/button';
 
@@ -73,8 +73,9 @@ export function EmployerInviteVacancyModal({
       toast('Приглашение отправлено', 'success');
       onSent?.();
       onClose();
-    } catch {
-      toast('Не удалось отправить приглашение', 'error');
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : 'Не удалось отправить приглашение';
+      toast(msg, e instanceof ApiError && e.status === 409 ? 'info' : 'error');
     } finally {
       setBusy(false);
     }

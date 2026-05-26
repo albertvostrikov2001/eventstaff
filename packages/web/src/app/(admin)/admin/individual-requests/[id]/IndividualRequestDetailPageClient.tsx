@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import { MessageSquare } from 'lucide-react';
 import { apiClient, ApiError } from '@/lib/api/client';
 import { useToast } from '@/components/ui/toast-context';
 
@@ -24,18 +25,46 @@ type Req = {
   status: string;
   adminComment: string | null;
   createdAt: string;
+  createdByUserId: string | null;
 };
 
-const STATUS_OPTS = ['NEW', 'IN_PROGRESS', 'COMPLETED', 'REJECTED'];
+const STATUS_OPTS: { value: string; label: string }[] = [
+  { value: 'NEW',         label: 'Новый' },
+  { value: 'IN_PROGRESS', label: 'В работе' },
+  { value: 'COMPLETED',   label: 'Завершён' },
+  { value: 'REJECTED',    label: 'Отклонён' },
+];
+
+const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
+  NEW:         { label: 'Новый',    cls: 'bg-amber-500/20 text-amber-200 border border-amber-500/40' },
+  IN_PROGRESS: { label: 'В работе', cls: 'bg-blue-500/20 text-blue-200 border border-blue-500/40' },
+  COMPLETED:   { label: 'Завершён', cls: 'bg-emerald-500/20 text-emerald-200 border border-emerald-500/40' },
+  REJECTED:    { label: 'Отклонён', cls: 'bg-red-500/20 text-red-200 border border-red-500/40' },
+};
+
+function StatusBadge({ status }: { status: string }) {
+  const s = STATUS_BADGE[status];
+  if (!s) return <span className="text-white/50 text-xs">{status}</span>;
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${s.cls}`}>
+      {status === 'NEW' && (
+        <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+      )}
+      {s.label}
+    </span>
+  );
+}
 
 export function IndividualRequestDetailPageClient() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
+  const router = useRouter();
   const [row, setRow] = useState<Req | null>(null);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState('NEW');
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
+  const [startingChat, setStartingChat] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -66,6 +95,22 @@ export function IndividualRequestDetailPageClient() {
     }
   };
 
+  const startChat = async () => {
+    if (!row?.createdByUserId) return;
+    setStartingChat(true);
+    try {
+      const res = await apiClient.post<{ data: { roomId: string } }>(
+        `/admin/users/${row.createdByUserId}/open-chat`,
+        {},
+      );
+      router.push(`/admin/messages/${res.data.roomId}`);
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Не удалось открыть чат', 'error');
+    } finally {
+      setStartingChat(false);
+    }
+  };
+
   if (loading || !row) {
     return <p className="text-white/60">Загрузка…</p>;
   }
@@ -77,7 +122,23 @@ export function IndividualRequestDetailPageClient() {
           ← Список
         </Link>
       </div>
-      <h1 className="text-2xl font-bold text-white">Заявка {row.id.slice(0, 8)}…</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-white">Заявка {row.id.slice(0, 8)}…</h1>
+          <StatusBadge status={row.status} />
+        </div>
+        {row.createdByUserId && (
+          <button
+            type="button"
+            onClick={() => void startChat()}
+            disabled={startingChat}
+            className="inline-flex items-center gap-2 rounded-xl bg-emerald-600/80 px-4 py-2 text-sm font-medium text-white shadow hover:bg-emerald-600 disabled:opacity-60"
+          >
+            <MessageSquare className="h-4 w-4" />
+            {startingChat ? 'Открываем…' : 'Начать чат'}
+          </button>
+        )}
+      </div>
       <div className="rounded-input border border-white/10 bg-white/[0.04] p-4 text-sm text-white/90">
         <dl className="grid gap-2 sm:grid-cols-2">
           <div>
@@ -85,16 +146,16 @@ export function IndividualRequestDetailPageClient() {
             <dd>{row.role}</dd>
           </div>
           <div>
-            <dt className="text-white/50">Статус</dt>
+            <dt className="text-white/50">Статус обработки</dt>
             <dd>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
-                className="mt-0.5 rounded border border-white/15 bg-white/5 px-2 py-1 text-white"
+                className="mt-0.5 rounded border border-white/15 bg-white/5 px-2 py-1.5 text-sm text-white"
               >
                 {STATUS_OPTS.map((s) => (
-                  <option key={s} value={s} className="bg-gray-900">
-                    {s}
+                  <option key={s.value} value={s.value} className="bg-gray-900">
+                    {s.label}
                   </option>
                 ))}
               </select>

@@ -74,7 +74,21 @@ export const useAuthStore = create<AuthState>((set) => ({
       return;
     }
     try {
-      const res = await fetch(`${api}/auth/me`, { credentials: 'include', cache: 'no-store' });
+      let res = await fetch(`${api}/auth/me`, { credentials: 'include', cache: 'no-store' });
+
+      // access_token живёт 15 мин, refresh_token — 30 дней.
+      // Если /me вернул 401, пробуем обновить пару токенов и повторяем.
+      if (res.status === 401) {
+        const refreshRes = await fetch(`${api}/auth/refresh`, {
+          method: 'POST',
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        if (refreshRes.ok) {
+          res = await fetch(`${api}/auth/me`, { credentials: 'include', cache: 'no-store' });
+        }
+      }
+
       if (res.ok) {
         const json = await res.json();
         set({

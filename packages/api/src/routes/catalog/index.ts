@@ -178,7 +178,12 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ]);
 
-    return replyPaginated(reply, workers, {
+    const workersSerialized = workers.map((w) => ({
+      ...w,
+      desiredRate: w.desiredRate != null ? parseFloat(w.desiredRate.toString()) : null,
+    }));
+
+    return replyPaginated(reply, workersSerialized, {
       total,
       page,
       limit,
@@ -209,9 +214,30 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
       return replyFail(reply, 404, 'NOT_FOUND', 'Worker not found');
     }
 
+    // Загружаем доступность на текущий + следующие 2 месяца
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const endDate = new Date(todayStart);
+    endDate.setMonth(endDate.getMonth() + 3);
+
+    const availability = await fastify.prisma.workerAvailability.findMany({
+      where: {
+        workerId: worker.id,
+        date: { gte: todayStart, lte: endDate },
+      },
+      select: { date: true, isBlocked: true, isBooked: true },
+      orderBy: { date: 'asc' },
+    });
+
     return replyOk(reply, {
       ...worker,
+      desiredRate: worker.desiredRate != null ? parseFloat(worker.desiredRate.toString()) : null,
       userId: worker.userId,
+      availability: availability.map((a) => ({
+        date: (a.date as Date).toISOString().split('T')[0],
+        isBlocked: a.isBlocked,
+        isBooked: a.isBooked,
+      })),
     });
   });
 
@@ -299,7 +325,12 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ]);
 
-    return replyPaginated(reply, vacancies, {
+    const vacanciesSerialized = vacancies.map((v) => ({
+      ...v,
+      rate: v.rate != null ? parseFloat(v.rate.toString()) : null,
+    }));
+
+    return replyPaginated(reply, vacanciesSerialized, {
       total,
       page: query.page,
       limit: query.limit,
@@ -334,7 +365,10 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
       data: { viewsCount: { increment: 1 } },
     });
 
-    return replyOk(reply, vacancy);
+    return replyOk(reply, {
+      ...vacancy,
+      rate: vacancy.rate != null ? parseFloat(vacancy.rate.toString()) : null,
+    });
   });
 
   // GET /employers
@@ -377,7 +411,17 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ]);
 
-    return replyPaginated(reply, employers, {
+    // Serialize Prisma Decimal fields to plain numbers (Fastify fast-json-stringify
+    // does not call toJSON() on Decimal, so they arrive in the browser as raw objects)
+    const serialized = employers.map((e) => ({
+      ...e,
+      ratingScore: e.ratingScore != null ? parseFloat(e.ratingScore.toString()) : null,
+      reliabilityScore: parseFloat(e.reliabilityScore.toString()),
+      responseRate: parseFloat(e.responseRate.toString()),
+      commissionRate: parseFloat(e.commissionRate.toString()),
+    }));
+
+    return replyPaginated(reply, serialized, {
       total,
       page: query.page,
       limit: query.limit,
@@ -395,7 +439,21 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     const { employer, gallery, totalShifts } = pack;
-    return replyOk(reply, { ...employer, gallery, totalShifts });
+    // Serialize Prisma Decimal fields to plain numbers
+    const serialized = {
+      ...employer,
+      ratingScore: employer.ratingScore != null ? parseFloat(employer.ratingScore.toString()) : null,
+      reliabilityScore: parseFloat(employer.reliabilityScore.toString()),
+      responseRate: parseFloat(employer.responseRate.toString()),
+      commissionRate: parseFloat(employer.commissionRate.toString()),
+      vacancies: employer.vacancies.map((v) => ({
+        ...v,
+        rate: parseFloat(v.rate.toString()),
+      })),
+      gallery,
+      totalShifts,
+    };
+    return replyOk(reply, serialized);
   });
 
   // GET /employers/:id/profile — плоский объект для интеграций (те же ограничения видимости)

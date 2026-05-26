@@ -56,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const needsChat =
     isInitialized &&
     user != null &&
-    (user.activeRole === 'worker' || user.activeRole === 'employer');
+    (user.activeRole === 'worker' || user.activeRole === 'employer' || user.activeRole === 'admin');
 
   if (needsChat) {
     return <ChatInboxProvider>{children}</ChatInboxProvider>;

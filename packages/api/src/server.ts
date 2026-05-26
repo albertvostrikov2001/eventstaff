@@ -28,6 +28,7 @@ import { mediaRoutes } from './routes/media';
 import { chatRoutes } from './routes/chat';
 import { shiftActionRoutes } from './routes/shifts';
 import { paymentRoutes } from './routes/payments';
+import { subscriptionRoutes } from './routes/subscriptions';
 import { attachChatSocket } from './socket/chat-socket';
 import { processStaleShiftConfirmations } from './lib/shift-escalation';
 
@@ -162,6 +163,7 @@ async function buildApp() {
   await app.register(mediaRoutes, { prefix: '/api/v1/employer/media' });
   await app.register(chatRoutes, { prefix: '/api/v1/chat' });
   await app.register(paymentRoutes, { prefix: '/api/v1/payments' });
+  await app.register(subscriptionRoutes, { prefix: '/api/v1/subscriptions' });
 
   return app;
 }

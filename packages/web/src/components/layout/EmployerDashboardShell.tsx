@@ -12,7 +12,7 @@ import {
   Search,
   Bell,
   ImagePlus,
-  Banknote,
+  Zap,
   Briefcase,
   Send,
   ExternalLink,
@@ -52,7 +52,7 @@ export function EmployerDashboardShell({ children }: { children: React.ReactNode
       },
       { href: '/employer/messages', label: 'Сообщения', icon: MessageSquare, badge: chatUnread },
       { href: '/employer/applications', label: 'Все отклики', icon: Users },
-      { href: '/employer/payments', label: 'Оплата', icon: Banknote },
+      { href: '/employer/subscription', label: 'Подписка', icon: Zap },
       { href: '/employer/notifications', label: 'Уведомления', icon: Bell, badge: notifUnread || undefined },
       { href: '/employer/settings', label: 'Настройки', icon: Settings },
       { href: '/employer/settings/notifications', label: 'Email-рассылка', icon: Mail },
@@ -62,33 +62,32 @@ export function EmployerDashboardShell({ children }: { children: React.ReactNode
   );
 
   const sidebarFooter = (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       <Link
         href="/"
-        className="flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-[color:var(--u-emerald-light,#6ee7b7)]"
+        className="flex items-center gap-2 text-sm font-medium text-[var(--text-secondary)] transition-colors hover:text-[var(--text-primary)]"
       >
-        <ExternalLink className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+        <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
         Перейти на сайт
       </Link>
-      <div className="flex flex-col gap-2 border-t border-white/[0.08] pt-3 text-xs">
-        <Link href="/vacancies" className="text-white/45 transition hover:text-emerald-200">
-          Вакансии
-        </Link>
-        <Link href="/workers" className="text-white/45 transition hover:text-emerald-200">
-          Специалисты
-        </Link>
-        <Link href="/pricing" className="text-white/45 transition hover:text-emerald-200">
-          Тарифы
-        </Link>
+      <div className="flex flex-col gap-1.5 border-t border-[var(--border-subtle)] pt-2.5 font-mono text-[11px] tracking-[.04em] uppercase">
+        <Link href="/vacancies" className="text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)]">Вакансии</Link>
+        <Link href="/workers" className="text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)]">Специалисты</Link>
+        <Link href="/employers" className="text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)]">Работодатели</Link>
+        <Link href="/pricing" className="text-[var(--text-muted)] transition-colors hover:text-[var(--text-secondary)]">Тарифы</Link>
       </div>
     </div>
   );
 
   return (
-    <div className="flex min-h-screen bg-[linear-gradient(160deg,#0d1f17_0%,#122a1e_40%,#0a1810_100%)] text-gray-100">
+    <div
+      data-shell="dark"
+      className="flex min-h-screen text-[var(--text-primary)]"
+      style={{ background: 'linear-gradient(160deg, var(--bg-1) 0%, #0a1810 100%)' }}
+    >
       <DashboardSidebar
         items={sidebarItems}
-        logoHref="/"
+        logoHref="/employer/dashboard"
         footer={sidebarFooter}
         dark
         mobileOpen={mobileMenuOpen}
@@ -97,7 +96,7 @@ export function EmployerDashboardShell({ children }: { children: React.ReactNode
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <DashboardTopBar variant="cabinet" onMenuToggle={() => setMobileMenuOpen((v) => !v)} />
         <main className="flex-1 overflow-auto">
-          <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+          <div className="mx-auto max-w-[1100px] px-4 py-8 sm:px-8">
             <RestrictionBanner />
             {children}
           </div>

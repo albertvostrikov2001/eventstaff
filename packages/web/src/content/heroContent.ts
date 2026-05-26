@@ -14,5 +14,5 @@ export const heroContent = {
   ],
   videoSrc: '/assets/platform-intro.mp4',
   videoPoster: '/assets/video-poster.svg',
-  videoCaption: 'Узнать о платформе за 2 минуты',
+  videoCaption: 'Узнать о платформе за 1 минуту',
 } as const;

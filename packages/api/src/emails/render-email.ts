@@ -2,7 +2,9 @@ import type { InAppNotificationType } from '@prisma/client';
 import { emailShell, escapeHtml } from '@/emails/brand';
 import { applicationReplyEmail } from '@/emails/templates/application-reply.email';
 import { cancellationEmail } from '@/emails/templates/cancellation.email';
+import { chatMessageEmail } from '@/emails/templates/chat-message.email';
 import { complaintEmail } from '@/emails/templates/complaint.email';
+import { emailVerificationEmail } from '@/emails/templates/email-verification.email';
 import { invitationEmail } from '@/emails/templates/invitation.email';
 import { newApplicationEmail } from '@/emails/templates/new-application.email';
 import { passwordResetEmail } from '@/emails/templates/password-reset.email';
@@ -77,6 +79,17 @@ export function renderEmailForType(
       return passwordResetEmail({
         name: d.name ?? 'пользователь',
         resetUrl: d.resetUrl ?? '',
+      });
+    case 'NEW_CHAT_MESSAGE':
+      return chatMessageEmail({
+        senderName: d.senderName ?? 'Пользователь',
+        messagePreview: d.messagePreview ?? '',
+        ctaUrl: d.ctaUrl ?? '',
+      });
+    case 'EMAIL_VERIFICATION':
+      return emailVerificationEmail({
+        code: d.code ?? '',
+        email: d.email ?? '',
       });
     case 'PAYMENT_RECEIVED': {
       const title = 'Платёж на платформе Юнити';

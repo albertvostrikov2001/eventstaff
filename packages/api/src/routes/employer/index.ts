@@ -1,4 +1,4 @@
-import { ApplicationStatus, BusinessType, type Vacancy, Prisma, ShiftStatus, ShiftPayStatus, ShiftFailedBy } from '@prisma/client';
+import { ApplicationStatus, BookingStatus, BusinessType, type Vacancy, Prisma, ShiftStatus, ShiftPayStatus, ShiftFailedBy } from '@prisma/client';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import {
   employerProfileUpdateSchema,
@@ -18,6 +18,7 @@ import {
 } from '@/lib/shift-confirmation';
 import { WORKER_FAILURE_CODES } from '@/lib/shift-codes';
 import { ReliabilityService } from '@/services/reliability-service';
+import { SubscriptionService } from '@/services/subscription-service';
 
 function vacancyTagsAsStrings(tags: unknown): string[] | undefined {
   if (!Array.isArray(tags)) return undefined;
@@ -83,6 +84,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
     fastify.authenticate,
     fastify.requireRole(['employer']),
   ];
+  const subSvc = new SubscriptionService(fastify.prisma);
 
   // GET /dashboard/summary — ожидающие отклики (pending) и всего откликов по вакансиям работодателя
   fastify.get('/dashboard/summary', { preHandler: employerAuth }, async (request, reply) => {
@@ -455,6 +457,20 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
     });
     if (!profile) {
       return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
+    }
+
+    // ── Vacancy limit check (only for active/paused, not drafts) ──
+    if (body.status === 'active' || body.status === 'paused') {
+      const canCreate = await subSvc.canEmployerCreateVacancy(profile.id);
+      if (!canCreate.allowed) {
+        return replyFail(
+          reply,
+          403,
+          'VACANCY_LIMIT_REACHED',
+          `Вы достигли лимита активных вакансий (${canCreate.limit}) на тарифе «${canCreate.plan === 'free' ? 'Старт' : canCreate.plan}». Перейдите на тариф Бизнес или Про.`,
+          { current: canCreate.current, limit: canCreate.limit, plan: canCreate.plan },
+        );
+      }
     }
 
     const prismaStatus =
@@ -901,7 +917,11 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
 
     const application = await fastify.prisma.application.findFirst({
       where: { id },
-      include: { vacancy: true },
+      include: {
+        vacancy: {
+          include: { employer: { select: { userId: true } } },
+        },
+      },
     });
     if (!application || application.vacancy.employerId !== profile.id) {
       return replyFail(reply, 404, 'NOT_FOUND', 'Application not found');
@@ -911,6 +931,45 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       where: { id },
       data: { status: body.status as Parameters<typeof fastify.prisma.application.update>[0]['data']['status'] },
     });
+
+    // When employer confirms application → auto-create Booking + Shift
+    if (body.status === 'confirmed') {
+      const v = application.vacancy;
+      const existingBooking = await fastify.prisma.booking.findFirst({
+        where: { linkedVacancyId: v.id, workerId: application.workerId },
+      });
+      if (!existingBooking) {
+        const booking = await fastify.prisma.booking.create({
+          data: {
+            employerId: profile.id,
+            workerId: application.workerId,
+            linkedVacancyId: v.id,
+            date: v.dateStart,
+            timeStart: v.timeStart ?? null,
+            timeEnd: v.timeEnd ?? null,
+            location: v.address ?? null,
+            rate: v.rate,
+            description: v.title,
+            status: BookingStatus.confirmed,
+          },
+        });
+        // Create shift
+        const workerUser = await fastify.prisma.workerProfile.findUnique({
+          where: { id: application.workerId },
+          select: { userId: true },
+        });
+        if (workerUser) {
+          await fastify.prisma.shift.create({
+            data: {
+              bookingId: booking.id,
+              workerId: workerUser.userId,
+              employerId: request.jwtUser.sub,
+              status: ShiftStatus.PENDING,
+            },
+          });
+        }
+      }
+    }
 
     const worker = await fastify.prisma.workerProfile.findUnique({
       where: { id: application.workerId },
@@ -944,11 +1003,15 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
         }
       } else if (body.status === 'confirmed' || body.status === 'rejected') {
         const statusLabel = body.status === 'confirmed' ? 'принят' : 'отклонён';
+        const notifTitle = body.status === 'confirmed' ? 'Смена назначена' : 'Ответ по отклику';
+        const notifBody = body.status === 'confirmed'
+          ? `Работодатель «${employerName}» назначил вам смену по вакансии «${application.vacancy.title}». Перейдите в «Мои смены» чтобы принять.`
+          : `Ваш отклик на «${application.vacancy.title}» ${statusLabel}`;
         await fastify.notificationService.create({
           userId: worker.user.id,
           type: 'APPLICATION_RESPONSE',
-          title: 'Ответ по отклику',
-          body: `Ваш отклик на «${application.vacancy.title}» ${statusLabel}`,
+          title: notifTitle,
+          body: notifBody,
           data: { applicationId: id, vacancyId: application.vacancyId, status: body.status },
         });
         if (worker.user.email) {
@@ -1336,9 +1399,13 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
         include: {
           booking: {
             select: {
+              id: true,
               date: true,
               timeStart: true,
               timeEnd: true,
+              location: true,
+              rate: true,
+              description: true,
               linkedVacancy: { select: { id: true, title: true, dateStart: true } },
               worker: {
                 select: {
@@ -1521,7 +1588,8 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
 
     const limit = 20;
     const where: Prisma.ApplicationWhereInput = {
-      status: 'invited',
+      // Show all employer-initiated invitations regardless of worker's response
+      status: { in: ['invited', 'confirmed', 'rejected', 'cancelled'] },
       vacancy: { employerId: profile.id },
     };
 
@@ -1545,6 +1613,65 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       limit,
       totalPages: Math.ceil(total / limit),
     });
+  });
+
+  // PATCH /bookings/:id — employer edits shift booking details (only when shift is PENDING)
+  fastify.patch('/bookings/:id', { preHandler: employerAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = z
+      .object({
+        date: z.string().datetime().optional(),
+        timeStart: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+        timeEnd: z.string().regex(/^\d{2}:\d{2}$/).nullable().optional(),
+        location: z.string().max(500).nullable().optional(),
+        rate: z.number().positive().optional(),
+        description: z.string().max(2000).nullable().optional(),
+      })
+      .parse(request.body);
+
+    const profile = await fastify.prisma.employerProfile.findUnique({
+      where: { userId: request.jwtUser.sub },
+    });
+    if (!profile) return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
+
+    const booking = await fastify.prisma.booking.findFirst({
+      where: { id, employerId: profile.id },
+      include: {
+        shifts: { select: { id: true, status: true, workerId: true } },
+        worker: { select: { userId: true } },
+      },
+    });
+    if (!booking) return replyFail(reply, 404, 'NOT_FOUND', 'Booking not found');
+
+    const shift = booking.shifts[0];
+    if (shift && shift.status !== ShiftStatus.PENDING) {
+      return replyFail(reply, 400, 'INVALID_STATE', 'Редактировать можно только ожидающую смену');
+    }
+
+    const updated = await fastify.prisma.booking.update({
+      where: { id },
+      data: {
+        ...(body.date !== undefined && { date: new Date(body.date) }),
+        ...(body.timeStart !== undefined && { timeStart: body.timeStart }),
+        ...(body.timeEnd !== undefined && { timeEnd: body.timeEnd }),
+        ...(body.location !== undefined && { location: body.location }),
+        ...(body.rate !== undefined && { rate: body.rate }),
+        ...(body.description !== undefined && { description: body.description }),
+      },
+    });
+
+    // Notify worker about updated shift details
+    if (shift) {
+      await fastify.notificationService.create({
+        userId: booking.worker.userId,
+        type: 'SHIFT_COMPLETED',
+        title: 'Детали смены изменены',
+        body: 'Работодатель обновил информацию о вашей смене. Проверьте дату и место.',
+        data: { shiftId: shift.id, bookingId: id },
+      });
+    }
+
+    return replyOk(reply, updated);
   });
 
   // GET /shifts-for-payment — paginated

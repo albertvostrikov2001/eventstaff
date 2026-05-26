@@ -5,37 +5,38 @@ import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50',
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-40',
   {
     variants: {
       variant: {
+        /** Основная CTA — плоский accent #5bb880, тёмный текст */
         primary:
-          'bg-unity-gradient-primary text-white hover:bg-unity-gradient-primary-hover active:translate-y-0 active:shadow-none hover:shadow-[var(--u-shadow-primary-hover)] hover:-translate-y-px focus-visible:ring-[color:var(--u-emerald)]',
+          'bg-[var(--accent)] text-[var(--text-on-accent)] hover:bg-[var(--accent-hover)] active:bg-[var(--accent-active)] focus-visible:ring-[var(--accent)]',
         /** Обводка emerald, текст emerald (тёмный кабинет) */
         secondary:
-          'border border-emerald-500/55 bg-transparent text-emerald-200 hover:border-emerald-400/70 hover:bg-emerald-500/10 focus-visible:ring-[color:var(--u-emerald)]',
-        /** Светлые страницы: серая рамка */
+          'border border-[var(--border-emerald)] bg-transparent text-[var(--accent)] hover:border-[var(--accent)] hover:bg-[var(--accent-faint)] focus-visible:ring-[var(--accent)]',
+        /** Светлые страницы: серая рамка на белом фоне */
         outline:
-          'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 active:bg-gray-100 focus-visible:ring-[#2d6a4a]',
-        /** Тёмный кабинет: белая полупрозрачная рамка */
+          'border border-[var(--border-ink)] bg-white text-[var(--ink-primary)] hover:bg-gray-50 active:bg-gray-100 focus-visible:ring-[var(--accent)]',
+        /** Тёмный кабинет: полупрозрачная рамка */
         muted:
-          'border border-white/20 bg-transparent text-white hover:border-white/35 hover:bg-white/[0.06] focus-visible:ring-white/40',
+          'border border-[var(--border-default)] bg-[rgba(255,255,255,0.04)] text-[var(--text-primary)] hover:border-[var(--border-strong)] hover:bg-[rgba(255,255,255,0.08)] focus-visible:ring-[var(--accent)]',
         /** Светлый ghost */
         ghost:
-          'text-gray-700 hover:bg-gray-100 active:bg-gray-200 focus-visible:ring-[#2d6a4a] bg-transparent',
-        /** Тёмный ghost: без фона, белый текст */
+          'bg-transparent text-[var(--ink-secondary)] hover:bg-[rgba(0,0,0,0.04)] hover:text-[var(--ink-primary)] active:bg-[rgba(0,0,0,0.07)] focus-visible:ring-[var(--accent)]',
+        /** Тёмный ghost */
         ghostInverse:
-          'bg-transparent text-white hover:bg-white/[0.06] focus-visible:ring-white/30 border-0 shadow-none',
+          'bg-transparent text-[var(--text-secondary)] hover:bg-[rgba(255,255,255,0.05)] hover:text-[var(--text-primary)] focus-visible:ring-[var(--accent)] border-0 shadow-none',
         danger:
-          'bg-error text-white hover:bg-red-600 active:bg-red-700 focus-visible:ring-red-500 border border-transparent',
+          'bg-[var(--state-danger-bg)] text-[var(--state-danger)] border border-[rgba(217,106,106,0.3)] hover:bg-[rgba(217,106,106,0.20)] focus-visible:ring-[var(--state-danger)]',
         link:
-          'border-0 bg-transparent p-0 h-auto font-medium text-[color:var(--u-emerald)] underline-offset-4 hover:underline focus-visible:ring-[color:var(--u-emerald)] shadow-none',
+          'border-0 bg-transparent p-0 h-auto font-medium text-[var(--accent)] underline-offset-4 hover:underline focus-visible:ring-[var(--accent)] shadow-none',
       },
       size: {
-        sm: 'rounded-[6px] px-3 py-1.5 text-xs min-h-0',
-        md: 'rounded-[12px] px-4 py-2.5 text-sm',
-        lg: 'rounded-[12px] px-6 py-3 text-base',
-        icon: 'h-10 w-10 rounded-[12px] p-0',
+        sm:   'h-8  rounded-[var(--r-3)] px-3 text-[13px]',
+        md:   'h-10 rounded-[var(--r-4)] px-4 text-sm',
+        lg:   'h-12 rounded-[var(--r-4)] px-[22px] text-[15px]',
+        icon: 'h-10 w-10 rounded-[var(--r-4)] p-0',
       },
     },
     defaultVariants: {

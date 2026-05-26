@@ -126,7 +126,11 @@ async function request<T>(endpoint: string, options: FetchOptions = {}): Promise
     if (qs) url += `?${qs}`;
   }
 
-  const headers: HeadersInit = { 'Content-Type': 'application/json', ...init.headers };
+  const hasBody = init.body !== undefined && init.body !== null;
+  const headers: HeadersInit = {
+    ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
+    ...init.headers,
+  };
 
   let res: Response;
   try {

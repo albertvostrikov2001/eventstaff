@@ -1,6 +1,8 @@
 import type { InAppNotificationType, PrismaClient } from '@prisma/client';
 import type { Redis } from 'ioredis';
 import { Resend } from 'resend';
+import nodemailer from 'nodemailer';
+import type { Transporter } from 'nodemailer';
 import type { Queue } from 'bullmq';
 import { renderEmailForType } from '@/emails/render-email';
 import { maskEmail } from '@/lib/email-mask';
@@ -22,16 +24,39 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-function fromHeader(): string {
-  const name = process.env.RESEND_FROM_NAME?.trim() || 'Юнити';
+function fromHeader(): { name: string; email: string; formatted: string } {
+  const name = process.env.RESEND_FROM_NAME?.trim() ||
+    process.env.SMTP_FROM_NAME?.trim() ||
+    'Юнити';
   const email =
     process.env.RESEND_FROM_EMAIL?.trim() ||
+    process.env.SMTP_FROM_EMAIL?.trim() ||
     process.env.EMAIL_FROM?.trim() ||
+    process.env.SMTP_USER?.trim() ||
     '';
   if (!email) {
-    throw new Error('RESEND_FROM_EMAIL or EMAIL_FROM must be set');
+    throw new Error('EMAIL_FROM (or SMTP_FROM_EMAIL / SMTP_USER) must be set');
   }
-  return `${name} <${email}>`;
+  return { name, email, formatted: `${name} <${email}>` };
+}
+
+/** Build nodemailer SMTP transporter from env vars if configured */
+function buildSmtpTransporter(): Transporter | null {
+  const host = process.env.SMTP_HOST?.trim();
+  const user = process.env.SMTP_USER?.trim();
+  const pass = process.env.SMTP_PASS?.trim();
+  if (!host || !user || !pass) return null;
+
+  const port = parseInt(process.env.SMTP_PORT?.trim() ?? '465', 10);
+  const secure = process.env.SMTP_SECURE !== 'false'; // default true (SSL)
+
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: { user, pass },
+    tls: { rejectUnauthorized: false },
+  });
 }
 
 type PrefKey =
@@ -40,7 +65,8 @@ type PrefKey =
   | 'emailReview'
   | 'emailComplaint'
   | 'emailNewApplication'
-  | 'emailApplicationReply';
+  | 'emailApplicationReply'
+  | 'emailChatMessage';
 
 function prefFieldForType(type: InAppNotificationType): PrefKey | null {
   switch (type) {
@@ -56,6 +82,8 @@ function prefFieldForType(type: InAppNotificationType): PrefKey | null {
       return 'emailNewApplication';
     case 'APPLICATION_RESPONSE':
       return 'emailApplicationReply';
+    case 'NEW_CHAT_MESSAGE':
+      return 'emailChatMessage';
     default:
       return null;
   }
@@ -63,6 +91,7 @@ function prefFieldForType(type: InAppNotificationType): PrefKey | null {
 
 export class EmailService {
   private resend: Resend | null;
+  private smtp: Transporter | null;
 
   constructor(
     private readonly prisma: PrismaClient,
@@ -72,6 +101,15 @@ export class EmailService {
   ) {
     const key = process.env.RESEND_API_KEY?.trim();
     this.resend = key ? new Resend(key) : null;
+    this.smtp = buildSmtpTransporter();
+
+    if (!this.resend && !this.smtp) {
+      this.log.warn('No email transport configured. Set RESEND_API_KEY or SMTP_HOST+SMTP_USER+SMTP_PASS in .env');
+    } else if (this.smtp && !this.resend) {
+      this.log.info('Email transport: SMTP');
+    } else if (this.resend) {
+      this.log.info('Email transport: Resend');
+    }
   }
 
   async canSend(userId: string, type: NotificationType): Promise<boolean> {
@@ -172,21 +210,21 @@ export class EmailService {
   async send(params: EmailJob): Promise<void> {
     const { logId, to, type, templateData } = params;
 
-    if (!this.resend) {
+    if (!this.resend && !this.smtp) {
       await this.prisma.emailLog.update({
         where: { id: logId },
         data: {
           status: 'FAILED',
-          errorText: 'RESEND_API_KEY is not configured',
+          errorText: 'No email transport configured (missing RESEND_API_KEY or SMTP settings)',
         },
       });
-      this.log.error('Resend is not configured (missing RESEND_API_KEY)');
+      this.log.error('No email transport configured');
       return;
     }
 
-    let from: string;
+    let fromInfo: { name: string; email: string; formatted: string };
     try {
-      from = fromHeader();
+      fromInfo = fromHeader();
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Invalid from header';
       await this.prisma.emailLog.update({
@@ -203,53 +241,66 @@ export class EmailService {
       data: { subject },
     });
 
+    // Use Resend if configured, otherwise fall back to SMTP
+    if (this.resend) {
+      await this.sendViaResend({ logId, to, subject, html, from: fromInfo.formatted });
+    } else if (this.smtp) {
+      await this.sendViaSmtp({ logId, to, subject, html, from: fromInfo.formatted });
+    }
+  }
+
+  private async sendViaResend(params: { logId: string; to: string; subject: string; html: string; from: string }): Promise<void> {
+    const { logId, to, subject, html, from } = params;
     const waits = [60_000, 300_000];
     let lastErr: unknown;
 
     for (let attempt = 0; attempt < 3; attempt++) {
-      if (attempt > 0) {
-        await sleep(waits[attempt - 1] ?? 900_000);
-      }
+      if (attempt > 0) await sleep(waits[attempt - 1] ?? 900_000);
       try {
-        const { data, error } = await this.resend.emails.send({
-          from,
-          to: [to],
-          subject,
-          html,
-        });
-        if (error) {
-          throw new Error(error.message);
-        }
+        const { data, error } = await this.resend!.emails.send({ from, to: [to], subject, html });
+        if (error) throw new Error(error.message);
         await this.prisma.emailLog.update({
           where: { id: logId },
-          data: {
-            status: 'SENT',
-            providerMessageId: data?.id ?? null,
-            sentAt: new Date(),
-            errorText: null,
-          },
+          data: { status: 'SENT', providerMessageId: data?.id ?? null, sentAt: new Date(), errorText: null },
         });
         this.log.info({ logId, to: maskEmail(to), providerId: data?.id }, 'Email sent via Resend');
         return;
       } catch (err) {
         lastErr = err;
-        const message = err instanceof Error ? err.message : String(err);
-        this.log.warn(
-          { logId, attempt: attempt + 1, to: maskEmail(to), err: message },
-          'Resend send attempt failed',
-        );
+        this.log.warn({ logId, attempt: attempt + 1, to: maskEmail(to), err: err instanceof Error ? err.message : String(err) }, 'Resend attempt failed');
       }
     }
 
     const finalMsg = lastErr instanceof Error ? lastErr.message : String(lastErr);
-    await this.prisma.emailLog.update({
-      where: { id: logId },
-      data: {
-        status: 'FAILED',
-        errorText: finalMsg.slice(0, 2000),
-      },
-    });
-    this.log.error({ logId, to: maskEmail(to), err: finalMsg }, 'Email failed after retries');
+    await this.prisma.emailLog.update({ where: { id: logId }, data: { status: 'FAILED', errorText: finalMsg.slice(0, 2000) } });
+    this.log.error({ logId, to: maskEmail(to), err: finalMsg }, 'Email failed after retries (Resend)');
+  }
+
+  private async sendViaSmtp(params: { logId: string; to: string; subject: string; html: string; from: string }): Promise<void> {
+    const { logId, to, subject, html, from } = params;
+    const waits = [15_000, 60_000];
+    let lastErr: unknown;
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) await sleep(waits[attempt - 1] ?? 120_000);
+      try {
+        const info = await this.smtp!.sendMail({ from, to, subject, html });
+        const msgId = (info as { messageId?: string }).messageId ?? null;
+        await this.prisma.emailLog.update({
+          where: { id: logId },
+          data: { status: 'SENT', providerMessageId: msgId, sentAt: new Date(), errorText: null },
+        });
+        this.log.info({ logId, to: maskEmail(to), messageId: msgId }, 'Email sent via SMTP');
+        return;
+      } catch (err) {
+        lastErr = err;
+        this.log.warn({ logId, attempt: attempt + 1, to: maskEmail(to), err: err instanceof Error ? err.message : String(err) }, 'SMTP attempt failed');
+      }
+    }
+
+    const finalMsg = lastErr instanceof Error ? lastErr.message : String(lastErr);
+    await this.prisma.emailLog.update({ where: { id: logId }, data: { status: 'FAILED', errorText: finalMsg.slice(0, 2000) } });
+    this.log.error({ logId, to: maskEmail(to), err: finalMsg }, 'Email failed after retries (SMTP)');
   }
 
   /** Re-queue a failed send without applying rate limits again. */
@@ -267,12 +318,7 @@ export class EmailService {
 
     await this.prisma.emailLog.update({
       where: { id: logId },
-      data: {
-        status: 'PENDING',
-        errorText: null,
-        providerMessageId: null,
-        sentAt: null,
-      },
+      data: { status: 'PENDING', errorText: null, providerMessageId: null, sentAt: null },
     });
 
     await this.emailQueue.add(

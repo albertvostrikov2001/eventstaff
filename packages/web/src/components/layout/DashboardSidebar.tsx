@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface SidebarItem {
   href: string;
@@ -19,8 +20,26 @@ interface DashboardSidebarProps {
   dark?: boolean;
   mobileOpen?: boolean;
   onMobileClose?: () => void;
-  /** Содержимое фиксированного футера (например ссылка на публичный сайт) */
   footer?: ReactNode;
+}
+
+/** Geometric brand mark — matches design system */
+function BrandMark() {
+  return (
+    <div
+      className="relative h-6 w-6 shrink-0 rounded-[6px]"
+      style={{ background: 'linear-gradient(135deg, var(--accent) 0%, #1f5a3d 100%)' }}
+    >
+      <div
+        className="absolute rounded-[2px]"
+        style={{ inset: '7px', background: 'var(--bg-0)' }}
+      />
+      <div
+        className="absolute rounded-[1px]"
+        style={{ inset: '10px', background: 'var(--accent)' }}
+      />
+    </div>
+  );
 }
 
 function NavLinks({
@@ -34,7 +53,7 @@ function NavLinks({
 }) {
   const pathname = usePathname();
   return (
-    <nav className="space-y-1 p-4">
+    <nav className="flex flex-col gap-0.5 p-2">
       {items.map((item) => {
         const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
         return (
@@ -42,20 +61,28 @@ function NavLinks({
             key={item.href}
             href={item.href}
             onClick={onLinkClick}
-            className={`flex items-center gap-3 rounded-input px-3 py-2 text-sm font-medium transition ${
+            className={cn(
+              'relative flex items-center gap-2.5 rounded-[var(--r-3)] border-l-[3px] px-3 py-[9px] text-sm font-medium transition-all duration-[120ms]',
               isActive
                 ? dark
-                  ? 'border-l-[3px] border-primary-500 bg-white/[0.08] pl-[9px] text-white'
-                  : 'bg-primary-50 text-primary-700'
+                  ? 'border-[var(--accent)] bg-[var(--accent-faint)] pl-[9px] text-[var(--accent)]'
+                  : 'border-primary-500 bg-primary-50 pl-[9px] text-primary-700'
                 : dark
-                ? 'border-l-[3px] border-transparent pl-[9px] text-white/60 hover:bg-white/[0.05] hover:text-white/90'
-                : 'text-gray-600 hover:bg-gray-50 hover:text-primary-600'
-            }`}
+                ? 'border-transparent pl-[9px] text-[var(--text-secondary)] hover:bg-white/[0.04] hover:text-[var(--text-primary)]'
+                : 'border-transparent pl-[9px] text-gray-600 hover:bg-gray-50 hover:text-primary-600',
+            )}
           >
             <item.icon className="h-4 w-4 shrink-0" />
             <span className="min-w-0 flex-1 truncate">{item.label}</span>
             {item.badge != null && item.badge > 0 && (
-              <span className="shrink-0 rounded-full bg-primary-500 px-1.5 py-0.5 text-xs font-bold leading-none text-white">
+              <span
+                className={cn(
+                  'ml-auto shrink-0 min-w-[18px] rounded-full px-1.5 py-0.5 text-center font-mono text-[10px] font-semibold leading-none tracking-[.04em]',
+                  dark
+                    ? 'bg-[var(--accent)] text-[var(--text-on-accent)]'
+                    : 'bg-primary-500 text-white',
+                )}
+              >
                 {item.badge > 99 ? '99+' : item.badge}
               </span>
             )}
@@ -74,7 +101,6 @@ export function DashboardSidebar({
   onMobileClose,
   footer,
 }: DashboardSidebarProps) {
-  // Close on Escape
   useEffect(() => {
     if (!mobileOpen) return;
     const handler = (e: KeyboardEvent) => {
@@ -84,82 +110,82 @@ export function DashboardSidebar({
     return () => document.removeEventListener('keydown', handler);
   }, [mobileOpen, onMobileClose]);
 
-  // Prevent body scroll when drawer open
   useEffect(() => {
-    if (mobileOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
+    document.body.style.overflow = mobileOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
   }, [mobileOpen]);
 
-  const cabinetBrandLink = (
-    <Link href={logoHref} className="flex items-center gap-2" onClick={onMobileClose}>
-      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-500">
-        <span className="text-sm font-bold text-white">U</span>
-      </div>
-      <span className={`font-heading text-lg font-bold ${dark ? 'text-white' : 'text-gray-900'}`}>
+  const brandLink = (
+    <Link href={logoHref} className="flex items-center gap-2.5" onClick={onMobileClose}>
+      <BrandMark />
+      <span
+        className={cn(
+          'font-display text-[17px] font-semibold tracking-[-0.01em]',
+          dark ? 'text-[var(--text-primary)]' : 'text-gray-900',
+        )}
+      >
         Юнити
       </span>
     </Link>
   );
 
-  const logoSectionDesktop = (
+  const logoRow = (withClose: boolean) => (
     <div
-      className={`flex h-16 items-center gap-2 border-b px-6 ${
-        dark ? 'border-white/[0.08]' : 'border-gray-200'
-      }`}
+      className={cn(
+        'flex h-16 items-center gap-2 border-b px-5',
+        dark ? 'border-[var(--border-subtle)]' : 'border-gray-200',
+      )}
     >
-      {cabinetBrandLink}
+      {brandLink}
+      {withClose && (
+        <button
+          onClick={onMobileClose}
+          aria-label="Закрыть меню"
+          className={cn(
+            'ml-auto shrink-0 rounded-[var(--r-3)] p-1.5 transition-colors',
+            dark
+              ? 'text-[var(--text-secondary)] hover:bg-white/10 hover:text-[var(--text-primary)]'
+              : 'text-gray-500 hover:bg-gray-100',
+          )}
+        >
+          <X className="h-5 w-5" />
+        </button>
+      )}
     </div>
   );
 
-  const logoSectionMobile = (
+  const footerSection = footer != null ? (
     <div
-      className={`flex h-16 items-center justify-between gap-2 border-b px-6 ${
-        dark ? 'border-white/[0.08]' : 'border-gray-200'
-      }`}
+      className={cn(
+        'shrink-0 border-t p-4',
+        dark ? 'border-[var(--border-subtle)]' : 'border-gray-200',
+      )}
     >
-      {cabinetBrandLink}
-      <button
-        onClick={onMobileClose}
-        aria-label="Закрыть меню"
-        className={`shrink-0 rounded-full p-1.5 ${dark ? 'text-white/60 hover:bg-white/10 hover:text-white' : 'text-gray-500 hover:bg-gray-100'}`}
-      >
-        <X className="h-5 w-5" />
-      </button>
+      {footer}
     </div>
-  );
+  ) : null;
 
   return (
     <>
       {/* Desktop sidebar */}
       <aside
-        className={`hidden w-64 shrink-0 flex-col border-r lg:flex ${
-          dark ? 'border-white/[0.08] bg-white/[0.04]' : 'border-gray-200 bg-white'
-        }`}
+        className={cn(
+          'hidden w-60 shrink-0 flex-col border-r lg:flex',
+          dark
+            ? 'border-[var(--border-subtle)] bg-black/25'
+            : 'border-gray-200 bg-white',
+        )}
       >
-        {logoSectionDesktop}
+        {logoRow(false)}
         <div className="flex min-h-0 flex-1 flex-col">
           <div className="flex-1 overflow-y-auto">
             <NavLinks items={items} dark={dark} />
           </div>
-          {footer != null ? (
-            <div
-              className={`shrink-0 border-t p-4 ${
-                dark ? 'border-white/[0.08]' : 'border-gray-200'
-              }`}
-            >
-              {footer}
-            </div>
-          ) : null}
+          {footerSection}
         </div>
       </aside>
 
-      {/* Mobile drawer backdrop */}
+      {/* Mobile backdrop */}
       {mobileOpen && (
         <div
           className="fixed inset-0 z-40 bg-black/60 lg:hidden"
@@ -168,27 +194,23 @@ export function DashboardSidebar({
         />
       )}
 
-      {/* Mobile drawer panel */}
+      {/* Mobile drawer */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 flex-col transform transition-transform duration-300 ease-in-out lg:hidden ${
-          mobileOpen ? 'translate-x-0' : '-translate-x-full'
-        } ${dark ? 'border-r border-white/[0.08] bg-[#0d1f17]' : 'border-r border-gray-200 bg-white'}`}
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 flex w-72 flex-col transform transition-transform duration-300 ease-in-out lg:hidden',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full',
+          dark
+            ? 'border-r border-[var(--border-subtle)] bg-[var(--bg-1)]'
+            : 'border-r border-gray-200 bg-white',
+        )}
         aria-label="Мобильная навигация"
       >
-        {logoSectionMobile}
+        {logoRow(true)}
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="flex-1 overflow-y-auto">
             <NavLinks items={items} dark={dark} onLinkClick={onMobileClose} />
           </div>
-          {footer != null ? (
-            <div
-              className={`shrink-0 border-t p-4 ${
-                dark ? 'border-white/[0.08]' : 'border-gray-200'
-              }`}
-            >
-              {footer}
-            </div>
-          ) : null}
+          {footerSection}
         </div>
       </aside>
     </>

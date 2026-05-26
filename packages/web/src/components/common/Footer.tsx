@@ -54,10 +54,7 @@ export function Footer() {
                 height={40}
                 className="block shrink-0 object-contain"
               />
-              <span
-                className="text-lg font-semibold text-white"
-                style={{ fontFamily: 'var(--font-playfair, "Playfair Display", serif)' }}
-              >
+              <span className="font-display text-[17px] font-semibold tracking-[-0.01em] text-[var(--text-primary)]">
                 Юнити
               </span>
             </Link>
@@ -84,7 +81,7 @@ export function Footer() {
           {/* Link columns */}
           {Object.values(FOOTER_LINKS).map((section) => (
             <div key={section.title}>
-              <h3 className="text-sm font-semibold text-white mb-4">{section.title}</h3>
+              <h3 className="mb-4 font-mono text-[11px] font-medium uppercase tracking-[.10em] text-[var(--text-muted)]">{section.title}</h3>
               <ul className="space-y-2.5">
                 {section.links.map((link) => (
                   <li key={link.href}>

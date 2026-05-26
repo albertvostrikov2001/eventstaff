@@ -12,15 +12,17 @@ interface Prefs {
   emailComplaint: boolean;
   emailNewApplication: boolean;
   emailApplicationReply: boolean;
+  emailChatMessage: boolean;
 }
 
 const ROWS: { key: keyof Prefs; label: string }[] = [
+  { key: 'emailChatMessage', label: 'Новые сообщения в чате' },
   { key: 'emailInvitation', label: 'Приглашения на вакансии' },
+  { key: 'emailApplicationReply', label: 'Ответы на ваши отклики' },
   { key: 'emailCancellation', label: 'Отмены смен и откликов' },
   { key: 'emailReview', label: 'Отзывы и оценки' },
   { key: 'emailComplaint', label: 'Жалобы и обращения' },
   { key: 'emailNewApplication', label: 'Новые отклики' },
-  { key: 'emailApplicationReply', label: 'Ответы на ваши отклики' },
 ];
 
 export default function WorkerNotificationSettingsPage() {

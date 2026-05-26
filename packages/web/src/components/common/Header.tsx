@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { href: '/employers',     label: 'Работодатели' },
   { href: '/pricing',       label: 'Тарифы' },
   { href: '/how-it-works',  label: 'Как работает' },
+  { href: '/contacts',      label: 'Контакты' },
 ];
 
 function resolveCabinetHref(user: AuthUser): string {
@@ -72,11 +73,10 @@ export function Header() {
 
   const navLinkClass = (href: string) =>
     cn(
-      'text-[0.9375rem] font-medium transition-colors duration-200',
+      'text-[15px] font-medium transition-colors duration-[var(--d-micro)] py-1.5',
       pathname === href
-        ? 'text-white border-b-2 pb-0.5'
-        : 'text-[color:var(--u-text-secondary)] hover:text-white',
-      pathname === href && 'border-[color:var(--u-emerald-light)]',
+        ? 'text-[var(--text-primary)] border-b-2 border-[var(--accent-hover)] pb-1'
+        : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
     );
 
   return (
@@ -109,7 +109,7 @@ export function Header() {
         <div className="hidden lg:flex min-w-0 items-center gap-2">
           <a
             href={SITE_PHONE_TEL}
-            className="flex items-center gap-1.5 text-[0.875rem] font-medium transition-colors text-[color:var(--u-text-secondary)] hover:text-white"
+            className="flex items-center gap-1.5 text-sm transition-colors text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
             aria-label={`Позвонить: ${SITE_PHONE_DISPLAY}`}
           >
             <Phone className="h-4 w-4 shrink-0" aria-hidden="true" />
@@ -124,7 +124,7 @@ export function Header() {
             <>
               <Link
                 href="/auth/login"
-                className="rounded-[var(--u-radius-md)] px-3.5 py-2 text-[0.875rem] font-medium transition-colors text-[rgba(255,255,255,0.85)] hover:bg-[rgba(255,255,255,0.06)]"
+                className="rounded-[var(--r-4)] px-3.5 py-2 text-[0.875rem] font-medium transition-colors text-[var(--text-secondary)] hover:bg-white/[0.06] hover:text-[var(--text-primary)]"
               >
                 Войти
               </Link>
@@ -138,7 +138,7 @@ export function Header() {
         {/* Mobile burger */}
         <button
           onClick={() => setMobileMenuOpen((v) => !v)}
-          className="lg:hidden rounded-[var(--u-radius-md)] p-2 transition-colors text-[color:var(--u-text-secondary)] hover:bg-[rgba(255,255,255,0.08)] hover:text-white"
+          className="lg:hidden rounded-[var(--r-3)] p-2 transition-colors text-[var(--text-secondary)] hover:bg-white/[0.08] hover:text-[var(--text-primary)]"
           aria-label={mobileMenuOpen ? 'Закрыть меню' : 'Открыть меню'}
           aria-expanded={mobileMenuOpen}
           aria-controls="mobile-drawer"
@@ -194,10 +194,10 @@ export function Header() {
                   href={item.href}
                   onClick={() => setMobileMenuOpen(false)}
                   className={cn(
-                    'block rounded-[var(--u-radius-md)] px-4 py-3 text-[1.125rem] font-medium transition-colors',
+                    'block rounded-[var(--r-3)] px-4 py-3 text-[1.0625rem] font-medium transition-colors',
                     pathname === item.href
-                      ? 'text-[color:var(--u-emerald-light)] bg-[rgba(255,255,255,0.05)]'
-                      : 'text-[color:var(--u-text-secondary)] hover:text-white hover:bg-[rgba(255,255,255,0.05)]',
+                      ? 'text-[var(--accent)] bg-[var(--accent-faint)]'
+                      : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/[0.05]',
                   )}
                 >
                   {item.label}
@@ -221,8 +221,8 @@ export function Header() {
                 <Link
                   href={resolveCabinetHref(user)}
                   onClick={() => setMobileMenuOpen(false)}
-                  className="block w-full text-center rounded-[var(--u-radius-md)] px-4 py-3 text-[0.875rem] font-semibold text-white transition-colors"
-                  style={{ background: 'var(--u-gradient-primary)' }}
+                  className="block w-full text-center rounded-[var(--r-4)] px-4 py-3 text-sm font-medium transition-colors"
+                  style={{ background: 'var(--accent)', color: 'var(--text-on-accent)' }}
                 >
                   Кабинет
                 </Link>
@@ -231,16 +231,15 @@ export function Header() {
                   <Link
                     href="/auth/login"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="block w-full text-center rounded-[var(--u-radius-md)] px-4 py-3 text-[0.875rem] font-medium border transition-colors text-[rgba(255,255,255,0.85)] hover:text-white"
-                    style={{ borderColor: 'var(--u-border-hover)' }}
+                    className="block w-full text-center rounded-[var(--r-4)] px-4 py-3 text-sm font-medium border border-[var(--border-strong)] text-[var(--text-secondary)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
                   >
                     Войти
                   </Link>
                   <Link
                     href="/auth/register"
                     onClick={() => setMobileMenuOpen(false)}
-                    className="block w-full text-center rounded-[var(--u-radius-md)] px-4 py-3 text-[0.875rem] font-semibold text-white transition-colors"
-                    style={{ background: 'var(--u-gradient-primary)' }}
+                    className="block w-full text-center rounded-[var(--r-4)] px-4 py-3 text-sm font-medium transition-colors"
+                    style={{ background: 'var(--accent)', color: 'var(--text-on-accent)' }}
                   >
                     Регистрация
                   </Link>

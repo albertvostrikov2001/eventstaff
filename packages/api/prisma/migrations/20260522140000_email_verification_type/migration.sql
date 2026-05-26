@@ -1,0 +1,2 @@
+-- Add EMAIL_VERIFICATION to InAppNotificationType enum
+ALTER TYPE "InAppNotificationType" ADD VALUE IF NOT EXISTS 'EMAIL_VERIFICATION';

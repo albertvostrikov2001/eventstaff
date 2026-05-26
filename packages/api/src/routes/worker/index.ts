@@ -1,17 +1,19 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { Prisma, ShiftStatus, StaffCategory } from '@prisma/client';
+import { BookingStatus, Prisma, ShiftStatus, StaffCategory } from '@prisma/client';
 import { workerProfileUpdateSchema } from '@unity/shared';
 import { getUserRestriction, restrictedReply } from '@/lib/restriction';
 import { publicSiteUrl } from '@/lib/public-site-url';
 import { replyFail, replyOk, replyPaginated } from '../../lib/api-reply';
 import { findWorkerScheduleConflicts } from '@/lib/worker-schedule-conflict';
+import { SubscriptionService } from '@/services/subscription-service';
 
 export const workerRoutes: FastifyPluginAsync = async (fastify) => {
   const workerAuth = [
     fastify.authenticate,
     fastify.requireRole(['worker']),
   ];
+  const subSvc = new SubscriptionService(fastify.prisma);
 
   // GET /dashboard/summary
   fastify.get('/dashboard/summary', { preHandler: workerAuth }, async (request, reply) => {
@@ -286,6 +288,38 @@ export const workerRoutes: FastifyPluginAsync = async (fastify) => {
       data: { status: newStatus },
     });
 
+    // When worker accepts invitation → auto-create Booking + Shift if not yet existing
+    if (body.action === 'ACCEPT') {
+      const v = application.vacancy;
+      const existingBooking = await fastify.prisma.booking.findFirst({
+        where: { linkedVacancyId: v.id, workerId: profile.id },
+      });
+      if (!existingBooking) {
+        const booking = await fastify.prisma.booking.create({
+          data: {
+            employerId: v.employer.id,
+            workerId: profile.id,
+            linkedVacancyId: v.id,
+            date: v.dateStart,
+            timeStart: v.timeStart ?? null,
+            timeEnd: v.timeEnd ?? null,
+            location: v.address ?? null,
+            rate: v.rate,
+            description: v.title,
+            status: BookingStatus.confirmed,
+          },
+        });
+        await fastify.prisma.shift.create({
+          data: {
+            bookingId: booking.id,
+            workerId: request.jwtUser.sub,
+            employerId: v.employer.userId,
+            status: ShiftStatus.PENDING,
+          },
+        });
+      }
+    }
+
     const employerUserId = application.vacancy.employer.user?.id;
     if (employerUserId) {
       const workerName = `${profile.firstName} ${profile.lastName}`.trim() || 'Работник';
@@ -370,6 +404,18 @@ export const workerRoutes: FastifyPluginAsync = async (fastify) => {
     });
     if (!profile) {
       return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
+    }
+
+    // ── Application limit check ──
+    const canApply = await subSvc.canWorkerApply(profile.id);
+    if (!canApply.allowed) {
+      return replyFail(
+        reply,
+        403,
+        'APPLICATION_LIMIT_REACHED',
+        `Вы исчерпали лимит откликов на этот месяц (${canApply.limit}). Перейдите на Premium для безлимитных откликов.`,
+        { used: canApply.used, limit: canApply.limit, plan: canApply.plan },
+      );
     }
 
     const vacancy = await fastify.prisma.vacancy.findUnique({ where: { id: body.vacancyId } });

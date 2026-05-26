@@ -5,47 +5,49 @@ export type EmployerFieldTone = 'default' | 'error' | 'success';
 
 export function employerFormSectionTitleClass(variant: EmployerFormVariant) {
   return variant === 'cabinet'
-    ? 'mb-5 text-xs font-semibold uppercase tracking-[0.12em] text-white/40'
+    ? 'mb-4 font-mono text-[11px] font-medium uppercase tracking-[.10em] text-[var(--text-muted)]'
     : 'mb-4 text-base font-semibold text-gray-900';
 }
 
 export function employerFormSectionShellClass(variant: EmployerFormVariant) {
   return variant === 'cabinet'
-    ? 'rounded-[14px] border border-white/[0.08] bg-white/[0.04] p-6'
-    : 'rounded-card border border-gray-200 bg-white p-6 shadow-sm';
+    ? 'rounded-[var(--r-5)] border border-[var(--border-subtle)] bg-[var(--card-bg,rgba(255,255,255,.04))] p-6'
+    : 'rounded-[var(--r-5)] border border-[var(--card-border,rgba(0,0,0,.08))] bg-[var(--card-bg,#fff)] p-6 shadow-sm';
 }
 
 export function employerFormHeadingClass(variant: EmployerFormVariant) {
   return variant === 'cabinet'
-    ? 'text-2xl font-bold text-white'
-    : 'text-2xl font-bold text-gray-900';
+    ? 'text-2xl font-medium tracking-[-0.01em] text-[var(--text-primary)]'
+    : 'text-2xl font-medium tracking-[-0.01em] text-[var(--ink-primary)]';
 }
 
 export function employerFormSubheadingClass(variant: EmployerFormVariant) {
   return variant === 'cabinet'
-    ? 'mt-1 text-sm text-white/55'
-    : 'mt-1 text-sm text-gray-500';
+    ? 'mt-1 text-sm text-[var(--text-secondary)]'
+    : 'mt-1 text-sm text-[var(--ink-secondary)]';
 }
 
 export function formLabelCn(variant: EmployerFormVariant) {
   return variant === 'cabinet'
-    ? 'mb-1.5 block text-[0.8125rem] font-medium tracking-[0.01em] text-white/70'
-    : 'mb-1.5 block text-sm font-medium text-gray-700';
+    ? 'mb-1.5 flex items-center gap-1 text-[13px] font-medium text-[var(--text-primary)]'
+    : 'mb-1.5 flex items-center gap-1 text-sm font-medium text-[var(--ink-primary)]';
 }
 
 export function formRequiredAsteriskCn(variant: EmployerFormVariant) {
   return variant === 'cabinet'
-    ? 'ml-0.5 text-[color:var(--u-emerald-light,#3d8a62)]'
-    : 'ml-0.5 text-error';
+    ? 'ml-0.5 text-[var(--accent)]'
+    : 'ml-0.5 text-[var(--state-danger)]';
 }
 
 const cabinetControlBase =
-  'w-full rounded-[10px] border px-[14px] py-3 text-[0.9375rem] transition-all duration-150 ease-linear outline-none text-white bg-white/[0.04] border-white/[0.12] placeholder:text-white/30 [color-scheme:dark]';
+  'w-full rounded-[var(--r-2)] border px-3.5 py-2.5 text-[14px] leading-snug transition-[border-color,box-shadow] duration-[var(--d-micro)] outline-none ' +
+  'bg-[rgba(255,255,255,.03)] border-[var(--border-default)] text-[var(--text-primary)] ' +
+  'placeholder:text-[var(--text-muted)] [color-scheme:dark]';
 
 const defaultControlBase =
-  'mt-1 block w-full rounded-input border px-3 py-2.5 text-sm shadow-sm transition focus:outline-none focus:ring-1';
+  'block w-full rounded-[var(--r-2)] border px-3.5 py-2.5 text-sm transition-[border-color,box-shadow] duration-[var(--d-micro)] outline-none ' +
+  'bg-white border-[rgba(0,0,0,.10)] text-[var(--ink-primary)] placeholder:text-[var(--ink-muted)]';
 
-/** Стилизованный контрол: текстовые поля, select, textarea (без mt). */
 export function formControlCn(
   variant: EmployerFormVariant,
   tone: EmployerFieldTone,
@@ -57,33 +59,38 @@ export function formControlCn(
     return cn(
       defaultControlBase,
       disabled
-        ? 'cursor-not-allowed border-gray-200 bg-gray-50 text-gray-500'
+        ? 'cursor-not-allowed border-[rgba(0,0,0,.06)] bg-gray-50 text-[var(--ink-muted)]'
         : tone === 'error'
-          ? 'border-error focus:border-error focus:ring-error'
+          ? 'border-[var(--state-danger)] focus:border-[var(--state-danger)] focus:ring-[3px] focus:ring-[var(--state-danger-bg)]'
           : tone === 'success'
-            ? 'border-success focus:border-success focus:ring-success'
-            : 'border-gray-300 focus:border-primary-500 focus:ring-primary-500',
+            ? 'border-[var(--state-success)] focus:border-[var(--state-success)] focus:ring-[3px] focus:ring-[var(--state-success-bg)]'
+            : 'focus:border-[var(--accent)] focus:ring-[3px] focus:ring-[var(--accent-faint)] hover:border-[rgba(0,0,0,.22)]',
       className,
     );
   }
 
+  // cabinet variant
   return cn(
     cabinetControlBase,
-    !disabled &&
-      'hover:border-white/20 hover:bg-white/[0.06] focus:border-[color:var(--u-emerald,#2d6a4a)] focus:bg-white/[0.06] focus:shadow-[0_0_0_3px_rgba(45,106,74,0.25)] focus:outline-none',
+    !disabled && [
+      'hover:border-[var(--border-strong)] hover:bg-[rgba(255,255,255,.05)]',
+      'focus:border-[var(--accent)] focus:bg-[rgba(255,255,255,.05)] focus:ring-[3px] focus:ring-[var(--accent-faint)]',
+    ],
     disabled &&
-      'cursor-not-allowed bg-white/[0.02] text-white/40 border-white/[0.08] placeholder:text-white/20',
+      'cursor-not-allowed bg-[rgba(255,255,255,.02)] text-[var(--text-disabled)] border-[var(--border-subtle)] placeholder:text-[var(--text-disabled)]',
     tone === 'error' &&
-      '!border-[#ef4444] shadow-[0_0_0_3px_rgba(239,68,68,0.15)] focus:border-[#ef4444]',
+      '!border-[var(--state-danger)] focus:ring-[3px] focus:ring-[var(--state-danger-bg)]',
     tone === 'success' &&
-      '!border-[color:var(--u-emerald-light,#3d8a62)] shadow-[0_0_0_3px_rgba(45,106,74,0.15)] focus:border-[color:var(--u-emerald-light,#3d8a62)]',
+      '!border-[var(--state-success)] focus:ring-[3px] focus:ring-[var(--state-success-bg)]',
     className,
   );
 }
 
 export function formHelperRowCn(variant: EmployerFormVariant, isError?: boolean) {
-  if (isError) return 'mt-1.5 flex items-start gap-1 text-[0.8125rem] leading-snug text-[#ef4444]';
+  if (isError) {
+    return 'mt-1.5 flex items-start gap-1 text-[13px] leading-snug text-[var(--state-danger)]';
+  }
   return variant === 'cabinet'
-    ? 'mt-1.5 text-[0.8125rem] text-white/40'
-    : 'mt-1.5 text-xs text-gray-500';
+    ? 'mt-1.5 text-[13px] text-[var(--text-muted)]'
+    : 'mt-1.5 text-xs text-[var(--ink-muted)]';
 }

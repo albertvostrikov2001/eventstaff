@@ -12,14 +12,16 @@ interface Prefs {
   emailComplaint: boolean;
   emailNewApplication: boolean;
   emailApplicationReply: boolean;
+  emailChatMessage: boolean;
 }
 
 const ROWS: { key: keyof Prefs; label: string }[] = [
+  { key: 'emailChatMessage', label: 'Новые сообщения в чате' },
+  { key: 'emailNewApplication', label: 'Новые отклики на вакансии' },
   { key: 'emailInvitation', label: 'Приглашения' },
   { key: 'emailCancellation', label: 'Отмены смен и откликов' },
   { key: 'emailReview', label: 'Отзывы и оценки' },
   { key: 'emailComplaint', label: 'Жалобы и обращения' },
-  { key: 'emailNewApplication', label: 'Новые отклики на вакансии' },
   { key: 'emailApplicationReply', label: 'Ответы на ваши запросы' },
 ];
 

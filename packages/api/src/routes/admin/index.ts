@@ -7,9 +7,11 @@ import { IndividualRequestStatus } from '@prisma/client';
 import { invalidateAllUserTokens } from '@/lib/refresh-tokens';
 import { replyFail, replyOk, replyPaginated } from '../../lib/api-reply';
 import { safeUserSelect } from '@/lib/safe-user-select';
+import { SubscriptionService, type WorkerPlanKey, type EmployerPlanKey } from '@/services/subscription-service';
 
 export const adminRoutes: FastifyPluginAsync = async (fastify) => {
   const adminAuth = [fastify.authenticate, fastify.requireRole(['admin'])];
+  const subSvc = new SubscriptionService(fastify.prisma);
 
   // GET /users
   fastify.get('/users', { preHandler: adminAuth }, async (request, reply) => {
@@ -768,9 +770,16 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   fastify.get('/individual-requests/:id', { preHandler: adminAuth }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const row = await fastify.prisma.individualRequest.findUnique({ where: { id } });
+    let row = await fastify.prisma.individualRequest.findUnique({ where: { id } });
     if (!row) {
       return replyFail(reply, 404, 'NOT_FOUND', 'Not found');
+    }
+    // Авто-пометка: NEW → IN_PROGRESS при первом открытии администратором
+    if (row.status === 'NEW') {
+      row = await fastify.prisma.individualRequest.update({
+        where: { id },
+        data: { status: 'IN_PROGRESS' },
+      });
     }
     return replyOk(reply, row);
   });
@@ -950,5 +959,180 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     });
 
     return replyOk(reply, updated);
+  });
+
+  // ─── Admin chat: open or reuse a room with any registered user ─────────────
+
+  fastify.post('/users/:userId/open-chat', { preHandler: adminAuth }, async (request, reply) => {
+    const { userId: targetUserId } = request.params as { userId: string };
+    const adminId = request.jwtUser.sub;
+
+    // Load target user profiles
+    const targetUser = await fastify.prisma.user.findUnique({
+      where: { id: targetUserId },
+      include: {
+        workerProfile: { select: { id: true } },
+        employerProfile: { select: { id: true } },
+      },
+    });
+    if (!targetUser) return replyFail(reply, 404, 'NOT_FOUND', 'Пользователь не найден');
+    if (!targetUser.workerProfile && !targetUser.employerProfile) {
+      return replyFail(reply, 400, 'NO_PROFILE', 'У пользователя нет профиля для чата');
+    }
+
+    // Load admin profiles
+    const adminUser = await fastify.prisma.user.findUnique({
+      where: { id: adminId },
+      include: {
+        workerProfile: { select: { id: true } },
+        employerProfile: { select: { id: true } },
+      },
+    });
+    if (!adminUser) return replyFail(reply, 404, 'NOT_FOUND', 'Администратор не найден');
+
+    let workerId: string;
+    let employerId: string;
+
+    if (targetUser.workerProfile) {
+      // Target is a worker → admin acts as employer
+      workerId = targetUser.workerProfile.id;
+      let ep = adminUser.employerProfile;
+      if (!ep) {
+        ep = await fastify.prisma.employerProfile.upsert({
+          where: { userId: adminId },
+          create: {
+            userId: adminId,
+            slug: `platform-support-e-${adminId.slice(-10)}`,
+            type: 'company',
+            companyName: 'Юнити Поддержка',
+            contactName: 'Администрация',
+          },
+          update: {},
+          select: { id: true },
+        });
+      }
+      employerId = ep.id;
+    } else {
+      // Target is an employer → admin acts as worker
+      employerId = targetUser.employerProfile!.id;
+      let wp = adminUser.workerProfile;
+      if (!wp) {
+        wp = await fastify.prisma.workerProfile.upsert({
+          where: { userId: adminId },
+          create: {
+            userId: adminId,
+            slug: `platform-support-w-${adminId.slice(-10)}`,
+            firstName: 'Поддержка',
+            lastName: 'Юнити',
+            visibility: 'hidden',
+          },
+          update: {},
+          select: { id: true },
+        });
+      }
+      workerId = wp.id;
+    }
+
+    // Create or reuse existing GENERAL room
+    const room = await fastify.prisma.chatRoom.upsert({
+      where: { workerId_employerId: { workerId, employerId } },
+      create: {
+        workerId,
+        employerId,
+        contextType: 'GENERAL',
+        lastMessageAt: new Date(),
+      },
+      update: {},
+      select: { id: true },
+    });
+
+    return replyOk(reply, { roomId: room.id });
+  });
+
+  // ── PATCH /admin/users/:userId/subscription — ручная выдача подписки ──────
+  fastify.patch(
+    '/users/:userId/subscription',
+    { preHandler: adminAuth },
+    async (request, reply) => {
+      const { userId } = request.params as { userId: string };
+      const body = z
+        .object({
+          role: z.enum(['worker', 'employer']),
+          plan: z.string(),
+          months: z.number().int().min(1).max(24).default(1),
+        })
+        .parse(request.body);
+
+      const user = await fastify.prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          workerProfile: { select: { id: true } },
+          employerProfile: { select: { id: true } },
+        },
+      });
+      if (!user) return replyFail(reply, 404, 'NOT_FOUND', 'Пользователь не найден');
+
+      if (body.role === 'worker') {
+        const worker = user.workerProfile;
+        if (!worker) return replyFail(reply, 400, 'NO_PROFILE', 'У пользователя нет профиля работника');
+        const validPlans = ['free', 'premium'];
+        if (!validPlans.includes(body.plan)) {
+          return replyFail(reply, 400, 'INVALID_PLAN', `Допустимые планы работника: ${validPlans.join(', ')}`);
+        }
+        const sub = await subSvc.grantWorkerSubscription(
+          worker.id,
+          body.plan as WorkerPlanKey,
+          body.months,
+          true,
+        );
+        await fastify.notificationService.create({
+          userId,
+          type: 'SYSTEM',
+          title: 'Подписка активирована',
+          body: `Администратор активировал тариф Premium на ${body.months} мес.`,
+          data: { plan: body.plan },
+        });
+        return replyOk(reply, sub);
+      } else {
+        const employer = user.employerProfile;
+        if (!employer) return replyFail(reply, 400, 'NO_PROFILE', 'У пользователя нет профиля работодателя');
+        const validPlans = ['free', 'basic', 'pro', 'enterprise'];
+        if (!validPlans.includes(body.plan)) {
+          return replyFail(reply, 400, 'INVALID_PLAN', `Допустимые планы работодателя: ${validPlans.join(', ')}`);
+        }
+        const sub = await subSvc.grantEmployerSubscription(
+          employer.id,
+          body.plan as EmployerPlanKey,
+          body.months,
+          true,
+        );
+        const planLabel = body.plan === 'basic' ? 'Бизнес' : body.plan === 'pro' ? 'Про' : body.plan;
+        await fastify.notificationService.create({
+          userId,
+          type: 'SYSTEM',
+          title: 'Тариф активирован',
+          body: `Администратор активировал тариф ${planLabel} на ${body.months} мес.`,
+          data: { plan: body.plan },
+        });
+        return replyOk(reply, sub);
+      }
+    },
+  );
+
+  // ── GET /admin/subscriptions — список всех активных подписок ─────────────
+  fastify.get('/subscriptions', { preHandler: adminAuth }, async (_request, reply) => {
+    const [workerSubs, employerSubs] = await Promise.all([
+      fastify.prisma.workerSubscription.findMany({
+        where: { status: 'active', plan: { not: 'free' } },
+        include: { worker: { select: { firstName: true, lastName: true, userId: true } } },
+        orderBy: { createdAt: 'desc' },
+      }),
+      fastify.prisma.subscription.findMany({
+        where: { status: 'active', plan: { not: 'free' } },
+        include: { employer: { select: { companyName: true, contactName: true, userId: true } } },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+    return replyOk(reply, { workers: workerSubs, employers: employerSubs });
   });
 };

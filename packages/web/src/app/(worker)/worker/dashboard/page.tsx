@@ -4,9 +4,11 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuthStore } from '@/stores/authStore';
 import { apiClient } from '@/lib/api/client';
-import { Send, Star, Eye, EyeOff, Briefcase, Inbox, Mail } from 'lucide-react';
+import { Send, Star, Eye, EyeOff, Briefcase, Mail } from 'lucide-react';
 import { APPLICATION_STATUSES } from '@unity/shared';
 import { ReliabilityWidget } from '@/components/worker/ReliabilityWidget';
+import { EmployerIndividualRequestModal } from '@/components/employer/EmployerIndividualRequestModal';
+import { Button } from '@/components/ui/button';
 
 interface Application {
   id: string;
@@ -38,6 +40,7 @@ export default function WorkerDashboardPage() {
   const [visibility, setVisibility] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
+  const [requestModalOpen, setRequestModalOpen] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -75,6 +78,8 @@ export default function WorkerDashboardPage() {
 
   return (
     <div>
+      <EmployerIndividualRequestModal open={requestModalOpen} onOpenChange={setRequestModalOpen} role="worker" />
+
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Добро пожаловать, {name}!</h1>
@@ -115,19 +120,28 @@ export default function WorkerDashboardPage() {
         <ReliabilityWidget />
       </div>
 
+      <div className="mt-8 rounded-[14px] border border-white/[0.08] bg-white/[0.04] bg-gradient-to-br from-white/[0.06] to-white/[0.02] p-6">
+        <h3 className="text-lg font-semibold text-white">Не нашли подходящую вакансию?</h3>
+        <p className="mt-2 max-w-xl text-sm text-white/55">
+          Оставьте заявку — мы подберём подходящие предложения и свяжемся с вами в течение 24 часов.
+        </p>
+        <Button
+          type="button"
+          variant="primary"
+          size="md"
+          className="mt-4 rounded-xl shadow-lg"
+          onClick={() => setRequestModalOpen(true)}
+        >
+          Оставить персональный запрос
+        </Button>
+      </div>
+
       <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="rounded-input border border-white/10 bg-white/[0.04] p-6">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="font-semibold text-white">Быстрые действия</h3>
           </div>
           <div className="space-y-2">
-            <Link
-              href="/request"
-              className="flex items-center gap-3 rounded-input border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/90 transition hover:border-primary-400/50 hover:bg-white/10"
-            >
-              <Inbox className="h-4 w-4 text-primary-300" />
-              Персональный запрос
-            </Link>
             <Link
               href="/vacancies"
               className="flex w-full items-center gap-3 rounded-input border border-white/10 bg-white/5 px-4 py-3 text-sm font-medium text-white/90 transition hover:border-primary-400/50 hover:bg-white/10"

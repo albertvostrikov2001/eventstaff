@@ -185,7 +185,7 @@ export const workerProfileUpdateSchema = z.object({
   lastName: z.string().min(2).max(50).optional(),
   age: z.number().int().min(18).max(99).optional(),
   bio: z.string().max(2000).optional(),
-  experienceYears: z.number().int().min(0).max(50).optional(),
+  experienceYears: z.number().min(0).max(50).optional(),
   hasMedicalBook: z.boolean().optional(),
   desiredRate: z.number().positive().optional(),
   rateType: z.enum(['hourly', 'per_shift', 'fixed', 'daily', 'weekly', 'after_event']).optional(),

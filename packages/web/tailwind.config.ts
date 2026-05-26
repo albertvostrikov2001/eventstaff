@@ -6,17 +6,18 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        /* ── Primary accent (new: #5bb880, was #10b981) ── */
         primary: {
-          50:  '#ecfdf5',
-          100: '#d1fae5',
-          200: '#a7f3d0',
-          300: '#6ee7b7',
-          400: '#34d399',
-          500: '#10b981',
-          600: '#059669',
-          700: '#047857',
-          800: '#065f46',
-          900: '#064e3b',
+          50:  '#f0faf4',
+          100: '#d9f2e4',
+          200: '#b3e5c9',
+          300: '#88d4a9',
+          400: '#6cc792',
+          500: '#5bb880',  /* --accent */
+          600: '#4ea16f',  /* --accent-active */
+          700: '#3e8559',
+          800: '#2c5d44',  /* --accent-soft */
+          900: '#1a3d2d',
         },
         secondary: {
           50:  '#fff1f2',
@@ -42,30 +43,47 @@ const config: Config = {
           800: '#1f2937',
           900: '#111827',
         },
-        /* Unity Dark Premium palette — available as Tailwind classes */
+        /* ── Design system palette ── */
         unity: {
-          dark:       '#0d1f17',
-          surface:    '#122a1e',
-          muted:      '#1a3d2b',
-          emerald:    '#2d6a4a',
-          'emerald-light': '#3d8a62',
+          /* Dark scale (cabinet backgrounds) */
+          'bg0':      '#08120e',
+          'bg1':      '#0f1d16',
+          'bg2':      '#16271e',
+          'bg3':      '#1e3327',
+          'bg4':      '#28402f',
+          /* Warm dark */
+          'warm1':    '#1a120b',
+          'warm2':    '#271a10',
+          /* Light */
+          cream:      '#f4efe7',
+          /* Legacy aliases */
+          dark:       '#08120e',
+          surface:    '#16271e',
+          muted:      '#1e3327',
+          emerald:    '#2c5d44',
+          'emerald-light': '#5bb880',
           mocha:      '#2e1f14',
           'mocha-mid':'#3d2a1a',
           'mocha-accent': '#8b5a3a',
-          cream:      '#f2ede8',
         },
-        success: '#10b981',
-        warning: '#f59e0b',
-        error:   '#ef4444',
-        info:    '#3b82f6',
+        /* ── Semantic state colors (updated to match design) ── */
+        success: '#5bb880',
+        warning: '#d6a55c',
+        error:   '#d96a6a',
+        info:    '#6aa4d9',
       },
+
+      /* ── Fonts ── */
       fontFamily: {
-        heading: ['var(--font-heading)', 'Inter', 'system-ui', 'sans-serif'],
-        body:    ['var(--font-body)',    'Inter', 'system-ui', 'sans-serif'],
-        sans:    ['var(--font-inter)',   'Inter', 'system-ui', 'sans-serif'],
-        serif:   ['var(--font-playfair)', 'Playfair Display', 'Georgia', 'serif'],
-        mono:    ['JetBrains Mono', 'monospace'],
+        sans:    ['var(--font-onest)', 'Onest', 'Inter', 'system-ui', 'sans-serif'],
+        display: ['var(--font-onest)', 'Onest', 'Inter', 'system-ui', 'sans-serif'],
+        heading: ['var(--font-onest)', 'Onest', 'Inter', 'system-ui', 'sans-serif'],
+        body:    ['var(--font-onest)', 'Onest', 'Inter', 'system-ui', 'sans-serif'],
+        /* Keep serif slot (hero-h1 still uses it in some places) */
+        serif:   ['Georgia', 'serif'],
+        mono:    ['var(--font-jetbrains)', 'JetBrains Mono', 'SF Mono', 'Menlo', 'monospace'],
       },
+
       fontSize: {
         xs:   ['0.75rem',  { lineHeight: '1rem' }],
         sm:   ['0.875rem', { lineHeight: '1.25rem' }],
@@ -75,35 +93,45 @@ const config: Config = {
         '2xl':['1.5rem',   { lineHeight: '2rem' }],
         '3xl':['1.875rem', { lineHeight: '2.25rem' }],
         '4xl':['2.25rem',  { lineHeight: '2.5rem' }],
-        '5xl':['3rem',     { lineHeight: '1.2' }],
+        '5xl':['3rem',     { lineHeight: '1.15' }],
       },
+
+      /* ── Radii (aligned with design: r-5=14px for cards) ── */
       borderRadius: {
-        sm:    '6px',
-        card:  '8px',
-        input: '6px',
-        badge: '4px',
-        modal: '12px',
-        md:    '12px',
-        lg:    '16px',
+        sm:    '6px',   /* --r-2 */
+        card:  '14px',  /* --r-5 (was 8px) */
+        input: '6px',   /* --r-2 */
+        badge: '4px',   /* --r-1 */
+        modal: '20px',  /* --r-6 */
+        md:    '14px',  /* --r-5 */
+        lg:    '20px',  /* --r-6 */
         xl:    '24px',
         full:  '9999px',
       },
+
       boxShadow: {
-        sm:          '0 1px 2px 0 rgb(0 0 0 / 0.05)',
-        card:        '0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.06)',
-        'card-hover':'0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08)',
-        md:          '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
-        lg:          '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
-        'glow-emerald': '0 0 60px rgba(45,106,74,0.4)',
-        'glow-mocha':   '0 0 60px rgba(139,90,58,0.3)',
+        sm:           '0 1px 2px 0 rgb(0 0 0 / 0.05)',
+        card:         '0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.06)',
+        'card-hover': '0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.08)',
+        md:           '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)',
+        lg:           '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+        'el-2':       'inset 0 0 0 1px rgba(255,255,255,.10), 0 1px 0 rgba(255,255,255,.04) inset',
+        'el-3':       'inset 0 0 0 1px rgba(255,255,255,.10), 0 12px 32px -16px rgba(0,0,0,.6)',
+        'glow-accent':'0 0 0 1px rgba(91,184,128,.35), 0 0 24px -4px rgba(91,184,128,.22)',
+        'glow-emerald':'0 0 60px rgba(91,184,128,.22)',
+        'glow-mocha': '0 0 60px rgba(139,90,58,0.3)',
       },
+
       letterSpacing: {
         tighter: '-0.04em',
         tight:   '-0.02em',
+        snug:    '-0.01em',
         normal:  '0em',
         wide:    '0.04em',
         wider:   '0.08em',
+        widest:  '0.10em',
       },
+
       keyframes: {
         shimmer: {
           '100%': { transform: 'translateX(100%)' },
@@ -125,13 +153,19 @@ const config: Config = {
           '25%':      { transform: 'rotate(-8deg)' },
           '75%':      { transform: 'rotate(8deg)' },
         },
+        'badge-pulse': {
+          '0%, 100%': { opacity: '1' },
+          '50%':      { opacity: '0.7' },
+        },
       },
+
       animation: {
-        shimmer:    'shimmer 1.5s infinite',
-        'slide-up': 'slide-up 0.15s ease-out',
-        'slide-down':'slide-down 0.15s ease-out',
-        'fade-in':  'fade-in 0.15s ease-out',
-        wiggle:     'wiggle 0.5s ease-in-out',
+        shimmer:      'shimmer 1.5s infinite',
+        'slide-up':   'slide-up 0.15s ease-out',
+        'slide-down': 'slide-down 0.15s ease-out',
+        'fade-in':    'fade-in 0.15s ease-out',
+        wiggle:       'wiggle 0.5s ease-in-out',
+        'badge-pulse':'badge-pulse 3s ease-in-out infinite',
       },
     },
   },

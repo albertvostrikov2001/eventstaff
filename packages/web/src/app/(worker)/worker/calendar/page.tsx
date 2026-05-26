@@ -156,7 +156,7 @@ export default function WorkerCalendarPage() {
         <div>
           <h1 className="text-2xl font-bold text-white/90">Календарь занятости</h1>
           <p className="mt-1 text-sm text-white/50">
-            Отметьте доступные дни. Подтверждённые смены отображаются отдельно.
+            Отметьте свои свободные и занятые дни.
           </p>
         </div>
         {dirty && (
@@ -165,6 +165,29 @@ export default function WorkerCalendarPage() {
             {saving ? 'Сохраняем…' : 'Сохранить'}
           </Button>
         )}
+      </div>
+
+      {/* ── Instruction card ── */}
+      <div className="mt-4 rounded-[12px] border border-white/[0.06] bg-white/[0.03] px-4 py-3">
+        <p className="mb-2 text-[12px] font-semibold uppercase tracking-wide text-white/40">Как пользоваться</p>
+        <div className="flex flex-wrap gap-x-6 gap-y-2 text-[13px] text-white/60">
+          <span className="flex items-center gap-2">
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-[5px] bg-emerald-500/25 text-[10px] text-emerald-200">1×</span>
+            Нажмите — <span className="text-emerald-300 font-medium">Свободен</span>
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-[5px] bg-white/15 text-[10px] text-white/60">2×</span>
+            Ещё раз — <span className="text-white/80 font-medium">Занят</span>
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-[5px] border border-white/15 text-[10px] text-white/40">3×</span>
+            Третий раз — убрать отметку
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-[5px] bg-indigo-500/25 text-[10px] text-indigo-200">★</span>
+            Смены от работодателя проставляются автоматически
+          </span>
+        </div>
       </div>
 
       {conflictDate ? (
@@ -176,22 +199,22 @@ export default function WorkerCalendarPage() {
         </div>
       ) : null}
 
-      <div className="mt-6 rounded-[14px] border border-white/[0.08] bg-white/[0.04] p-4 sm:p-6">
+      <div className="mt-4 rounded-[14px] border border-white/[0.08] bg-white/[0.04] p-3 sm:p-4">
         <div className="flex items-center justify-between">
-          <button type="button" onClick={prevMonth} className="rounded-input p-1.5 text-white/65 hover:bg-white/[0.06]">
-            <ChevronLeft className="h-5 w-5" />
+          <button type="button" onClick={prevMonth} className="rounded-input p-1 text-white/65 hover:bg-white/[0.06]">
+            <ChevronLeft className="h-4 w-4" />
           </button>
-          <h2 className="text-base font-semibold text-white/90">
+          <h2 className="text-sm font-semibold text-white/90">
             {MONTH_NAMES[month]} {year}
           </h2>
-          <button type="button" onClick={nextMonth} className="rounded-input p-1.5 text-white/65 hover:bg-white/[0.06]">
-            <ChevronRight className="h-5 w-5" />
+          <button type="button" onClick={nextMonth} className="rounded-input p-1 text-white/65 hover:bg-white/[0.06]">
+            <ChevronRight className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="mt-4 grid grid-cols-7 gap-1">
+        <div className="mt-2 grid grid-cols-7 gap-0.5">
           {WEEKDAYS.map((d) => (
-            <div key={d} className="py-1 text-center text-xs font-medium text-white/50">
+            <div key={d} className="py-1 text-center text-[10px] font-medium text-white/40">
               {d}
             </div>
           ))}
@@ -207,11 +230,12 @@ export default function WorkerCalendarPage() {
             const isBooked = bookedDates.has(dateStr);
             const isPast = new Date(dateStr) < new Date(todayStr);
             const isConflict = conflictDate === dateStr;
+            const isToday = dateStr === todayStr;
 
             let cls =
-              'aspect-square rounded-[10px] text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-emerald-500/40';
+              'h-8 w-full rounded-[7px] text-xs font-medium transition focus:outline-none focus:ring-1 focus:ring-emerald-500/40';
             if (isPast) {
-              cls += ' cursor-not-allowed text-white/40';
+              cls += ' cursor-not-allowed text-white/25';
             } else if (isBooked) {
               cls += ' cursor-not-allowed bg-indigo-500/25 text-indigo-100 ring-1 ring-indigo-400/40';
             } else if (isConflict) {
@@ -221,7 +245,9 @@ export default function WorkerCalendarPage() {
             } else if (state === 'blocked') {
               cls += ' bg-white/10 text-white/50 hover:bg-white/15';
             } else {
-              cls += ' text-white/65 hover:bg-white/[0.06]';
+              cls += isToday
+                ? ' ring-1 ring-white/30 text-white/80 hover:bg-white/[0.06]'
+                : ' text-white/60 hover:bg-white/[0.06]';
             }
 
             return (
@@ -239,17 +265,17 @@ export default function WorkerCalendarPage() {
           })}
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-4 text-xs text-white/50">
-          <span className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded bg-emerald-500/30" />
+        <div className="mt-3 flex flex-wrap gap-3 text-[10px] text-white/45">
+          <span className="flex items-center gap-1">
+            <span className="h-2.5 w-2.5 rounded-sm bg-emerald-500/30" />
             Доступен
           </span>
-          <span className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded bg-white/15" />
-            Занят (ручная блокировка)
+          <span className="flex items-center gap-1">
+            <span className="h-2.5 w-2.5 rounded-sm bg-white/15" />
+            Занят
           </span>
-          <span className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded bg-indigo-500/30 ring-1 ring-indigo-400/40" />
+          <span className="flex items-center gap-1">
+            <span className="h-2.5 w-2.5 rounded-sm bg-indigo-500/30 ring-1 ring-indigo-400/40" />
             Смена
           </span>
         </div>

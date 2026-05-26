@@ -13,7 +13,6 @@ import {
   ShieldCheck,
   Shield,
   Eye,
-  Send,
 } from 'lucide-react';
 import { EmployerIndividualRequestModal } from '@/components/employer/EmployerIndividualRequestModal';
 import { EmployerRecentApplicationsSection } from '@/components/employer/EmployerRecentApplicationsSection';
@@ -258,15 +257,6 @@ export default function EmployerDashboardPage() {
                 <Search className="h-4 w-4 text-primary-400" />
                 Найти персонал
               </Link>
-              <Button
-                type="button"
-                variant="ghostInverse"
-                className="flex w-full items-center justify-start gap-3 rounded-[14px] border border-white/[0.08] bg-white/5 px-4 py-3 text-left text-sm font-medium text-white/90 transition hover:border-primary-400/50 hover:bg-white/10"
-                onClick={() => setRequestModalOpen(true)}
-              >
-                <Send className="h-4 w-4 text-primary-400" />
-                Персональный запрос
-              </Button>
             </div>
           </div>
 

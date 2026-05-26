@@ -44,7 +44,7 @@ export function Logo({ size = 'md', showText = true, href = '/', className = '' 
         <span
           className="font-semibold text-white leading-none"
           style={{
-            fontFamily: 'var(--font-playfair, "Playfair Display", serif)',
+            fontFamily: 'var(--font-display, var(--font-onest, "Onest", sans-serif))',
             fontSize: textSizeMap[size],
           }}
         >

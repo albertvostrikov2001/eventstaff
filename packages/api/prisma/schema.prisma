@@ -258,6 +258,8 @@ enum InAppNotificationType {
   INDIVIDUAL_REQUEST
   SYSTEM
   PASSWORD_RESET
+  NEW_CHAT_MESSAGE
+  EMAIL_VERIFICATION
 }
 
 enum EmailLogStatus {
@@ -438,6 +440,7 @@ model WorkerProfile {
   availability  WorkerAvailability[]
   workHistory   WorkHistory[]
   chatRooms     ChatRoom[]    @relation("ChatRoomWorker")
+  subscription  WorkerSubscription?
 
   @@index([cityId, visibility])
   @@index([ratingScore(sort: Desc)])
@@ -829,12 +832,35 @@ model Subscription {
   currentPeriodStart DateTime?          @map("current_period_start")
   currentPeriodEnd   DateTime?          @map("current_period_end")
   paymentId          String?            @map("payment_id")
+  grantedByAdmin     Boolean            @default(false) @map("granted_by_admin")
   createdAt          DateTime           @default(now()) @map("created_at")
   updatedAt          DateTime           @updatedAt @map("updated_at")
 
   employer EmployerProfile @relation(fields: [employerId], references: [id], onDelete: Cascade)
 
   @@map("subscriptions")
+}
+
+enum WorkerPlan {
+  free
+  premium
+}
+
+model WorkerSubscription {
+  id                 String             @id @default(cuid())
+  workerId           String             @unique @map("worker_id")
+  plan               WorkerPlan         @default(free)
+  status             SubscriptionStatus @default(active)
+  currentPeriodStart DateTime?          @map("current_period_start")
+  currentPeriodEnd   DateTime?          @map("current_period_end")
+  paymentId          String?            @map("payment_id")
+  grantedByAdmin     Boolean            @default(false) @map("granted_by_admin")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  worker WorkerProfile @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@map("worker_subscriptions")
 }
 
 model ContentPage {
@@ -981,6 +1007,7 @@ model NotificationPreferences {
   emailComplaint        Boolean  @default(true) @map("email_complaint")
   emailNewApplication   Boolean  @default(true) @map("email_new_application")
   emailApplicationReply Boolean  @default(true) @map("email_application_reply")
+  emailChatMessage      Boolean  @default(true) @map("email_chat_message")
   updatedAt             DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)

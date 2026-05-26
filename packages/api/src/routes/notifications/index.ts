@@ -9,6 +9,7 @@ const preferencesBody = z.object({
   emailComplaint: z.boolean().optional(),
   emailNewApplication: z.boolean().optional(),
   emailApplicationReply: z.boolean().optional(),
+  emailChatMessage: z.boolean().optional(),
 });
 
 export const notificationRoutes: FastifyPluginAsync = async (fastify) => {
@@ -79,6 +80,7 @@ export const notificationRoutes: FastifyPluginAsync = async (fastify) => {
       emailComplaint: prefs.emailComplaint,
       emailNewApplication: prefs.emailNewApplication,
       emailApplicationReply: prefs.emailApplicationReply,
+      emailChatMessage: prefs.emailChatMessage,
     });
   });
 
@@ -96,6 +98,7 @@ export const notificationRoutes: FastifyPluginAsync = async (fastify) => {
       emailComplaint: prefs.emailComplaint,
       emailNewApplication: prefs.emailNewApplication,
       emailApplicationReply: prefs.emailApplicationReply,
+      emailChatMessage: prefs.emailChatMessage,
     });
   });
 };

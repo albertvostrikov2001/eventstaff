@@ -26,10 +26,11 @@ interface Meta {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  invited: { label: 'Ожидает ответа', color: 'bg-amber-100 text-amber-700' },
-  confirmed: { label: 'Принято', color: 'bg-green-100 text-green-700' },
-  rejected: { label: 'Отклонено', color: 'bg-red-100 text-red-600' },
-  pending: { label: 'Ожидает', color: 'bg-gray-100 text-gray-600' },
+  invited:   { label: 'Ожидает ответа', color: 'bg-amber-100 text-amber-700' },
+  confirmed: { label: 'Принято',        color: 'bg-green-100 text-green-700' },
+  rejected:  { label: 'Отклонено',      color: 'bg-red-100 text-red-600' },
+  cancelled: { label: 'Отменено',       color: 'bg-gray-100 text-gray-500' },
+  pending:   { label: 'На рассмотрении', color: 'bg-gray-100 text-gray-600' },
 };
 
 export default function EmployerInvitationsPage() {

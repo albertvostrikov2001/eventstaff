@@ -28,7 +28,7 @@ export function ChatInboxProvider({ children }: { children: React.ReactNode }) {
       setConnection('disconnected');
       return;
     }
-    if (user.activeRole !== 'worker' && user.activeRole !== 'employer') {
+    if (user.activeRole !== 'worker' && user.activeRole !== 'employer' && user.activeRole !== 'admin') {
       return;
     }
 
