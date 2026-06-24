@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=1440"/>
+<title>Юнити · Главная</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"/>
+<style>
+:root{
+  --bg-0:#08120e; --bg-1:#0f1d16; --bg-2:#16271e; --bg-3:#1e3327; --bg-4:#28402f;
+  --bg-warm-1:#1a120b; --bg-warm-2:#271a10; --bg-cream-1:#f4efe7;
+  --text-primary:#f1eee7; --text-secondary:#a5b0a8; --text-muted:#6a7670; --text-disabled:#424b46;
+  --text-on-accent:#08120e; --ink-primary:#1a2218; --ink-secondary:#4a5249; --ink-muted:#6a7670;
+  --border-subtle:rgba(255,255,255,.06); --border-default:rgba(255,255,255,.10); --border-strong:rgba(255,255,255,.18);
+  --border-emerald:rgba(91,184,128,.35); --border-ink:rgba(0,0,0,.10);
+  --accent:#5bb880; --accent-hover:#6cc792; --accent-active:#4ea16f; --accent-soft:#2c5d44;
+  --accent-faint:rgba(91,184,128,.10); --accent-glow:rgba(91,184,128,.22); --accent-warm:#c6845c;
+  --state-success:#5bb880; --state-success-bg:rgba(91,184,128,.10);
+  --state-warning:#d6a55c; --state-warning-bg:rgba(214,165,92,.10);
+  --state-danger:#d96a6a;  --state-danger-bg:rgba(217,106,106,.10);
+  --state-info:#6aa4d9;    --state-info-bg:rgba(106,164,217,.10);
+  --font-display:'Onest','Inter',system-ui,sans-serif;
+  --font-body:'Onest','Inter',system-ui,sans-serif;
+  --font-mono:'JetBrains Mono','SF Mono',Menlo,monospace;
+  --r-1:4px; --r-2:6px; --r-3:8px; --r-4:10px; --r-5:14px; --r-6:20px;
+  --el-1:inset 0 0 0 1px var(--border-subtle);
+  --el-2:inset 0 0 0 1px var(--border-default),0 1px 0 rgba(255,255,255,.04) inset;
+  --el-3:inset 0 0 0 1px var(--border-default),0 1px 0 rgba(255,255,255,.05) inset,0 12px 32px -16px rgba(0,0,0,.6);
+  --el-4:inset 0 0 0 1px var(--border-strong),0 1px 0 rgba(255,255,255,.06) inset,0 24px 60px -20px rgba(0,0,0,.75);
+  --el-focus:0 0 0 2px var(--bg-0),0 0 0 4px var(--accent);
+  --el-focus-ink:0 0 0 2px #fff,0 0 0 4px var(--accent);
+  --el-glow-emerald:0 0 0 1px var(--border-emerald),0 0 24px -4px var(--accent-glow);
+  --ease-out:cubic-bezier(.2,.7,.2,1); --d-micro:120ms; --d-standard:200ms;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;font-family:var(--font-body);-webkit-font-smoothing:antialiased;font-feature-settings:'ss01'}
+body{background:var(--bg-cream-1);color:var(--ink-primary);font-size:15px;line-height:1.4;min-height:100vh}
+body[data-shell='dark']{background:var(--bg-0);color:var(--text-primary)}
+a{color:inherit;text-decoration:none}
+::selection{background:var(--accent-soft);color:var(--text-primary)}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:1ms!important;animation-duration:1ms!important}}
+h1,h2,h3,h4,h5,h6{font-family:var(--font-display);font-weight:500;letter-spacing:-.01em;margin:0}
+.container{max-width:1280px;margin:0 auto;padding:0 24px}
+
+/* HEADER (public) */
+.hdr{position:sticky;top:0;z-index:50;height:72px;background:rgba(8,18,14,.78);backdrop-filter:blur(20px) saturate(140%);border-bottom:1px solid var(--border-subtle);box-shadow:0 4px 24px -12px rgba(0,0,0,.5);color:var(--text-primary)}
+.hdr-inner{max-width:1280px;margin:0 auto;height:100%;padding:0 24px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.hdr-left{display:flex;align-items:center;gap:32px}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--font-display);font-weight:600;font-size:18px;letter-spacing:-.01em;color:var(--text-primary)}
+.brand-mark{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--accent) 0%,#1f5a3d 100%);position:relative}
+.brand-mark::after{content:'';position:absolute;inset:7px;border-radius:2px;background:var(--bg-0)}
+.brand-mark::before{content:'';position:absolute;inset:10px;background:var(--accent);border-radius:1px}
+.hdr-nav{display:flex;gap:28px}
+.hdr-link{font-size:15px;font-weight:500;color:var(--text-secondary);transition:color var(--d-micro) var(--ease-out);padding:6px 0}
+.hdr-link:hover{color:var(--text-primary)}
+.hdr-link.active{color:var(--text-primary);border-bottom:2px solid var(--accent-hover);padding-bottom:4px}
+.hdr-right{display:flex;align-items:center;gap:8px}
+.hdr-phone{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--text-secondary);padding:8px 12px;transition:color var(--d-micro)}
+.hdr-phone:hover{color:var(--text-primary)}
+@media (max-width:1023px){.hdr-nav,.hdr-phone,.hdr-right .btn{display:none}.hdr-burger{display:inline-flex!important}}
+.hdr-burger{display:none;width:40px;height:40px;align-items:center;justify-content:center;border-radius:var(--r-4);color:var(--text-secondary);background:transparent;border:0;cursor:pointer}
+
+/* FOOTER (public) */
+.ftr{background:var(--bg-0);border-top:1px solid var(--border-subtle);padding:60px 24px 40px;color:var(--text-secondary)}
+.ftr-inner{max-width:1280px;margin:0 auto;display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:40px}
+.ftr h6{margin:0 0 14px;font-family:var(--font-mono);font-size:11px;letter-spacing:.10em;text-transform:uppercase;color:var(--text-muted);font-weight:400}
+.ftr a{display:block;padding:5px 0;font-size:13px;color:var(--text-secondary);transition:color var(--d-micro)}
+.ftr a:hover{color:var(--text-primary)}
+.ftr-brand{display:flex;flex-direction:column;gap:10px}
+.ftr-brand p{font-size:13px;margin:0;line-height:1.55;max-width:38ch}
+.ftr-bot{max-width:1280px;margin:32px auto 0;padding-top:20px;border-top:1px solid var(--border-subtle);display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:11px;color:var(--text-muted);letter-spacing:.04em}
+@media (max-width:767px){.ftr-inner{grid-template-columns:1fr;gap:24px}.ftr-bot{flex-direction:column;gap:10px}}
+
+/* BUTTONS — copy from eventstaff-patch/.../button.tsx */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid transparent;font-family:var(--font-body);font-weight:500;cursor:pointer;white-space:nowrap;transition:background var(--d-micro) var(--ease-out),border-color var(--d-micro) var(--ease-out),color var(--d-micro) var(--ease-out),box-shadow var(--d-micro) var(--ease-out);text-decoration:none;outline:none;font-size:14px}
+.btn:focus-visible{box-shadow:var(--el-focus)}
+.btn[disabled]{opacity:.4;pointer-events:none}
+.btn-sm{height:32px;padding:0 12px;border-radius:var(--r-3);font-size:13px}
+.btn-md{height:40px;padding:0 16px;border-radius:var(--r-4)}
+.btn-lg{height:48px;padding:0 22px;border-radius:var(--r-4);font-size:15px}
+.btn-primary{background:var(--accent);color:var(--text-on-accent)}
+.btn-primary:hover{background:var(--accent-hover)}
+.btn-primary:active{background:var(--accent-active)}
+.btn-secondary{background:transparent;color:var(--text-primary);border-color:var(--border-emerald)}
+.btn-secondary:hover{background:var(--accent-faint);border-color:var(--accent)}
+.btn-outline{background:#fff;color:var(--ink-primary);border-color:var(--border-ink)}
+.btn-outline:hover{background:#f6f3ec;border-color:var(--ink-muted)}
+.btn-muted{background:rgba(255,255,255,.04);color:var(--text-primary);border-color:var(--border-default)}
+.btn-muted:hover{background:rgba(255,255,255,.08);border-color:var(--border-strong)}
+.btn-ghost{background:transparent;color:var(--text-secondary)}
+.btn-ghost:hover{background:rgba(255,255,255,.05);color:var(--text-primary)}
+.btn-ghost-ink{background:transparent;color:var(--ink-secondary)}
+.btn-ghost-ink:hover{background:rgba(0,0,0,.04);color:var(--ink-primary)}
+.btn-block{width:100%}
+.spinner{width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* INPUT (light + dark) */
+.input{height:40px;padding:0 14px;border-radius:var(--r-2);font:inherit;font-size:14px;width:100%;transition:border-color var(--d-micro) var(--ease-out),box-shadow var(--d-micro) var(--ease-out)}
+.input{background:#fff;border:1px solid var(--border-ink);color:var(--ink-primary)}
+.input::placeholder{color:var(--ink-muted)}
+.input:hover{border-color:var(--ink-muted)}
+.input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-faint);outline:none}
+.input-err{border-color:var(--state-danger)!important}
+.input-err:focus{box-shadow:0 0 0 3px var(--state-danger-bg)!important}
+[data-shell='dark'] .input{background:rgba(255,255,255,.03);border-color:var(--border-default);color:var(--text-primary)}
+[data-shell='dark'] .input::placeholder{color:var(--text-muted)}
+[data-shell='dark'] .input:hover{border-color:var(--border-strong)}
+.input-label{display:block;font-size:13px;font-weight:500;color:var(--ink-primary);margin-bottom:6px}
+[data-shell='dark'] .input-label{color:var(--text-primary)}
+.helper-err{margin-top:6px;font-size:12px;color:var(--state-danger)}
+.input-wrap{position:relative}
+.input-wrap > svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--ink-muted);width:14px;height:14px}
+.input-wrap .input{padding-left:38px}
+[data-shell='dark'] .input-wrap > svg{color:var(--text-muted)}
+textarea.input{height:auto;min-height:96px;padding:10px 14px;line-height:1.5;resize:vertical}
+
+/* CHECKBOX */
+.check{display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;line-height:1.5;color:var(--ink-primary)}
+[data-shell='dark'] .check{color:var(--text-primary)}
+.check input{display:none}
+.check-box{width:18px;height:18px;border-radius:4px;border:1.5px solid var(--border-ink);background:#fff;flex-shrink:0;margin-top:1px;position:relative;transition:all var(--d-micro)}
+[data-shell='dark'] .check-box{border-color:var(--border-strong);background:rgba(0,0,0,.2)}
+.check input:checked + .check-box{background:var(--accent);border-color:var(--accent)}
+.check input:checked + .check-box::after{content:'';position:absolute;left:4px;top:0px;width:5px;height:10px;border:solid var(--bg-0);border-width:0 2px 2px 0;transform:rotate(45deg)}
+
+/* BADGES / TAGS */
+.bdg{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:var(--r-1);font-family:var(--font-mono);font-size:11px;font-weight:500;letter-spacing:.04em;text-transform:uppercase}
+.bdg-default{background:rgba(106,118,112,.14);color:var(--text-muted)}
+.bdg-primary{background:var(--accent-faint);color:var(--accent);border:1px solid var(--border-emerald)}
+.bdg-success{background:var(--state-success-bg);color:var(--state-success)}
+.bdg-warning{background:var(--state-warning-bg);color:var(--state-warning)}
+.bdg-error{background:var(--state-danger-bg);color:var(--state-danger)}
+.bdg-info{background:var(--state-info-bg);color:var(--state-info)}
+.bdg-violet{background:rgba(160,120,200,.14);color:#c4a4d9}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent-glow);display:inline-block;flex-shrink:0}
+
+/* CHIP-pill */
+.chip{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:9999px;font-size:13px;color:var(--ink-secondary);background:#fff;border:1px solid var(--border-ink);cursor:pointer;transition:all var(--d-micro) var(--ease-out)}
+.chip:hover{border-color:var(--ink-muted);color:var(--ink-primary)}
+.chip-active{background:var(--accent);color:var(--text-on-accent);border-color:var(--accent)}
+[data-shell='dark'] .chip{background:rgba(255,255,255,.04);border-color:var(--border-default);color:var(--text-secondary)}
+[data-shell='dark'] .chip:hover{border-color:var(--border-strong);color:var(--text-primary)}
+[data-shell='dark'] .chip-active{background:var(--accent);color:var(--text-on-accent);border-color:var(--accent)}
+
+/* CARDS */
+.card{background:#fff;border:1px solid var(--border-ink);border-radius:var(--r-4);box-shadow:0 1px 0 rgba(0,0,0,.04);padding:24px}
+.card-md{padding:20px}.card-sm{padding:16px}
+[data-shell='dark'] .card{background:var(--bg-2);border-color:transparent;box-shadow:var(--el-2)}
+.card-cream{background:var(--bg-cream-1);border-color:var(--border-ink)}
+
+/* AVATAR */
+.av{border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:500;flex-shrink:0;color:var(--text-primary);font-family:var(--font-display)}
+.av-sm{width:32px;height:32px;font-size:12px}
+.av-md{width:40px;height:40px;font-size:14px}
+.av-lg{width:64px;height:64px;font-size:18px}
+.av-xl{width:96px;height:96px;font-size:24px}
+.av-em{background:linear-gradient(135deg,#2d6a4a 0%,#1a3d2b 100%);color:var(--accent)}
+.av-moc{background:linear-gradient(135deg,#523426 0%,#2e1f14 100%);color:var(--accent-warm)}
+.av-slate{background:linear-gradient(135deg,#2c3a35 0%,#1a2422 100%);color:#b8c2bb}
+.av-ind{background:linear-gradient(135deg,#2d3b58 0%,#18243a 100%);color:#8bb0e0}
+
+/* TOAST + ALERT */
+.alert{padding:12px 14px;border-radius:var(--r-3);font-size:13px;line-height:1.5;display:flex;gap:10px;align-items:flex-start}
+.alert-info{background:#e8eff7;border:1px solid #b3cbe3;color:#1d4f8a}
+.alert-error{background:#fbeded;border:1px solid #e8b4b4;color:#7a2a2a}
+.alert-success{background:#e7f3eb;border:1px solid #b3d6c0;color:#0c2e1f}
+[data-shell='dark'] .alert-info{background:var(--state-info-bg);color:var(--state-info);border-color:rgba(106,164,217,.3)}
+[data-shell='dark'] .alert-error{background:var(--state-danger-bg);color:var(--state-danger);border-color:rgba(217,106,106,.3)}
+
+/* SKELETON */
+.skel{position:relative;overflow:hidden;background:rgba(0,0,0,.06);border-radius:var(--r-2)}
+.skel::after{content:'';position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(0,0,0,.06) 50%,transparent);animation:shim 1.5s infinite}
+[data-shell='dark'] .skel{background:rgba(255,255,255,.04)}
+[data-shell='dark'] .skel::after{background:linear-gradient(90deg,transparent,rgba(255,255,255,.08) 50%,transparent)}
+@keyframes shim{to{transform:translateX(100%)}}
+
+/* Mobile toggle ribbon shown at top of artifact (Desktop/Mobile preview switch) */
+.viewport-toggle{position:fixed;top:8px;right:8px;z-index:9999;display:inline-flex;padding:3px;border-radius:8px;background:rgba(8,18,14,.85);border:1px solid var(--border-default);gap:2px;font-family:var(--font-mono);font-size:11px;letter-spacing:.04em}
+.viewport-toggle button{padding:5px 10px;border:0;background:transparent;color:var(--text-secondary);cursor:pointer;border-radius:5px;font-family:inherit;font-size:11px}
+.viewport-toggle button.active{background:rgba(255,255,255,.08);color:var(--text-primary)}
+.viewport-toggle button:hover{color:var(--text-primary)}
+
+.land-hero{position:relative;overflow:hidden;background:var(--bg-0);color:var(--text-primary);padding:80px 0;min-height:560px;display:flex;align-items:center}
+.land-hero::before{content:'';position:absolute;left:-100px;top:50%;transform:translateY(-50%);width:600px;height:600px;border-radius:50%;background:radial-gradient(circle,var(--accent-glow) 0%,transparent 60%);filter:blur(80px);pointer-events:none}
+.land-hero::after{content:'';position:absolute;inset:0;background-image:radial-gradient(circle,rgba(255,255,255,.08) 1px,transparent 1px);background-size:24px 24px;opacity:.03;pointer-events:none}
+.land-hero-grid{display:grid;grid-template-columns:55fr 45fr;gap:48px;align-items:center;position:relative;z-index:1}
+.land-badge{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border-default);background:rgba(255,255,255,.04);border-radius:9999px;padding:6px 14px;font-size:12px;letter-spacing:.04em;color:var(--text-secondary);text-transform:uppercase;margin-bottom:32px}
+.land-h1{font-size:clamp(40px,5vw,68px);line-height:1.1;letter-spacing:-.02em;font-weight:500;margin:0 0 20px}
+.land-sub{font-size:18px;line-height:1.55;color:var(--text-secondary);max-width:480px;margin:0 0 36px}
+.land-ctas{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:24px}
+.land-trust{display:flex;flex-wrap:wrap;gap:18px;font-size:13px;color:var(--text-muted)}
+.land-trust span{display:inline-flex;align-items:center;gap:6px}
+.land-trust .ck{color:var(--accent-hover)}
+.land-video{aspect-ratio:16/10;background:#0a1810;border:1px solid var(--border-default);border-radius:var(--r-6);box-shadow:0 20px 60px rgba(0,0,0,.4);position:relative;overflow:hidden}
+.land-video::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,#0d1f17 0%,#1a3d2b 50%,#0d1f17 100%);background-size:200% 100%;animation:shim 2.5s infinite}
+.land-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.12);backdrop-filter:blur(8px);border:1.5px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;color:#fff;z-index:2}
+.land-video-cap{margin-top:12px;font-size:13px;color:var(--text-muted);text-align:center}
+
+.stats-banner{background:#fff;padding:64px 0;border-bottom:1px solid var(--border-ink)}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0}
+.stats-cell{padding:20px 24px;position:relative;text-align:center}
+.stats-cell:not(:last-child)::after{content:'';position:absolute;right:0;top:30%;height:40%;width:1px;background:var(--ink-primary);opacity:.15}
+.stats-num{font-family:var(--font-display);font-weight:600;font-size:36px;letter-spacing:-.02em;color:var(--accent);line-height:1}
+.stats-lbl{font-size:13px;color:var(--ink-secondary);margin-top:8px}
+
+.funnel{display:grid;grid-template-columns:1fr 1fr;min-height:520px;color:#fff}
+.funnel-panel{padding:80px 60px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:18px}
+.funnel-emp{background:linear-gradient(152deg,var(--bg-0) 0%,var(--bg-2) 42%,#1b4f38 100%)}
+.funnel-wrk{background:linear-gradient(208deg,var(--bg-warm-1) 0%,var(--bg-warm-2) 40%,#3d2a1a 100%)}
+.funnel-icon{display:inline-flex;align-items:center;justify-content:center}
+.funnel-title{font-family:var(--font-display);font-weight:600;font-size:34px;color:#fff;line-height:1.15}
+.funnel-desc{font-size:15px;color:rgba(255,255,255,.7);max-width:340px;line-height:1.65;margin:0}
+.funnel-ben{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:10px;text-align:left;width:100%;max-width:320px}
+.funnel-ben li{display:flex;gap:10px;font-size:14px;color:rgba(255,255,255,.85)}
+.funnel-cta{margin-top:auto;border:1.5px solid rgba(255,255,255,.5);color:#fff;padding:13px 28px;border-radius:var(--r-4);font-weight:600;font-size:15px;text-decoration:none;transition:all var(--d-micro)}
+.funnel-cta:hover{background:rgba(255,255,255,.1);border-color:#fff}
+
+.section-light{background:var(--bg-cream-1);padding:80px 0;color:var(--ink-primary)}
+.section-light-h{text-align:center;margin-bottom:48px}
+.section-light-h h2{font-size:36px;font-weight:600}
+.section-light-h p{font-size:16px;color:var(--ink-secondary);margin-top:8px}
+.cat-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:16px}
+.cat-card{background:#fff;border:1px solid var(--border-ink);border-radius:var(--r-5);padding:22px 16px;display:flex;flex-direction:column;align-items:center;gap:14px;cursor:pointer;transition:all var(--d-standard) var(--ease-out);text-decoration:none;color:inherit}
+.cat-card:hover{background:var(--accent);border-color:transparent;transform:translateY(-3px);box-shadow:0 8px 24px -8px rgba(45,106,74,.3)}
+.cat-card:hover .cat-name,.cat-card:hover svg{color:#fff}
+.cat-icon{width:48px;height:48px;background:var(--accent-faint);border-radius:var(--r-4);display:flex;align-items:center;justify-content:center;color:var(--accent);transition:all var(--d-standard)}
+.cat-card:hover .cat-icon{background:rgba(255,255,255,.15);color:#fff}
+.cat-name{font-size:14px;font-weight:500;text-align:center;color:var(--ink-primary);transition:color var(--d-standard)}
+
+.how-section{background:#fff;padding:80px 0}
+.how-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:32px;margin-top:48px}
+.how-step{text-align:center;position:relative}
+.how-step-icon{width:64px;height:64px;border-radius:var(--r-5);background:var(--accent-faint);display:flex;align-items:center;justify-content:center;margin:0 auto;color:var(--accent)}
+.how-step-num{position:absolute;top:-8px;right:calc(50% - 40px);width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center}
+.how-step h3{margin:16px 0 6px;font-size:17px;font-weight:600;color:var(--ink-primary)}
+.how-step p{font-size:13px;color:var(--ink-secondary);line-height:1.55;margin:0}
+
+.trust-section{background:var(--bg-cream-1);padding:80px 0;text-align:center}
+.trust-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:32px;margin-top:48px;text-align:center}
+.trust-tile{width:64px;height:64px;border-radius:var(--r-5);background:var(--accent-faint);color:var(--accent);display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
+
+.benefits-section{background:#fff;padding:80px 0}
+.benefits-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.benefit-card{border:1px solid var(--border-ink);border-radius:var(--r-5);padding:36px;background:#fff;display:flex;flex-direction:column}
+.benefit-icon{width:48px;height:48px;border-radius:var(--r-4);background:var(--accent-faint);color:var(--accent);display:flex;align-items:center;justify-content:center;margin-bottom:18px}
+.benefit-icon-warm{background:rgba(198,132,92,.1);color:var(--accent-warm)}
+.benefit-list{list-style:none;padding:0;margin:0 0 24px;display:flex;flex-direction:column;gap:12px}
+.benefit-list li{display:flex;gap:10px;font-size:14px;color:var(--ink-secondary);line-height:1.55}
+.benefit-list li svg{color:var(--accent);flex-shrink:0;margin-top:2px}
+
+.final-cta{background:linear-gradient(135deg,var(--bg-0) 0%,var(--bg-2) 60%,#1b4f38 100%);color:#fff;padding:80px 0;text-align:center}
+.final-cta h2{font-size:40px;font-weight:600;letter-spacing:-.02em;margin-bottom:14px;color:#fff}
+.final-cta p{font-size:16px;color:rgba(255,255,255,.65);margin:0 auto 36px;max-width:420px}
+.final-cta-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+
+@media (max-width:1023px){
+  .land-hero-grid{grid-template-columns:1fr;gap:32px}
+  .stats-grid{grid-template-columns:repeat(2,1fr)}
+  .stats-cell:nth-child(2)::after{display:none}
+  .funnel{grid-template-columns:1fr}
+  .cat-grid{grid-template-columns:repeat(3,1fr)}
+  .how-grid{grid-template-columns:repeat(2,1fr)}
+  .benefits-grid{grid-template-columns:1fr}
+}
+.vp-mobile .land-hero-grid{grid-template-columns:1fr;gap:24px}
+.vp-mobile .land-h1{font-size:36px}
+.vp-mobile .land-sub{font-size:15px}
+.vp-mobile .stats-grid{grid-template-columns:1fr 1fr}
+.vp-mobile .stats-cell:nth-child(2)::after{display:none}
+.vp-mobile .funnel{grid-template-columns:1fr}
+.vp-mobile .funnel-panel{padding:48px 24px}
+.vp-mobile .cat-grid{grid-template-columns:1fr 1fr}
+.vp-mobile .how-grid{grid-template-columns:1fr;gap:20px}
+.vp-mobile .benefits-grid{grid-template-columns:1fr}
+.vp-mobile .final-cta h2{font-size:28px}
+.vp-mobile .section-light-h h2,.vp-mobile .trust-section h2{font-size:24px}
+</style>
+</head>
+<body>
+
+<div class="viewport-toggle" role="tablist" aria-label="Превью устройства">
+  <button id="vt-d" class="active" onclick="setVP('d')">Desktop</button>
+  <button id="vt-m" onclick="setVP('m')">Mobile</button>
+</div>
+<script>
+function setVP(m){
+  const root = document.body;
+  if(m==='m'){root.classList.add('vp-mobile');document.getElementById('vt-d').classList.remove('active');document.getElementById('vt-m').classList.add('active')}
+  else{root.classList.remove('vp-mobile');document.getElementById('vt-d').classList.add('active');document.getElementById('vt-m').classList.remove('active')}
+}
+</script>
+<style>
+.vp-mobile{max-width:390px;margin:0 auto;border-left:1px solid var(--border-default);border-right:1px solid var(--border-default)}
+.vp-mobile .hdr-inner{padding:0 16px}
+.vp-mobile .hdr-nav,.vp-mobile .hdr-phone,.vp-mobile .hdr-right .btn{display:none}
+.vp-mobile .hdr-burger{display:inline-flex}
+.vp-mobile .container{padding:0 16px}
+.vp-mobile .ftr{padding:40px 16px 24px}
+.vp-mobile .ftr-inner{grid-template-columns:1fr;gap:20px}
+.vp-mobile .ftr-bot{flex-direction:column;gap:8px;font-size:10px}
+</style>
+
+
+<header class="hdr">
+  <div class="hdr-inner">
+    <div class="hdr-left">
+      <a class="brand" href="/"><span class="brand-mark"></span>Юнити</a>
+      <nav class="hdr-nav" aria-label="Основная навигация">
+        <a class="hdr-link " href="/vacancies">Вакансии</a><a class="hdr-link " href="/workers">Специалисты</a><a class="hdr-link " href="/employers">Работодатели</a><a class="hdr-link " href="/pricing">Тарифы</a><a class="hdr-link " href="/how-it-works">Как работает</a>
+      </nav>
+    </div>
+    <div class="hdr-right">
+      <a class="hdr-phone" href="tel:+74959881234"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>+7 (495) 988-12-34</a>
+      <a class="btn btn-ghost btn-md" href="/auth/login">Войти</a>
+      <a class="btn btn-primary btn-md" href="/auth/register">Регистрация</a>
+      <button class="hdr-burger" aria-label="Меню"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+    </div>
+  </div>
+</header>
+<main>
+
+<section class="land-hero">
+  <div class="container land-hero-grid">
+    <div>
+      <div class="land-badge" role="status"><span class="dot"></span>Новороссийск</div>
+      <h1 class="land-h1">Нужный персонал —<br/>в нужное время</h1>
+      <p class="land-sub">Юнити — платформа для подбора event-персонала. Официанты, бармены, повара, хостес и координаторы — под любое мероприятие, с проверенными профилями.</p>
+      <div class="land-ctas">
+        <a class="btn btn-primary btn-lg" href="/workers"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="9" cy="7" r="4"/><path d="M3 21v-1a6 6 0 0112 0v1M17 11a4 4 0 010-8M23 21v-1a6 6 0 00-3-5"/></svg>Найти персонал</a>
+        <a class="btn btn-muted btn-lg" href="/auth/register?role=employer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>Разместить вакансию</a>
+      </div>
+      <div class="land-trust">
+        <span><span class="ck">✓</span>500+ проверенных анкет</span>
+        <span style="opacity:.4">·</span>
+        <span><span class="ck">✓</span>Отклик за 24 часа</span>
+        <span style="opacity:.4">·</span>
+        <span><span class="ck">✓</span>Работаем с 2026</span>
+      </div>
+    </div>
+    <div>
+      <div class="land-video">
+        <button class="land-play" aria-label="Запустить видео"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20"/></svg></button>
+      </div>
+      <p class="land-video-cap">Узнать о платформе за 2 минуты</p>
+    </div>
+  </div>
+</section>
+
+<section class="stats-banner">
+  <div class="container">
+    <div class="stats-grid">
+      <div class="stats-cell"><div class="stats-num">500+</div><div class="stats-lbl">Анкет в базе</div></div>
+      <div class="stats-cell"><div class="stats-num">48 ч</div><div class="stats-lbl">Среднее время закрытия вакансии</div></div>
+      <div class="stats-cell"><div class="stats-num">97 %</div><div class="stats-lbl">Работодателей вернулись повторно</div></div>
+      <div class="stats-cell"><div class="stats-num">2026</div><div class="stats-lbl">Год основания</div></div>
+    </div>
+  </div>
+</section>
+
+<section class="funnel">
+  <div class="funnel-panel funnel-emp">
+    <div class="funnel-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#a8d5b5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></div>
+    <h2 class="funnel-title">Я ищу персонал</h2>
+    <p class="funnel-desc">Размещайте вакансии, выбирайте из каталога проверенных кандидатов и бронируйте персонал под конкретные даты мероприятий.</p>
+    <ul class="funnel-ben">
+      <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6fcf97" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Поиск по роли, опыту и дате события</li>
+      <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6fcf97" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Верифицированные профили с отзывами</li>
+      <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6fcf97" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Быстрое бронирование — без лишних звонков</li>
+    </ul>
+    <a class="funnel-cta" href="/auth/register?role=employer">Начать поиск</a>
+  </div>
+  <div class="funnel-panel funnel-wrk">
+    <div class="funnel-icon"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#d5a88a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="7" r="4"/><polyline points="22 11 14 11 14 17"/><path d="M3 21v-1a6 6 0 0112 0v1"/></svg></div>
+    <h2 class="funnel-title">Я ищу работу</h2>
+    <p class="funnel-desc">Создайте анкету, откликайтесь на вакансии и получайте приглашения от работодателей. Работайте на мероприятиях в удобном формате.</p>
+    <ul class="funnel-ben">
+      <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e8a87c" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Анкета готова за 5 минут</li>
+      <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e8a87c" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Отклики и приглашения в одном кабинете</li>
+      <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e8a87c" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Гибкий график — разовые смены и долгосрочно</li>
+    </ul>
+    <a class="funnel-cta" href="/auth/register?role=worker">Создать анкету</a>
+  </div>
+</section>
+
+<section class="section-light">
+  <div class="container">
+    <div class="section-light-h">
+      <h2>Кого ищут чаще всего</h2>
+      <p>12 категорий специалистов в каталоге</p>
+    </div>
+    <div class="cat-grid">
+      <a class="cat-card" href="/vacancies?category=waiter"><div class="cat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M3 11h18M12 11v10M5 5l1 4M19 5l-1 4M5 5h14"/></svg></div><div class="cat-name">Официанты</div></a>
+      <a class="cat-card" href="/vacancies?category=bartender"><div class="cat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M8 3h8l-4 6-4-6zM12 9v9M8 21h8"/></svg></div><div class="cat-name">Бармены</div></a>
+      <a class="cat-card" href="/vacancies?category=cook"><div class="cat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M6 13.87A4 4 0 117.41 6a5.11 5.11 0 019.18 0A4 4 0 1118 13.87V21H6z"/></svg></div><div class="cat-name">Повара</div></a>
+      <a class="cat-card" href="/vacancies?category=admin"><div class="cat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M9 4H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-3M9 12h6M9 16h4"/></svg></div><div class="cat-name">Администраторы</div></a>
+      <a class="cat-card" href="/vacancies?category=hostess"><div class="cat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0116 0v1"/><polyline points="9 15 11 17 15 13"/></svg></div><div class="cat-name">Хостес</div></a>
+      <a class="cat-card" href="/vacancies?category=coord"><div class="cat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/><polyline points="9 15 11 17 15 13"/></svg></div><div class="cat-name">Координаторы</div></a>
+      <a class="cat-card" href="/vacancies?category=banquet"><div class="cat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><polygon points="12 2 15 8.5 22 9.3 17 14.1 18.5 21 12 17.8 5.5 21 7 14.1 2 9.3 9 8.5"/></svg></div><div class="cat-name">Банкетные менеджеры</div></a>
+      <a class="cat-card" href="/vacancies?category=dj"><div class="cat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div><div class="cat-name">Диджеи</div></a>
+      <a class="cat-card" href="/vacancies?category=cashier"><div class="cat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div><div class="cat-name">Кассиры</div></a>
+      <a class="cat-card" href="/vacancies?category=wardrobe"><div class="cat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M16 2H8L4 6v16h16V6zM8 2l4 4 4-4M12 13h.01"/></svg></div><div class="cat-name">Гардеробщики</div></a>
+      <a class="cat-card" href="/vacancies?category=tech"><div class="cat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg></div><div class="cat-name">Технический персонал</div></a>
+      <a class="cat-card" href="/vacancies"><div class="cat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></div><div class="cat-name">Другие специалисты</div></a>
+    </div>
+  </div>
+</section>
+
+<section class="how-section">
+  <div class="container">
+    <div class="section-light-h">
+      <h2>Как это работает</h2>
+      <p>Четыре простых шага до результата</p>
+    </div>
+    <div class="how-grid">
+      <div class="how-step"><div class="how-step-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><div class="how-step-num">1</div><h3>Найдите</h3><p>Просмотрите каталог проверенных специалистов или опубликуйте вакансию</p></div>
+      <div class="how-step"><div class="how-step-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div><div class="how-step-num">2</div><h3>Свяжитесь</h3><p>Обсудите детали через встроенный чат платформы</p></div>
+      <div class="how-step"><div class="how-step-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18"/></svg></div><div class="how-step-num">3</div><h3>Подтвердите</h3><p>Забронируйте специалиста на нужную дату и время</p></div>
+      <div class="how-step"><div class="how-step-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 15 8.5 22 9.3 17 14.1 18.5 21 12 17.8 5.5 21 7 14.1 2 9.3 9 8.5"/></svg></div><div class="how-step-num">4</div><h3>Оцените</h3><p>Оставьте отзыв после завершения — развивайте доверие</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="trust-section">
+  <div class="container">
+    <h2 style="font-size:32px;font-weight:600">Доверие — основа платформы</h2>
+    <p style="font-size:16px;color:var(--ink-secondary);margin:12px auto 0;max-width:560px">Каждый специалист и работодатель проходит верификацию. Рейтинги, отзывы и бейджи помогают принять правильное решение.</p>
+    <div class="trust-grid">
+      <div><div class="trust-tile"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><h3 style="font-size:17px;font-weight:600">Верификация</h3><p style="font-size:14px;color:var(--ink-secondary);margin-top:6px">Подтверждённые профили и контакты</p></div>
+      <div><div class="trust-tile"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 15 8.5 22 9.3 17 14.1 18.5 21 12 17.8 5.5 21 7 14.1 2 9.3 9 8.5"/></svg></div><h3 style="font-size:17px;font-weight:600">Отзывы</h3><p style="font-size:14px;color:var(--ink-secondary);margin-top:6px">Честные оценки по итогам каждой смены</p></div>
+      <div><div class="trust-tile"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><h3 style="font-size:17px;font-weight:600">Скорость</h3><p style="font-size:14px;color:var(--ink-secondary);margin-top:6px">Подбор персонала за считанные часы</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="benefits-section">
+  <div class="container">
+    <div class="section-light-h">
+      <h2>Всё что нужно — в одном месте</h2>
+    </div>
+    <div class="benefits-grid">
+      <div class="benefit-card">
+        <div class="benefit-icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></div>
+        <h3 style="font-size:20px;font-weight:600;margin-bottom:20px">Для работодателей</h3>
+        <ul class="benefit-list">
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="9 12 11 14 15 10"/></svg>Публикуйте вакансию за 5 минут</li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="9 12 11 14 15 10"/></svg>Получите отклики от проверенных специалистов</li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="9 12 11 14 15 10"/></svg>Бронируйте работника на конкретную дату</li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="9 12 11 14 15 10"/></svg>Оценивайте и приглашайте повторно</li>
+        </ul>
+        <a href="/for-employers" style="display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:600;color:var(--accent)">Подробнее<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
+      </div>
+      <div class="benefit-card">
+        <div class="benefit-icon benefit-icon-warm"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="9" cy="7" r="4"/><path d="M3 21v-1a6 6 0 0112 0v1M17 11a4 4 0 010-8M23 21v-1a6 6 0 00-3-5"/></svg></div>
+        <h3 style="font-size:20px;font-weight:600;margin-bottom:20px">Для специалистов</h3>
+        <ul class="benefit-list">
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-warm)" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="9 12 11 14 15 10"/></svg>Создайте профессиональный профиль</li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-warm)" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="9 12 11 14 15 10"/></svg>Управляйте расписанием и доступностью</li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-warm)" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="9 12 11 14 15 10"/></svg>Получайте приглашения напрямую</li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent-warm)" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="9 12 11 14 15 10"/></svg>Развивайте репутацию через отзывы</li>
+        </ul>
+        <a href="/for-workers" style="display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:600;color:var(--accent-warm)">Подробнее<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="final-cta">
+  <div class="container">
+    <h2>Начните прямо сейчас</h2>
+    <p>Регистрация бесплатна. Размещение вакансий — бесплатно на старте.</p>
+    <div class="final-cta-row">
+      <a class="btn btn-primary btn-lg" href="/auth/register?role=employer"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>Я работодатель</a>
+      <a class="btn btn-muted btn-lg" href="/auth/register?role=worker"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="9" cy="7" r="4"/><path d="M3 21v-1a6 6 0 0112 0v1M17 11a4 4 0 010-8M23 21v-1a6 6 0 00-3-5"/></svg>Я ищу работу</a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="ftr">
+  <div class="ftr-inner">
+    <div class="ftr-brand">
+      <a class="brand" href="/" style="color:var(--text-primary)"><span class="brand-mark"></span>Юнити</a>
+      <p>Специализированная платформа для подбора event-персонала: рестораны, кейтеринг, площадки, агентства.</p>
+    </div>
+    <div><h6>Платформа</h6>
+      <a href="/vacancies">Вакансии</a><a href="/workers">Специалисты</a><a href="/employers">Работодатели</a><a href="/pricing">Тарифы</a>
+    </div>
+    <div><h6>Компания</h6>
+      <a href="/about">О сервисе</a><a href="/contacts">Контакты</a><a href="/help">Помощь</a><a href="/how-it-works">Как работает</a>
+    </div>
+    <div><h6>Документы</h6>
+      <a href="/legal/offer">Оферта</a><a href="/legal/privacy">Конфиденциальность</a><a href="/legal/terms">Условия</a>
+    </div>
+  </div>
+  <div class="ftr-bot">
+    <span>© 2026 Юнити · 353900, г. Новороссийск</span>
+    <span>info@unity-staff.ru · +7 (495) 988-12-34 · Пн–Пт 10:00–19:00 МСК</span>
+  </div>
+</footer>
+</body>
+</html>

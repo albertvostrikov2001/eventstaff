@@ -16,9 +16,13 @@ export default function NewVacancyPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [cities, setCities] = useState<City[]>([]);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     apiClient.get<{ data: City[] }>('/catalog/cities').then((res) => setCities(res.data)).catch(() => {});
+    apiClient.get<{ data: { logoUrl?: string | null } }>('/employer/profile')
+      .then((res) => setLogoUrl(res.data.logoUrl ?? null))
+      .catch(() => {});
   }, []);
 
   const onSubmit = async (data: VacancyCreateInput) => {
@@ -53,7 +57,7 @@ export default function NewVacancyPage() {
           </div>
         </div>
       </div>
-      <VacancyForm cities={cities} mode="create" onSubmit={onSubmit} />
+      <VacancyForm cities={cities} mode="create" onSubmit={onSubmit} existingLogoUrl={logoUrl} />
     </div>
   );
 }

@@ -295,12 +295,16 @@ export class EmailService {
       } catch (err) {
         lastErr = err;
         this.log.warn({ logId, attempt: attempt + 1, to: maskEmail(to), err: err instanceof Error ? err.message : String(err) }, 'SMTP attempt failed');
+        // Постоянная ошибка SMTP (5xx, напр. 554 spam / 550 mailbox) — повтор бессмыслен
+        // и только усиливает «спам-сигнал». Прекращаем сразу.
+        const code = (err as { responseCode?: number }).responseCode;
+        if (typeof code === 'number' && code >= 500 && code < 600) break;
       }
     }
 
     const finalMsg = lastErr instanceof Error ? lastErr.message : String(lastErr);
     await this.prisma.emailLog.update({ where: { id: logId }, data: { status: 'FAILED', errorText: finalMsg.slice(0, 2000) } });
-    this.log.error({ logId, to: maskEmail(to), err: finalMsg }, 'Email failed after retries (SMTP)');
+    this.log.error({ logId, to: maskEmail(to), err: finalMsg }, 'Email failed (SMTP)');
   }
 
   /** Re-queue a failed send without applying rate limits again. */

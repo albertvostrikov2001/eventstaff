@@ -42,6 +42,8 @@ const nextConfig = {
             { protocol: 'http', hostname: '127.0.0.1', pathname: '/**' },
             { protocol: 'http', hostname: '147.45.235.70', pathname: '/**' },
             { protocol: 'https', hostname: '147.45.235.70', pathname: '/**' },
+            { protocol: 'https', hostname: 'unityevent.ru', pathname: '/**' },
+            { protocol: 'https', hostname: 'www.unityevent.ru', pathname: '/**' },
           ],
         },
       }),

@@ -10,9 +10,12 @@ import { useToast } from '@/components/ui/toast-context';
 import { APPLICATION_STATUSES } from '@unity/shared';
 import { cn } from '@/lib/utils';
 import { OpenChatButton } from '@/components/chat/OpenChatButton';
+import { ShiftGuidelinesModal } from '@/components/shifts/ShiftGuidelinesModal';
+import { NextStepReminderModal } from '@/components/shifts/NextStepReminderModal';
 import { formatRelativeTimeRu } from '@/lib/format-relative-ru';
 import { ResponsiveTable, type Column } from '@/components/ui/ResponsiveTable';
 import { UserAvatar } from '@/components/ui/UserAvatar';
+import { PhotoLightbox } from '@/components/media/PhotoLightbox';
 import { Button } from '@/components/ui/button';
 
 interface ApplicationRow {
@@ -35,7 +38,7 @@ interface VacancyOpt {
   title: string;
 }
 
-const CHAT_READY_STATUSES = new Set(['confirmed', 'shift_started', 'completed', 'invited']);
+const CHAT_READY_STATUSES = new Set(['confirmed', 'shift_started', 'completed', 'invited', 'interview']);
 
 function rowCardCls() {
   return 'rounded-[14px] border border-white/[0.08] bg-white/[0.04] px-4 py-3';
@@ -57,6 +60,19 @@ export function EmployerApplicationsPageClient() {
   const [searchDraft, setSearchDraft] = useState('');
   const [sort, setSort] = useState<'newest' | 'oldest' | 'rating'>('newest');
   const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
+  const [confirmMemoId, setConfirmMemoId] = useState<string | null>(null);
+  const [showReminder, setShowReminder] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkWorking, setBulkWorking] = useState(false);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     const s = searchParams.get('status');
@@ -109,8 +125,29 @@ export function EmployerApplicationsPageClient() {
     void fetchList();
   }, [fetchList]);
 
+  const bulkAction = useCallback(
+    async (action: 'reject' | 'interview') => {
+      if (selectedIds.size === 0) return;
+      setBulkWorking(true);
+      try {
+        const res = await apiClient.patch<{ data: { updated: number } }>(
+          '/employer/applications/bulk',
+          { ids: Array.from(selectedIds), action },
+        );
+        toast(`Обновлено откликов: ${res.data.updated}`, 'success');
+        setSelectedIds(new Set());
+        void fetchList();
+      } catch (e) {
+        toast(e instanceof ApiError ? e.message : 'Не удалось выполнить действие', 'error');
+      } finally {
+        setBulkWorking(false);
+      }
+    },
+    [selectedIds, toast, fetchList],
+  );
+
   const updateStatus = useCallback(
-    async (id: string, st: 'confirmed' | 'rejected') => {
+    async (id: string, st: 'confirmed' | 'rejected' | 'interview'): Promise<boolean> => {
       setStatusUpdatingId(id);
       try {
         await apiClient.patch(`/employer/applications/${id}/status`, { status: st });
@@ -118,20 +155,44 @@ export function EmployerApplicationsPageClient() {
         toast(
           st === 'confirmed'
             ? 'Отклик принят. Теперь вы можете начать общение.'
-            : 'Отклик отклонён',
+            : st === 'interview'
+              ? 'Статус «На связи». Откройте чат, чтобы обсудить детали.'
+              : 'Отклик отклонён',
           'success',
         );
+        return true;
       } catch (e) {
         toast(
           e instanceof ApiError ? e.message : 'Не удалось обновить статус',
           'error',
         );
+        return false;
       } finally {
         setStatusUpdatingId(null);
       }
     },
     [toast],
   );
+
+  // Accepting an applicant assigns a shift — show the employer guidelines memo first.
+  const requestStatus = useCallback(
+    (id: string, st: 'confirmed' | 'rejected' | 'interview') => {
+      if (st === 'confirmed') {
+        setConfirmMemoId(id);
+      } else {
+        void updateStatus(id, st);
+      }
+    },
+    [updateStatus],
+  );
+
+  const confirmFromMemo = useCallback(async () => {
+    const id = confirmMemoId;
+    if (!id) return;
+    const ok = await updateStatus(id, 'confirmed');
+    setConfirmMemoId(null);
+    if (ok) setShowReminder(true);
+  }, [confirmMemoId, updateStatus]);
 
   const statusTone = (s: string) => {
     if (s === 'rejected') return 'bg-red-500/15 text-red-200 ring-1 ring-red-500/30';
@@ -147,6 +208,20 @@ export function EmployerApplicationsPageClient() {
   const columns = useMemo((): Column<ApplicationRow>[] => {
     return [
       {
+        key: 'select',
+        header: '',
+        render: (a) => (
+          <input
+            type="checkbox"
+            checked={selectedIds.has(a.id)}
+            onChange={() => toggleSelect(a.id)}
+            onClick={(e) => e.stopPropagation()}
+            className="h-4 w-4 cursor-pointer accent-emerald-500"
+            aria-label="Выбрать отклик"
+          />
+        ),
+      },
+      {
         key: 'worker',
         header: 'Работник',
         render: (a) => {
@@ -154,7 +229,9 @@ export function EmployerApplicationsPageClient() {
           const name = `${a.worker.firstName} ${a.worker.lastName}`.trim();
           return (
             <div className="flex items-center gap-3">
-              <UserAvatar src={a.worker.photoUrl} name={name || 'Работник'} size={48} />
+              <PhotoLightbox src={a.worker.photoUrl} alt={name} className="rounded-full" disabled={!a.worker.photoUrl}>
+                <UserAvatar src={a.worker.photoUrl} name={name || 'Работник'} size={48} />
+              </PhotoLightbox>
               <div>
                 <div className="font-medium text-white/95">{name || 'Работник'}</div>
                 <div className="text-xs text-white/45">{!Number.isNaN(rn) ? `★ ${rn.toFixed(1)}` : '—'}</div>
@@ -204,14 +281,14 @@ export function EmployerApplicationsPageClient() {
         render: (a) => (
           <RowActionsMenu
             a={a}
-            onStatus={updateStatus}
+            onStatus={requestStatus}
             statusUpdatingId={statusUpdatingId}
             chatReady={CHAT_READY_STATUSES.has(a.status)}
           />
         ),
       },
     ];
-  }, [updateStatus, statusUpdatingId]);
+  }, [requestStatus, statusUpdatingId, selectedIds, toggleSelect]);
 
   const mobileCard = useMemo(
     () => ({
@@ -220,7 +297,9 @@ export function EmployerApplicationsPageClient() {
         const name = `${a.worker.firstName} ${a.worker.lastName}`.trim() || 'Работник';
         return (
           <div className="flex min-w-0 items-center gap-2">
-            <UserAvatar src={a.worker.photoUrl} name={name} size={48} />
+            <PhotoLightbox src={a.worker.photoUrl} alt={name} className="rounded-full" disabled={!a.worker.photoUrl}>
+              <UserAvatar src={a.worker.photoUrl} name={name} size={48} />
+            </PhotoLightbox>
             <div className="min-w-0">
               <div className="truncate font-medium text-white">{name}</div>
               <div className="text-xs text-white/45">{!Number.isNaN(rn) ? `★ ${rn.toFixed(1)}` : '—'}</div>
@@ -247,13 +326,13 @@ export function EmployerApplicationsPageClient() {
       actions: (a: ApplicationRow) => (
         <ApplicationMobileActions
           a={a}
-          onStatus={updateStatus}
+          onStatus={requestStatus}
           statusUpdatingId={statusUpdatingId}
           chatReady={CHAT_READY_STATUSES.has(a.status)}
         />
       ),
     }),
-    [updateStatus, statusUpdatingId],
+    [requestStatus, statusUpdatingId],
   );
 
   return (
@@ -348,6 +427,41 @@ export function EmployerApplicationsPageClient() {
         </div>
       ) : (
         <>
+          {selectedIds.size > 0 && (
+            <div className="mt-6 flex flex-wrap items-center gap-3 rounded-[12px] border border-emerald-500/25 bg-emerald-500/[0.06] px-4 py-3">
+              <span className="text-sm font-medium text-white/85">
+                Выбрано: {selectedIds.size}
+              </span>
+              <div className="ml-auto flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="muted"
+                  size="sm"
+                  disabled={bulkWorking}
+                  onClick={() => void bulkAction('interview')}
+                >
+                  Связаться
+                </Button>
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  disabled={bulkWorking}
+                  onClick={() => void bulkAction('reject')}
+                >
+                  Отклонить выбранные
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghostInverse"
+                  size="sm"
+                  onClick={() => setSelectedIds(new Set())}
+                >
+                  Сбросить
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="mt-8">
             <ResponsiveTable
               data={apps}
@@ -401,6 +515,20 @@ export function EmployerApplicationsPageClient() {
           ) : null}
         </>
       )}
+
+      {confirmMemoId && (
+        <ShiftGuidelinesModal
+          variant="employer"
+          confirmLabel="Понятно, назначить смену"
+          loading={statusUpdatingId === confirmMemoId}
+          onConfirm={() => void confirmFromMemo()}
+          onClose={() => setConfirmMemoId(null)}
+        />
+      )}
+
+      {showReminder && (
+        <NextStepReminderModal variant="employer" onClose={() => setShowReminder(false)} />
+      )}
     </div>
   );
 }
@@ -412,11 +540,12 @@ function ApplicationMobileActions({
   chatReady,
 }: {
   a: ApplicationRow;
-  onStatus: (id: string, st: 'confirmed' | 'rejected') => void;
+  onStatus: (id: string, st: 'confirmed' | 'rejected' | 'interview') => void;
   statusUpdatingId: string | null;
   chatReady: boolean;
 }) {
   const canRespond = ['pending', 'viewed', 'invited', 'interview'].includes(a.status);
+  const canContact = ['pending', 'viewed'].includes(a.status);
 
   return (
     <div className="flex w-full flex-wrap gap-2">
@@ -426,6 +555,17 @@ function ApplicationMobileActions({
       >
         Профиль
       </Link>
+      {canContact && (
+        <Button
+          type="button"
+          variant="muted"
+          disabled={statusUpdatingId === a.id}
+          onClick={() => void onStatus(a.id, 'interview')}
+          className="inline-flex min-w-[120px] flex-1 justify-center rounded-[10px] py-2 text-sm disabled:opacity-40"
+        >
+          Связаться
+        </Button>
+      )}
       {chatReady && a.worker.userId ? (
         <OpenChatButton
           recipientUserId={a.worker.userId}
@@ -464,11 +604,12 @@ function RowActionsMenu({
   chatReady,
 }: {
   a: ApplicationRow;
-  onStatus: (id: string, st: 'confirmed' | 'rejected') => void;
+  onStatus: (id: string, st: 'confirmed' | 'rejected' | 'interview') => void;
   statusUpdatingId: string | null;
   chatReady: boolean;
 }) {
   const canRespond = ['pending', 'viewed', 'invited', 'interview'].includes(a.status);
+  const canContact = ['pending', 'viewed'].includes(a.status);
 
   return (
     <DropdownMenu.Root>
@@ -511,6 +652,18 @@ function RowActionsMenu({
             </DropdownMenu.Item>
           ) : null}
           <DropdownMenu.Separator className="cabinet-dropdown-separator my-2 h-px" />
+          {canContact && (
+            <DropdownMenu.Item
+              className="cabinet-dropdown-item cursor-pointer disabled:opacity-40"
+              disabled={statusUpdatingId === a.id}
+              onSelect={(ev) => {
+                ev.preventDefault();
+                void onStatus(a.id, 'interview');
+              }}
+            >
+              Связаться (на связи)
+            </DropdownMenu.Item>
+          )}
           <DropdownMenu.Item
             className="cabinet-dropdown-item cursor-pointer disabled:opacity-40"
             disabled={!canRespond || statusUpdatingId === a.id}

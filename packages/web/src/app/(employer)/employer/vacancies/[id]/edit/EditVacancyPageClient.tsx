@@ -51,15 +51,18 @@ export function EditVacancyPageClient() {
   const [cities, setCities] = useState<City[]>([]);
   const [vacancy, setVacancy] = useState<Vacancy | null>(null);
   const [loading, setLoading] = useState(true);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
       apiClient.get<{ data: Vacancy }>(`/employer/vacancies/${id}`),
       apiClient.get<{ data: City[] }>('/catalog/cities'),
+      apiClient.get<{ data: { logoUrl?: string | null } }>('/employer/profile').catch(() => ({ data: {} })),
     ])
-      .then(([vacRes, citiesRes]) => {
+      .then(([vacRes, citiesRes, profileRes]) => {
         setVacancy(vacRes.data);
         setCities(citiesRes.data);
+        setLogoUrl((profileRes as { data: { logoUrl?: string | null } }).data?.logoUrl ?? null);
       })
       .catch(() => toast('Ошибка загрузки', 'error'))
       .finally(() => setLoading(false));
@@ -155,6 +158,7 @@ export function EditVacancyPageClient() {
           }}
           onSubmit={onSubmit}
           submitLabel="Сохранить изменения"
+          existingLogoUrl={logoUrl}
         />
     </div>
   );

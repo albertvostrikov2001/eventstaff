@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { EmployerIndividualRequestModal } from '@/components/employer/EmployerIndividualRequestModal';
 import { EmployerRecentApplicationsSection } from '@/components/employer/EmployerRecentApplicationsSection';
+import { OnboardingChecklist } from '@/components/dashboard/OnboardingChecklist';
+import { ActionRequired } from '@/components/dashboard/ActionRequired';
 import { Button } from '@/components/ui/button';
 
 interface Stats {
@@ -57,6 +59,11 @@ export default function EmployerDashboardPage() {
     limit: number;
     unlimited: boolean;
   } | null>(null);
+  const [inviteUsage, setInviteUsage] = useState<{
+    used: number;
+    limit: number;
+    unlimited: boolean;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [requestModalOpen, setRequestModalOpen] = useState(false);
   const [myRequests, setMyRequests] = useState<MyIndividualRequestRow[]>([]);
@@ -70,7 +77,11 @@ export default function EmployerDashboardPage() {
       }),
       apiClient.get<{ data: unknown[] }>('/employer/favorites/workers'),
       apiClient.get<{
-        data: { pendingApplicationsCount: number; totalApplicationsCount: number };
+        data: {
+          pendingApplicationsCount: number;
+          totalApplicationsCount: number;
+          invitationUsage?: { used: number; limit: number; unlimited: boolean };
+        };
       }>('/employer/dashboard/summary'),
       apiClient
         .get<{ data: { used: number; limit: number; unlimited: boolean } }>('/user/review-usage')
@@ -84,6 +95,7 @@ export default function EmployerDashboardPage() {
           totalApplications: summaryRes.data.totalApplicationsCount,
           favoriteWorkers: favRes.data.length,
         });
+        if (summaryRes.data.invitationUsage) setInviteUsage(summaryRes.data.invitationUsage);
         if (usageRes?.data) setUsage(usageRes.data);
       })
       .catch(() => {})
@@ -114,7 +126,7 @@ export default function EmployerDashboardPage() {
     <div>
       <EmployerIndividualRequestModal open={requestModalOpen} onOpenChange={setRequestModalOpen} onSuccess={bumpIr} />
 
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">Добро пожаловать, {name}!</h1>
           <p className="mt-1 text-sm text-white/50">Управляйте наймом event-персонала</p>
@@ -128,6 +140,44 @@ export default function EmployerDashboardPage() {
           {isVerified ? 'Верифицирован' : 'Не верифицирован'}
         </div>
       </div>
+
+      {!loading && (
+        <OnboardingChecklist
+          title="Начните нанимать персонал"
+          items={[
+            {
+              label: 'Заполните профиль компании',
+              done: !!user?.employerProfile?.companyName,
+              href: '/employer/profile',
+              cta: 'Заполнить',
+            },
+            {
+              label: 'Создайте первую вакансию',
+              done: stats.activeVacancies > 0 || stats.totalApplications > 0,
+              href: '/employer/vacancies/new',
+              cta: 'Создать',
+            },
+            {
+              label: 'Рассмотрите первые отклики',
+              done: stats.totalApplications > 0 && stats.pendingApplications === 0,
+              href: '/employer/applications',
+              cta: 'Открыть',
+            },
+          ]}
+        />
+      )}
+
+      {!loading && (
+        <ActionRequired
+          items={[
+            {
+              label: 'Отклики ждут ответа',
+              href: '/employer/applications',
+              count: stats.pendingApplications,
+            },
+          ]}
+        />
+      )}
 
       {usage && !usage.unlimited && (
         <div className={`mt-6 p-4 ${cardCls()}`}>
@@ -146,6 +196,26 @@ export default function EmployerDashboardPage() {
         </div>
       )}
 
+      {inviteUsage && !inviteUsage.unlimited && inviteUsage.limit > 0 && (
+        <div className={`mt-4 flex flex-wrap items-center justify-between gap-2 p-4 ${cardCls()}`}>
+          <span className="text-sm text-white/70">
+            Приглашения в этом месяце:{' '}
+            <span className="font-semibold text-white">
+              {inviteUsage.used} / {inviteUsage.limit}
+            </span>
+            {inviteUsage.used >= inviteUsage.limit && (
+              <span className="ml-2 text-amber-300">лимит исчерпан</span>
+            )}
+          </span>
+          <Link
+            href="/employer/subscription"
+            className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/30"
+          >
+            Больше приглашений →
+          </Link>
+        </div>
+      )}
+
       <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className={`p-5 ${cardCls()}`}>
           <div className="flex items-center gap-3">
@@ -160,7 +230,7 @@ export default function EmployerDashboardPage() {
         </div>
 
         <Link
-          href="/employer/applications?status=pending"
+          href="/employer/applications"
           className={`block p-5 transition hover:bg-white/[0.06] ${
             stats.pendingApplications > 0
               ? 'rounded-[14px] border border-emerald-400/40 bg-white/[0.04] shadow-[0_0_0_1px_rgba(52,211,153,0.12)]'

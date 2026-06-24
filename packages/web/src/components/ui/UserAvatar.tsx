@@ -39,6 +39,7 @@ export function UserAvatar({ src, name, size = 48, className }: UserAvatarProps)
         height={wh}
         className={cn('rounded-full object-cover', className)}
         sizes={`${wh}px`}
+        unoptimized
         onError={() => setImgError(true)}
       />
     );

@@ -1,21 +1,38 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { publicAssetUrl } from '@/lib/public-asset-url';
 
-interface SidebarItem {
+export interface SidebarItem {
   href: string;
   label: string;
   icon: LucideIcon;
   badge?: number;
+  /** Optional inline action button rendered at the right of the row (e.g. "+" to create). */
+  ctaHref?: string;
+  ctaLabel?: string;
+}
+
+export interface SidebarDivider {
+  type: 'divider';
+  /** Optional section heading shown above the group. */
+  label?: string;
+}
+
+export type SidebarEntry = SidebarItem | SidebarDivider;
+
+function isDivider(entry: SidebarEntry): entry is SidebarDivider {
+  return 'type' in entry && entry.type === 'divider';
 }
 
 interface DashboardSidebarProps {
-  items: SidebarItem[];
+  items: SidebarEntry[];
   logoHref: string;
   dark?: boolean;
   mobileOpen?: boolean;
@@ -23,22 +40,17 @@ interface DashboardSidebarProps {
   footer?: ReactNode;
 }
 
-/** Geometric brand mark — matches design system */
 function BrandMark() {
   return (
-    <div
-      className="relative h-6 w-6 shrink-0 rounded-[6px]"
-      style={{ background: 'linear-gradient(135deg, var(--accent) 0%, #1f5a3d 100%)' }}
-    >
-      <div
-        className="absolute rounded-[2px]"
-        style={{ inset: '7px', background: 'var(--bg-0)' }}
-      />
-      <div
-        className="absolute rounded-[1px]"
-        style={{ inset: '10px', background: 'var(--accent)' }}
-      />
-    </div>
+    <Image
+      src={publicAssetUrl('/logo.png')}
+      alt="Юнити"
+      width={26}
+      height={28}
+      className="block shrink-0"
+      style={{ width: 26, height: 28, objectFit: 'contain' }}
+      priority
+    />
   );
 }
 
@@ -47,46 +59,84 @@ function NavLinks({
   dark,
   onLinkClick,
 }: {
-  items: SidebarItem[];
+  items: SidebarEntry[];
   dark: boolean;
   onLinkClick?: () => void;
 }) {
   const pathname = usePathname();
   return (
     <nav className="flex flex-col gap-0.5 p-2">
-      {items.map((item) => {
+      {items.map((entry, idx) => {
+        if (isDivider(entry)) {
+          return (
+            <div key={`divider-${idx}`} className={cn('px-3', entry.label ? 'mb-1 mt-3' : 'my-2')}>
+              {entry.label ? (
+                <span
+                  className={cn(
+                    'block text-[10px] font-semibold uppercase tracking-[0.08em]',
+                    dark ? 'text-white/30' : 'text-gray-400',
+                  )}
+                >
+                  {entry.label}
+                </span>
+              ) : (
+                <div className={cn('h-px', dark ? 'bg-white/[0.06]' : 'bg-gray-200')} />
+              )}
+            </div>
+          );
+        }
+
+        const item = entry;
         const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+        const hasBadge = item.badge != null && item.badge > 0;
         return (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={onLinkClick}
-            className={cn(
-              'relative flex items-center gap-2.5 rounded-[var(--r-3)] border-l-[3px] px-3 py-[9px] text-sm font-medium transition-all duration-[120ms]',
-              isActive
-                ? dark
-                  ? 'border-[var(--accent)] bg-[var(--accent-faint)] pl-[9px] text-[var(--accent)]'
-                  : 'border-primary-500 bg-primary-50 pl-[9px] text-primary-700'
-                : dark
-                ? 'border-transparent pl-[9px] text-[var(--text-secondary)] hover:bg-white/[0.04] hover:text-[var(--text-primary)]'
-                : 'border-transparent pl-[9px] text-gray-600 hover:bg-gray-50 hover:text-primary-600',
-            )}
-          >
-            <item.icon className="h-4 w-4 shrink-0" />
-            <span className="min-w-0 flex-1 truncate">{item.label}</span>
-            {item.badge != null && item.badge > 0 && (
-              <span
+          <div key={item.href} className="relative flex items-center">
+            <Link
+              href={item.href}
+              onClick={onLinkClick}
+              className={cn(
+                'relative flex flex-1 items-center gap-2.5 rounded-[var(--r-3)] border-l-[3px] px-3 py-3 lg:py-[9px] text-sm font-medium transition-all duration-[120ms]',
+                isActive
+                  ? dark
+                    ? 'border-[var(--accent)] bg-[var(--accent-faint)] pl-[9px] text-[var(--accent)]'
+                    : 'border-primary-500 bg-primary-50 pl-[9px] text-primary-700'
+                  : dark
+                  ? 'border-transparent pl-[9px] text-[var(--text-secondary)] hover:bg-white/[0.04] hover:text-[var(--text-primary)]'
+                  : 'border-transparent pl-[9px] text-gray-600 hover:bg-gray-50 hover:text-primary-600',
+              )}
+            >
+              <item.icon className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{item.label}</span>
+              {hasBadge && (
+                <span
+                  className={cn(
+                    'ml-auto shrink-0 min-w-[18px] rounded-full px-1.5 py-0.5 text-center font-mono text-[10px] font-semibold leading-none tracking-[.04em]',
+                    dark
+                      ? 'bg-[var(--accent)] text-[var(--text-on-accent)]'
+                      : 'bg-primary-500 text-white',
+                  )}
+                >
+                  {item.badge! > 99 ? '99+' : item.badge}
+                </span>
+              )}
+            </Link>
+            {item.ctaHref && (
+              <Link
+                href={item.ctaHref}
+                onClick={onLinkClick}
+                aria-label={item.ctaLabel ?? 'Создать'}
+                title={item.ctaLabel ?? 'Создать'}
                 className={cn(
-                  'ml-auto shrink-0 min-w-[18px] rounded-full px-1.5 py-0.5 text-center font-mono text-[10px] font-semibold leading-none tracking-[.04em]',
+                  'absolute right-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-lg font-bold leading-none transition',
                   dark
-                    ? 'bg-[var(--accent)] text-[var(--text-on-accent)]'
-                    : 'bg-primary-500 text-white',
+                    ? 'bg-[var(--accent-faint)] text-[var(--accent)] hover:bg-[var(--accent)]/30'
+                    : 'bg-primary-50 text-primary-600 hover:bg-primary-100',
                 )}
               >
-                {item.badge > 99 ? '99+' : item.badge}
-              </span>
+                +
+              </Link>
             )}
-          </Link>
+          </div>
         );
       })}
     </nav>

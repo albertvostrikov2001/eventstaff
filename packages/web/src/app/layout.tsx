@@ -4,6 +4,8 @@ import '@/styles/globals.css';
 import { AuthProvider } from '@/providers/AuthProvider';
 import { ToastProvider } from '@/components/ui/toast-context';
 import { NetworkErrorBanner } from '@/components/common/NetworkErrorBanner';
+import { CookieNotice } from '@/components/common/CookieNotice';
+import { YandexMetrika } from '@/components/analytics/YandexMetrika';
 
 import { config } from '@/lib/config';
 
@@ -40,21 +42,57 @@ export const metadata: Metadata = {
     'Специализированная платформа для подбора event-персонала в ресторанном бизнесе и сфере гостеприимства. Быстро. Проверено. Профессионально.',
   keywords: [
     'event персонал',
+    'персонал на мероприятие',
     'официант на мероприятие',
+    'официант на банкет',
     'бармен на банкет',
+    'хостес на мероприятие',
+    'повар на мероприятие',
+    'промоутер на акцию',
+    'аниматор на праздник',
     'работа официантом',
-    'подработка в ресторане',
+    'подработка официантом',
+    'подработка на мероприятиях',
     'кейтеринг персонал',
-    'Новороссийск',
+    'персонал для ресторана',
+    'найм персонала на смену',
+    'event агентство персонал',
+    'официант Новороссийск',
+    'персонал на мероприятие Новороссийск',
+    'официант Анапа',
+    'официант Краснодар',
   ],
   openGraph: {
     type: 'website',
     locale: 'ru_RU',
     siteName: 'Юнити',
+    url: config.siteUrl,
+    images: [
+      {
+        url: '/logo.png',
+        width: 512,
+        height: 512,
+        alt: 'Юнити — платформа event-персонала',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Юнити — Платформа event-персонала',
+    description:
+      'Подбор официантов, барменов и event-персонала для мероприятий, ресторанов и кейтеринга.',
+    images: ['/logo.png'],
+  },
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/apple-touch-icon.png',
   },
   robots: {
     index: true,
     follow: true,
+  },
+  verification: {
+    yandex: 'e1f7eade0fd58c6a',
   },
 };
 
@@ -67,7 +105,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <QueryProvider>
             <AuthProvider>{children}</AuthProvider>
           </QueryProvider>
+          <CookieNotice />
         </ToastProvider>
+        <YandexMetrika />
       </body>
     </html>
   );

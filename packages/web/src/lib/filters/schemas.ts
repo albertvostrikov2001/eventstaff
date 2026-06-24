@@ -65,7 +65,6 @@ const employerShiftTabs = [
   'active',
   'pending_confirm',
   'completed',
-  'needs_payment',
   'archive',
   'disputed',
   'all',

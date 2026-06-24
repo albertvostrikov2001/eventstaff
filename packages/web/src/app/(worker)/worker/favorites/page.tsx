@@ -86,7 +86,7 @@ export default function WorkerFavoritesPage() {
                     <p className="mt-0.5 text-sm text-white/50">
                       {v.employer.companyName ?? v.employer.contactName}
                       {v.employer.isVerified && (
-                        <span className="ml-1 text-xs text-primary-600">✓</span>
+                        <span className="ml-1 text-xs text-emerald-400">✓</span>
                       )}
                     </p>
                     <div className="mt-2 flex flex-wrap gap-2 text-xs text-white/45">
@@ -101,13 +101,13 @@ export default function WorkerFavoritesPage() {
                         </span>
                       )}
                       <span className="font-medium text-white/70">
-                        {Number(v.rate).toLocaleString('ru-RU')} ₽/ч
+                        {Number(v.rate).toLocaleString('ru-RU')} ₽
                       </span>
                     </div>
                   </div>
                   <button
                     onClick={() => remove(v.id)}
-                    className="ml-2 shrink-0 rounded-full p-1.5 text-error hover:bg-red-50"
+                    className="ml-2 shrink-0 rounded-full p-1.5 text-error hover:bg-red-500/15"
                   >
                     <Heart className="h-4 w-4 fill-current" />
                   </button>

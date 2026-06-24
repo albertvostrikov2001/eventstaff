@@ -1,6 +1,6 @@
 export function VacancyCardSkeleton() {
   return (
-    <div className="rounded-card border border-gray-200 bg-white p-5">
+    <div className="rounded-card border border-white/[0.08] bg-white/[0.04] p-5">
       {/* Title */}
       <div className="skeleton-light mb-1 h-5 w-4/5 rounded" />
       {/* Company */}

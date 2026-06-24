@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api/client';
 import { useToast } from '@/components/ui/toast-context';
 import { BanDialog } from '@/components/admin/BanDialog';
 import { UnrestrictDialog } from '@/components/admin/UnrestrictDialog';
+import { RestrictDialog } from '@/components/admin/RestrictDialog';
 import { ConfirmActionDialog } from '@/components/admin/ConfirmActionDialog';
 import {
   ShieldCheck,
@@ -21,6 +23,8 @@ import {
   FileText,
   Mail,
   Users,
+  MessageSquare,
+  ExternalLink,
 } from 'lucide-react';
 import { AdminEmptyState } from '@/components/admin/AdminEmptyState';
 
@@ -45,6 +49,7 @@ interface UserItem {
     contactName: string | null;
     logoUrl: string | null;
     isVerified: boolean;
+    isHidden: boolean;
   } | null;
   userReliabilityScore: { isRestricted: boolean; strikeCount: number } | null;
 }
@@ -96,16 +101,22 @@ function ActionsMenu({
   user,
   onBan,
   onUnban,
+  onRestrict,
   onUnrestrict,
   onVerify,
   onToggleVisibility,
+  onToggleEmployerVisibility,
+  onOpenChat,
 }: {
   user: UserItem;
   onBan: () => void;
   onUnban: () => void;
+  onRestrict: () => void;
   onUnrestrict: () => void;
   onVerify: () => void;
   onToggleVisibility: () => void;
+  onToggleEmployerVisibility: () => void;
+  onOpenChat: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -158,8 +169,52 @@ function ActionsMenu({
               )}
             </button>
           )}
+          {user.employerProfile && (
+            <button
+              onClick={() => { close(); onToggleEmployerVisibility(); }}
+              className="flex w-full items-center gap-2 px-4 py-2 text-sm text-white/70 hover:bg-white/[0.06] hover:text-white"
+            >
+              {user.employerProfile.isHidden ? (
+                <><Eye className="h-4 w-4 text-white/40" /> Показать работодателя</>
+              ) : (
+                <><EyeOff className="h-4 w-4 text-white/40" /> Скрыть работодателя</>
+              )}
+            </button>
+          )}
+
+          {/* Открыть анкету (админ видит даже скрытые профили) */}
+          {user.workerProfile && (
+            <a
+              href={`/workers/${user.workerProfile.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex w-full items-center gap-2 px-4 py-2 text-sm text-white/70 hover:bg-white/[0.06] hover:text-white"
+            >
+              <ExternalLink className="h-4 w-4 text-white/40" /> Открыть анкету
+            </a>
+          )}
+          {user.employerProfile && (
+            <a
+              href={`/employers/${user.employerProfile.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex w-full items-center gap-2 px-4 py-2 text-sm text-white/70 hover:bg-white/[0.06] hover:text-white"
+            >
+              <ExternalLink className="h-4 w-4 text-white/40" /> Открыть анкету
+            </a>
+          )}
 
           <div className="my-1 border-t border-white/[0.08]" />
+
+          {/* Start chat */}
+          {(user.workerProfile || user.employerProfile) && (
+            <button
+              onClick={() => { close(); onOpenChat(); }}
+              className="flex w-full items-center gap-2 px-4 py-2 text-sm text-white/70 hover:bg-white/[0.06] hover:text-white"
+            >
+              <MessageSquare className="h-4 w-4 text-emerald-400" /> Написать в чат
+            </button>
+          )}
 
           {/* Quick links */}
           <a
@@ -194,12 +249,19 @@ function ActionsMenu({
             </button>
           )}
 
-          {user.userReliabilityScore?.isRestricted && (
+          {user.userReliabilityScore?.isRestricted ? (
             <button
               onClick={() => { close(); onUnrestrict(); }}
               className="flex w-full items-center gap-2 px-4 py-2 text-sm font-medium text-amber-400 hover:bg-amber-500/10"
             >
               <AlertTriangle className="h-4 w-4" /> Снять ограничения
+            </button>
+          ) : (
+            <button
+              onClick={() => { close(); onRestrict(); }}
+              className="flex w-full items-center gap-2 px-4 py-2 text-sm font-medium text-amber-400 hover:bg-amber-500/10"
+            >
+              <AlertTriangle className="h-4 w-4" /> Наложить ограничение
             </button>
           )}
         </div>
@@ -210,6 +272,7 @@ function ActionsMenu({
 
 export default function AdminUsersPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const [users, setUsers] = useState<UserItem[]>([]);
   const [meta, setMeta] = useState<Meta>({ total: 0, page: 1, totalPages: 1 });
   const [loading, setLoading] = useState(true);
@@ -221,6 +284,7 @@ export default function AdminUsersPage() {
   const [banTarget, setBanTarget] = useState<UserItem | null>(null);
   const [unbanTarget, setUnbanTarget] = useState<UserItem | null>(null);
   const [unrestrictTarget, setUnrestrictTarget] = useState<UserItem | null>(null);
+  const [restrictTarget, setRestrictTarget] = useState<UserItem | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
   const load = () => {
@@ -287,6 +351,23 @@ export default function AdminUsersPage() {
     }
   };
 
+  const toggleEmployerVisibility = async (user: UserItem) => {
+    if (!user.employerProfile) return;
+    const next = !user.employerProfile.isHidden;
+    try {
+      await apiClient.patch(`/admin/employers/${user.employerProfile.id}/visibility`, {
+        isHidden: next,
+      });
+      updateUser({
+        id: user.id,
+        employerProfile: { ...user.employerProfile, isHidden: next },
+      });
+      toast(next ? 'Работодатель скрыт из каталога' : 'Работодатель показан в каталоге', 'success');
+    } catch {
+      toast('Ошибка обновления', 'error');
+    }
+  };
+
   const handleBanConfirm = async (reason: string) => {
     if (!banTarget) return;
     setActionLoading(true);
@@ -342,6 +423,38 @@ export default function AdminUsersPage() {
     }
   };
 
+  const handleRestrictConfirm = async (reason: string) => {
+    if (!restrictTarget) return;
+    setActionLoading(true);
+    try {
+      await apiClient.patch(`/admin/users/${restrictTarget.id}/restrict`, { reason });
+      updateUser({
+        id: restrictTarget.id,
+        userReliabilityScore: restrictTarget.userReliabilityScore
+          ? { ...restrictTarget.userReliabilityScore, isRestricted: true }
+          : { isRestricted: true, strikeCount: 0 },
+      });
+      toast('Ограничение наложено', 'success');
+      setRestrictTarget(null);
+    } catch {
+      toast('Ошибка наложения ограничения', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleOpenChat = async (user: UserItem) => {
+    try {
+      const res = await apiClient.post<{ data: { roomId: string } }>(
+        `/admin/users/${user.id}/open-chat`,
+        {},
+      );
+      router.push(`/admin/messages/${res.data.roomId}`);
+    } catch {
+      toast('Не удалось открыть чат', 'error');
+    }
+  };
+
   const getUserDisplayName = (u: UserItem) =>
     u.workerProfile
       ? `${u.workerProfile.firstName} ${u.workerProfile.lastName}`.trim() || '—'
@@ -362,7 +475,7 @@ export default function AdminUsersPage() {
             className="w-full rounded-input border border-white/15 bg-white/5 py-2.5 pl-10 pr-4 text-sm text-white placeholder:text-white/30 focus:border-primary-400 focus:outline-none focus:ring-1 focus:ring-primary-400"
           />
         </form>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           {ROLE_FILTERS.map((r) => (
             <button
               key={r}
@@ -382,7 +495,7 @@ export default function AdminUsersPage() {
         </div>
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-card border border-white/10 bg-white/[0.04]">
+      <div className="mt-4 overflow-x-auto rounded-card border border-white/10 bg-white/[0.04]">
         <table className="min-w-full divide-y divide-white/[0.06]">
           <thead>
             <tr className="border-b border-white/[0.06]">
@@ -464,9 +577,12 @@ export default function AdminUsersPage() {
                         user={u}
                         onBan={() => setBanTarget(u)}
                         onUnban={() => setUnbanTarget(u)}
+                        onRestrict={() => setRestrictTarget(u)}
                         onUnrestrict={() => setUnrestrictTarget(u)}
                         onVerify={() => toggleVerify(u)}
                         onToggleVisibility={() => toggleVisibility(u)}
+                        onToggleEmployerVisibility={() => toggleEmployerVisibility(u)}
+                        onOpenChat={() => handleOpenChat(u)}
                       />
                     </td>
                   </tr>
@@ -532,6 +648,15 @@ export default function AdminUsersPage() {
         loading={actionLoading}
         onConfirm={handleUnrestrictConfirm}
         onCancel={() => setUnrestrictTarget(null)}
+      />
+
+      {/* Restrict Dialog */}
+      <RestrictDialog
+        open={!!restrictTarget}
+        userName={restrictTarget ? getUserDisplayName(restrictTarget) : ''}
+        loading={actionLoading}
+        onConfirm={handleRestrictConfirm}
+        onCancel={() => setRestrictTarget(null)}
       />
     </div>
   );

@@ -31,7 +31,7 @@ export const EMPLOYER_PLANS = {
     label: 'Старт',
     price: 0,
     maxActiveVacancies: 3,
-    monthlyInvitations: 0,
+    monthlyInvitations: 3,
     hasFullCatalog: false,
     hasAnalytics: false,
     maxTemplates: 0,
@@ -109,6 +109,15 @@ export class SubscriptionService {
   async canWorkerApply(workerId: string) {
     const sub = await this.getWorkerSubscription(workerId);
     if (sub.applicationsPerMonth === -1) {
+      return { allowed: true, used: 0, limit: -1, plan: sub.key };
+    }
+
+    // Разовый буст «безлимитные отклики на месяц»
+    const profile = await this.prisma.workerProfile.findUnique({
+      where: { id: workerId },
+      select: { unlimitedUntil: true },
+    });
+    if (profile?.unlimitedUntil && profile.unlimitedUntil > new Date()) {
       return { allowed: true, used: 0, limit: -1, plan: sub.key };
     }
 
@@ -243,7 +252,7 @@ export class SubscriptionService {
     const now = new Date();
     const end = plan === 'free' ? null : new Date(now.getFullYear(), now.getMonth() + months, now.getDate());
 
-    return this.prisma.subscription.upsert({
+    const sub = await this.prisma.subscription.upsert({
       where: { employerId },
       create: {
         employerId,
@@ -261,5 +270,26 @@ export class SubscriptionService {
         grantedByAdmin,
       },
     });
+
+    const planDef = EMPLOYER_PLANS[plan];
+    // Auto-manage verified badge based on plan
+    if (planDef.hasVerifiedBadge) {
+      await this.prisma.employerProfile.update({
+        where: { id: employerId },
+        data: { isVerified: true },
+      });
+    } else {
+      // Downgrade to free — restore to verifiedByAdmin state only
+      const profile = await this.prisma.employerProfile.findUnique({
+        where: { id: employerId },
+        select: { verifiedByAdmin: true },
+      });
+      await this.prisma.employerProfile.update({
+        where: { id: employerId },
+        data: { isVerified: profile?.verifiedByAdmin ?? false },
+      });
+    }
+
+    return sub;
   }
 }

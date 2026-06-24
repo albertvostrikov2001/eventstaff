@@ -3,7 +3,6 @@ import type { FastifyInstance } from 'fastify';
 import type { Booking } from '@prisma/client';
 import { bullmqConnectionFromEnv } from '@/lib/bullmq-redis';
 import { publicSiteUrl } from '@/lib/public-site-url';
-import { safeUserSelect } from '@/lib/safe-user-select';
 import type { EmailJob } from '@/services/email-service';
 
 const DLQ_NAME = 'email-dlq';
@@ -140,62 +139,6 @@ export async function startEmailWorkers(fastify: FastifyInstance): Promise<void>
         return;
       }
 
-      if (job.name === 'scan-unpaid-shifts') {
-        const shifts = await prisma.shift.findMany({
-          where: {
-            status: 'COMPLETED',
-            payments: { some: { status: 'PENDING' } },
-          },
-          include: {
-            booking: {
-              include: {
-                linkedVacancy: { select: { title: true } },
-                worker: { include: { user: { select: safeUserSelect } } },
-                employer: { include: { user: { select: safeUserSelect } } },
-              },
-            },
-            payments: { where: { status: 'PENDING' } },
-          },
-        });
-
-        const now = Date.now();
-        for (const shift of shifts) {
-          const end = combineDateTime(shift.booking.date, shift.booking.timeEnd ?? shift.booking.timeStart);
-          if (now < end.getTime() + 24 * 60 * 60 * 1000) continue;
-
-          const lockKey = `email:unpaid-reminder:${shift.id}`;
-          const ok = await redis.set(lockKey, '1', 'EX', 172800, 'NX');
-          if (ok !== 'OK') continue;
-
-          const pay = shift.payments[0];
-          if (!pay) continue;
-
-          const employerUser = shift.booking.employer.user;
-          const workerProf = shift.booking.worker;
-          const workerName = `${workerProf.firstName} ${workerProf.lastName}`.trim() || 'Исполнитель';
-          const email = employerUser.email;
-          if (!email) continue;
-
-          const amount = `${pay.amount} ${pay.currency}`;
-          const shiftDate = end.toLocaleDateString('ru-RU');
-          const site = publicSiteUrl();
-          const ctaUrl = `${site}/employer/dashboard`;
-
-          await emailService.queue({
-            userId: employerUser.id,
-            to: email,
-            type: 'PAYMENT_REQUIRED',
-            templateData: {
-              workerName,
-              amount,
-              shiftDate,
-              ctaUrl,
-            },
-          });
-        }
-        return;
-      }
-
       log.warn({ jobName: job.name }, 'Unknown email queue job');
     },
     { connection, concurrency: 4 },
@@ -236,17 +179,6 @@ export async function startEmailWorkers(fastify: FastifyInstance): Promise<void>
       jobId: 'cron-scan-shift-completion',
       attempts: 3,
       backoff: { type: 'exponential', delay: 10_000 },
-    },
-  );
-
-  await emailQueue.add(
-    'scan-unpaid-shifts',
-    {},
-    {
-      repeat: { every: 3600_000 },
-      jobId: 'cron-scan-unpaid-shifts',
-      attempts: 3,
-      backoff: { type: 'exponential', delay: 60_000 },
     },
   );
 

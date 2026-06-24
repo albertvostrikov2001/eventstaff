@@ -1,4 +1,4 @@
-import { ApplicationStatus, BookingStatus, BusinessType, type Vacancy, Prisma, ShiftStatus, ShiftPayStatus, ShiftFailedBy } from '@prisma/client';
+import { ApplicationStatus, BookingStatus, BusinessType, type Vacancy, Prisma, ShiftStatus, ShiftFailedBy } from '@prisma/client';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify';
 import {
   employerProfileUpdateSchema,
@@ -102,20 +102,36 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
     });
     const vacancyIds = vacancyRows.map((v) => v.id);
 
+    const inviteUsage = await subSvc.canEmployerInvite(profile.id);
+    const invitationUsage = {
+      used: inviteUsage.used,
+      limit: inviteUsage.limit,
+      unlimited: inviteUsage.limit === -1,
+    };
+
     if (vacancyIds.length === 0) {
-      return replyOk(reply, { pendingApplicationsCount: 0, totalApplicationsCount: 0 });
+      return replyOk(reply, {
+        pendingApplicationsCount: 0,
+        totalApplicationsCount: 0,
+        invitationUsage,
+      });
     }
 
     const baseWhere: Prisma.ApplicationWhereInput = { vacancyId: { in: vacancyIds } };
 
+    // "Ждут ответа" = ещё не обработанные откликом работодателя.
+    // viewed означает лишь "работодатель открыл", но реакция (принять/отклонить) ещё нужна.
     const [pendingApplicationsCount, totalApplicationsCount] = await fastify.prisma.$transaction([
       fastify.prisma.application.count({
-        where: { ...baseWhere, status: ApplicationStatus.pending },
+        where: {
+          ...baseWhere,
+          status: { in: [ApplicationStatus.pending, ApplicationStatus.viewed] },
+        },
       }),
       fastify.prisma.application.count({ where: baseWhere }),
     ]);
 
-    return replyOk(reply, { pendingApplicationsCount, totalApplicationsCount });
+    return replyOk(reply, { pendingApplicationsCount, totalApplicationsCount, invitationUsage });
   });
 
   // GET /profile
@@ -338,6 +354,20 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
         },
       }),
     ]);
+
+    // Mark seen applications as "viewed" — only in the unfiltered review view.
+    if (!q.status) {
+      const pendingIds = applications.filter((a) => a.status === 'pending').map((a) => a.id);
+      if (pendingIds.length > 0) {
+        await fastify.prisma.application.updateMany({
+          where: { id: { in: pendingIds }, status: 'pending' },
+          data: { status: 'viewed' },
+        });
+        for (const a of applications) {
+          if (a.status === 'pending') a.status = 'viewed';
+        }
+      }
+    }
 
     return replyPaginated(reply, applications, {
       total,
@@ -679,6 +709,43 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       data: { status: 'archived' },
     });
 
+    // Notify and cancel still-open applications (pending/viewed/invited) so candidates aren't left waiting.
+    const openApps = await fastify.prisma.application.findMany({
+      where: { vacancyId: id, status: { in: ['pending', 'viewed', 'invited'] } },
+      include: { worker: { include: { user: { select: { id: true, email: true } } } } },
+    });
+    if (openApps.length > 0) {
+      await fastify.prisma.application.updateMany({
+        where: { vacancyId: id, status: { in: ['pending', 'viewed', 'invited'] } },
+        data: { status: 'cancelled' },
+      });
+      const site = publicSiteUrl();
+      for (const app of openApps) {
+        const wUser = app.worker.user;
+        if (!wUser) continue;
+        await fastify.notificationService.create({
+          userId: wUser.id,
+          type: 'CANCELLATION',
+          title: 'Вакансия закрыта',
+          body: `Работодатель закрыл вакансию «${vacancy.title}». Отклик больше неактуален.`,
+          data: { vacancyId: id, applicationId: app.id },
+        });
+        if (wUser.email) {
+          await fastify.emailService.queue({
+            userId: wUser.id,
+            to: wUser.email,
+            type: 'CANCELLATION',
+            templateData: {
+              vacancyTitle: vacancy.title,
+              cancelledByRole: 'Работодатель',
+              cancellationReason: 'Вакансия закрыта работодателем',
+              ctaUrl: `${site}/worker/applications`,
+            },
+          });
+        }
+      }
+    }
+
     return replyOk(reply, updated);
   });
 
@@ -898,6 +965,18 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       orderBy: { createdAt: 'desc' },
     });
 
+    // Mark freshly-seen applications as "viewed" so the worker knows the employer saw them.
+    const pendingIds = applications.filter((a) => a.status === 'pending').map((a) => a.id);
+    if (pendingIds.length > 0) {
+      await fastify.prisma.application.updateMany({
+        where: { id: { in: pendingIds }, status: 'pending' },
+        data: { status: 'viewed' },
+      });
+      for (const a of applications) {
+        if (a.status === 'pending') a.status = 'viewed';
+      }
+    }
+
     return replyOk(reply, applications);
   });
 
@@ -905,7 +984,7 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.patch('/applications/:id/status', { preHandler: employerAuth }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const body = z
-      .object({ status: z.enum(['confirmed', 'rejected', 'invited', 'cancelled']) })
+      .object({ status: z.enum(['confirmed', 'rejected', 'invited', 'cancelled', 'interview']) })
       .parse(request.body);
 
     const profile = await fastify.prisma.employerProfile.findUnique({
@@ -1027,10 +1106,83 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
             },
           });
         }
+      } else if (body.status === 'interview') {
+        await fastify.notificationService.create({
+          userId: worker.user.id,
+          type: 'APPLICATION_RESPONSE',
+          title: 'Работодатель на связи',
+          body: `«${employerName}» хочет обсудить вакансию «${application.vacancy.title}». Откройте чат.`,
+          data: { applicationId: id, vacancyId: application.vacancyId, status: 'interview' },
+        });
       }
     }
 
     return replyOk(reply, updated);
+  });
+
+  // PATCH /applications/bulk — массовое действие над откликами
+  fastify.patch('/applications/bulk', { preHandler: employerAuth }, async (request, reply) => {
+    const body = z
+      .object({
+        ids: z.array(z.string()).min(1).max(100),
+        action: z.enum(['reject', 'interview']),
+      })
+      .parse(request.body);
+
+    const profile = await fastify.prisma.employerProfile.findUnique({
+      where: { userId: request.jwtUser.sub },
+      select: { id: true, companyName: true, contactName: true },
+    });
+    if (!profile) {
+      return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
+    }
+
+    // Only act on applications belonging to this employer's vacancies.
+    const apps = await fastify.prisma.application.findMany({
+      where: { id: { in: body.ids }, vacancy: { employerId: profile.id } },
+      include: {
+        vacancy: { select: { id: true, title: true } },
+        worker: { include: { user: { select: { id: true } } } },
+      },
+    });
+    if (apps.length === 0) {
+      return replyFail(reply, 404, 'NOT_FOUND', 'Отклики не найдены');
+    }
+
+    const newStatus = body.action === 'reject' ? 'rejected' : 'interview';
+    const actionableIds = apps
+      .filter((a) =>
+        body.action === 'reject'
+          ? !['rejected', 'cancelled', 'confirmed'].includes(a.status)
+          : ['pending', 'viewed'].includes(a.status),
+      )
+      .map((a) => a.id);
+
+    if (actionableIds.length > 0) {
+      await fastify.prisma.application.updateMany({
+        where: { id: { in: actionableIds } },
+        data: { status: newStatus as Parameters<typeof fastify.prisma.application.update>[0]['data']['status'] },
+      });
+
+      const employerName = profile.companyName || profile.contactName || 'Работодатель';
+      for (const a of apps) {
+        if (!actionableIds.includes(a.id)) continue;
+        const wUserId = a.worker.user?.id;
+        if (!wUserId) continue;
+        await fastify.notificationService.create({
+          userId: wUserId,
+          type: 'APPLICATION_RESPONSE',
+          title: body.action === 'reject' ? 'Ответ по отклику' : 'Работодатель на связи',
+          body:
+            body.action === 'reject'
+              ? `Ваш отклик на «${a.vacancy.title}» отклонён`
+              : `«${employerName}» хочет обсудить вакансию «${a.vacancy.title}». Откройте чат.`,
+          data: { applicationId: a.id, vacancyId: a.vacancy.id, status: newStatus },
+        });
+      }
+    }
+
+    return replyOk(reply, { updated: actionableIds.length });
   });
 
   // POST /invite — employer invites worker to vacancy
@@ -1044,6 +1196,15 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
     });
     if (!profile) {
       return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
+    }
+
+    // Check invitation limit
+    const canInvite = await subSvc.canEmployerInvite(profile.id);
+    if (canInvite.limit === 0) {
+      return replyFail(reply, 403, 'UPGRADE_REQUIRED', 'Отправка приглашений недоступна на вашем тарифе. Перейдите на тариф Бизнес или Про.');
+    }
+    if (!canInvite.allowed) {
+      return replyFail(reply, 403, 'INVITATION_LIMIT_REACHED', `Вы исчерпали лимит приглашений в этом месяце (${canInvite.limit}). Лимит обновится в начале следующего месяца.`, { used: canInvite.used, limit: canInvite.limit });
     }
 
     const vacancy = await fastify.prisma.vacancy.findFirst({
@@ -1236,7 +1397,6 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       'active',
       'pending_confirm',
       'completed',
-      'needs_payment',
       'archive',
       'disputed',
       'all',
@@ -1247,9 +1407,9 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
     const q = z
       .object({
         tab: z.enum(employerShiftTabs).optional(),
-        view: z.enum(['active', 'completed', 'needs_payment']).optional(),
+        view: z.enum(['active', 'completed']).optional(),
         /** Старый фронт: ?status= вместо tab/view */
-        status: z.enum(['active', 'completed', 'needs_payment']).optional(),
+        status: z.enum(['active', 'completed']).optional(),
         page: z.coerce.number().int().positive().default(1),
         perPage: z.coerce.number().int().min(1).max(50).default(20),
         vacancyId: z.string().optional(),
@@ -1265,7 +1425,6 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
     const v = q.view ?? q.status;
     let tab: EmployerShiftTab = q.tab ?? 'active';
     if (!q.tab && v === 'completed') tab = 'completed';
-    else if (!q.tab && v === 'needs_payment') tab = 'needs_payment';
     else if (!q.tab && v === 'active') tab = 'active';
 
     let workerUserId: string | undefined;
@@ -1319,9 +1478,6 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       ...(hasBookingConstraint ? { booking: bookingFilter } : {}),
     };
 
-    const paymentCompleted = { payments: { some: { status: ShiftPayStatus.COMPLETED } } };
-    const paymentNotCompleted = { payments: { none: { status: ShiftPayStatus.COMPLETED } } };
-
     function tabWhere(t: EmployerShiftTab): Prisma.ShiftWhereInput {
       switch (t) {
         case 'pending_confirm':
@@ -1345,13 +1501,6 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
           return {
             ...shiftBase,
             status: ShiftStatus.COMPLETED,
-            ...paymentCompleted,
-          };
-        case 'needs_payment':
-          return {
-            ...shiftBase,
-            status: ShiftStatus.COMPLETED,
-            ...paymentNotCompleted,
           };
         case 'archive':
           return { ...shiftBase, status: { in: [ShiftStatus.CANCELLED, ShiftStatus.FAILED] } };
@@ -1381,7 +1530,6 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       cActive,
       cPendingConfirm,
       cCompleted,
-      cNeedsPay,
       cArchive,
       cDisputed,
     ] = await Promise.all([
@@ -1389,11 +1537,9 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.prisma.shift.findMany({
         where: listWhere,
         orderBy:
-          tab === 'needs_payment'
-            ? { completedAt: 'asc' }
-            : tab === 'completed'
-              ? { completedAt: 'desc' }
-              : { createdAt: 'desc' },
+          tab === 'completed'
+            ? { completedAt: 'desc' }
+            : { createdAt: 'desc' },
         skip: (q.page - 1) * q.perPage,
         take: q.perPage,
         include: {
@@ -1420,7 +1566,6 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
             },
           },
           reviews: { select: { id: true, reviewerId: true } },
-          payments: { select: { id: true, status: true, amount: true } },
         },
       }),
       countWhere({
@@ -1434,11 +1579,6 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       }),
       countWhere({
         status: ShiftStatus.COMPLETED,
-        payments: { some: { status: ShiftPayStatus.COMPLETED } },
-      }),
-      countWhere({
-        status: ShiftStatus.COMPLETED,
-        payments: { none: { status: ShiftPayStatus.COMPLETED } },
       }),
       countWhere({
         status: { in: [ShiftStatus.CANCELLED, ShiftStatus.FAILED] },
@@ -1457,7 +1597,6 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
         active: cActive,
         pending_confirm: cPendingConfirm,
         completed: cCompleted,
-        needs_payment: cNeedsPay,
         archive: cArchive,
         disputed: cDisputed,
       },
@@ -1711,4 +1850,380 @@ export const employerRoutes: FastifyPluginAsync = async (fastify) => {
       });
     },
   );
+
+  // ── VACANCY BOOSTS ─────────────────────────────────────────────────────────
+
+  // POST /vacancies/:id/boost — boost a vacancy (check monthly limit)
+  fastify.post('/vacancies/:id/boost', { preHandler: employerAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const profile = await fastify.prisma.employerProfile.findUnique({
+      where: { userId: request.jwtUser.sub },
+      select: { id: true, boostCredits: true },
+    });
+    if (!profile) return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
+
+    const vacancy = await fastify.prisma.vacancy.findFirst({
+      where: { id, employerId: profile.id },
+    });
+    if (!vacancy) return replyFail(reply, 404, 'NOT_FOUND', 'Vacancy not found');
+
+    const sub = await subSvc.getEmployerSubscription(profile.id);
+
+    // Разрешён ли буст по тарифу (безлимит или в пределах месячного лимита)?
+    let allowedBySub = false;
+    if (sub.monthlyBoosts === -1) {
+      allowedBySub = true;
+    } else if (sub.monthlyBoosts > 0) {
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+      const usedThisMonth = await fastify.prisma.vacancyBoost.count({
+        where: { employerId: profile.id, createdAt: { gte: monthStart } },
+      });
+      allowedBySub = usedThisMonth < sub.monthlyBoosts;
+    }
+
+    // Если по тарифу нельзя — пробуем потратить купленный буст из пакета.
+    let usedCredit = false;
+    if (!allowedBySub) {
+      if (profile.boostCredits > 0) {
+        usedCredit = true;
+      } else if (sub.monthlyBoosts === 0) {
+        return replyFail(reply, 403, 'UPGRADE_REQUIRED', 'Буст вакансий доступен с тарифа Бизнес или при покупке пакета бустов.');
+      } else {
+        return replyFail(reply, 403, 'BOOST_LIMIT_REACHED', `Лимит бустов в этом месяце исчерпан (${sub.monthlyBoosts}). Купите дополнительный буст или пакет.`, { limit: sub.monthlyBoosts });
+      }
+    }
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    const boost = await fastify.prisma.vacancyBoost.create({
+      data: { vacancyId: id, employerId: profile.id, expiresAt },
+    });
+    if (usedCredit) {
+      await fastify.prisma.employerProfile.update({
+        where: { id: profile.id },
+        data: { boostCredits: { decrement: 1 } },
+      });
+    }
+
+    return replyOk(reply, { ...boost, expiresAt, usedCredit }, 201);
+  });
+
+  // GET /vacancies/:id/boost — get boost status
+  fastify.get('/vacancies/:id/boost', { preHandler: employerAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const profile = await fastify.prisma.employerProfile.findUnique({
+      where: { userId: request.jwtUser.sub },
+      select: { id: true },
+    });
+    if (!profile) return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
+
+    const now = new Date();
+    const activeBoost = await fastify.prisma.vacancyBoost.findFirst({
+      where: { vacancyId: id, employerId: profile.id, expiresAt: { gt: now } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const sub = await subSvc.getEmployerSubscription(profile.id);
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    const usedThisMonth = await fastify.prisma.vacancyBoost.count({
+      where: { employerId: profile.id, createdAt: { gte: monthStart } },
+    });
+
+    return replyOk(reply, {
+      isActive: !!activeBoost,
+      expiresAt: activeBoost?.expiresAt ?? null,
+      usedThisMonth,
+      monthlyLimit: sub.monthlyBoosts,
+      canBoost: sub.monthlyBoosts === -1 || usedThisMonth < sub.monthlyBoosts,
+    });
+  });
+
+  // ── TEMPLATES ──────────────────────────────────────────────────────────────
+
+  // GET /templates
+  fastify.get('/templates', { preHandler: employerAuth }, async (request, reply) => {
+    const profile = await fastify.prisma.employerProfile.findUnique({
+      where: { userId: request.jwtUser.sub },
+      select: { id: true },
+    });
+    if (!profile) return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
+
+    const sub = await subSvc.getEmployerSubscription(profile.id);
+    const templates = await fastify.prisma.vacancyTemplate.findMany({
+      where: { employerId: profile.id },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return replyOk(reply, {
+      templates,
+      used: templates.length,
+      limit: sub.maxTemplates,
+      canCreate: sub.maxTemplates === -1 || templates.length < sub.maxTemplates,
+      planKey: sub.key,
+    });
+  });
+
+  // POST /templates
+  fastify.post('/templates', { preHandler: employerAuth }, async (request, reply) => {
+    const body = z.object({
+      name: z.string().min(1).max(100),
+      vacancyData: z.record(z.unknown()),
+    }).parse(request.body);
+
+    const profile = await fastify.prisma.employerProfile.findUnique({
+      where: { userId: request.jwtUser.sub },
+      select: { id: true },
+    });
+    if (!profile) return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
+
+    const sub = await subSvc.getEmployerSubscription(profile.id);
+    if (sub.maxTemplates === 0) {
+      return replyFail(reply, 403, 'UPGRADE_REQUIRED', 'Шаблоны вакансий доступны с тарифа Бизнес.');
+    }
+    if (sub.maxTemplates !== -1) {
+      const count = await fastify.prisma.vacancyTemplate.count({
+        where: { employerId: profile.id },
+      });
+      if (count >= sub.maxTemplates) {
+        return replyFail(reply, 403, 'TEMPLATE_LIMIT_REACHED', `Лимит шаблонов исчерпан (${sub.maxTemplates} из ${sub.maxTemplates}). Перейдите на тариф Про для безлимитных шаблонов.`, { used: count, limit: sub.maxTemplates });
+      }
+    }
+
+    const template = await fastify.prisma.vacancyTemplate.create({
+      data: { employerId: profile.id, name: body.name, vacancyData: body.vacancyData },
+    });
+    return replyOk(reply, template, 201);
+  });
+
+  // GET /templates/:id
+  fastify.get('/templates/:id', { preHandler: employerAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const profile = await fastify.prisma.employerProfile.findUnique({
+      where: { userId: request.jwtUser.sub },
+      select: { id: true },
+    });
+    if (!profile) return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
+
+    const template = await fastify.prisma.vacancyTemplate.findFirst({
+      where: { id, employerId: profile.id },
+    });
+    if (!template) return replyFail(reply, 404, 'NOT_FOUND', 'Template not found');
+    return replyOk(reply, template);
+  });
+
+  // PUT /templates/:id
+  fastify.put('/templates/:id', { preHandler: employerAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = z.object({
+      name: z.string().min(1).max(100).optional(),
+      vacancyData: z.record(z.unknown()).optional(),
+    }).parse(request.body);
+
+    const profile = await fastify.prisma.employerProfile.findUnique({
+      where: { userId: request.jwtUser.sub },
+      select: { id: true },
+    });
+    if (!profile) return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
+
+    const existing = await fastify.prisma.vacancyTemplate.findFirst({
+      where: { id, employerId: profile.id },
+    });
+    if (!existing) return replyFail(reply, 404, 'NOT_FOUND', 'Template not found');
+
+    const updated = await fastify.prisma.vacancyTemplate.update({
+      where: { id },
+      data: {
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.vacancyData !== undefined ? { vacancyData: body.vacancyData } : {}),
+      },
+    });
+    return replyOk(reply, updated);
+  });
+
+  // DELETE /templates/:id
+  fastify.delete('/templates/:id', { preHandler: employerAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const profile = await fastify.prisma.employerProfile.findUnique({
+      where: { userId: request.jwtUser.sub },
+      select: { id: true },
+    });
+    if (!profile) return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
+
+    const existing = await fastify.prisma.vacancyTemplate.findFirst({
+      where: { id, employerId: profile.id },
+    });
+    if (!existing) return replyFail(reply, 404, 'NOT_FOUND', 'Template not found');
+
+    await fastify.prisma.vacancyTemplate.delete({ where: { id } });
+    return replyOk(reply, { deleted: true });
+  });
+
+  // POST /templates/:id/use — create vacancy draft from template
+  fastify.post('/templates/:id/use', { preHandler: employerAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const profile = await fastify.prisma.employerProfile.findUnique({
+      where: { userId: request.jwtUser.sub },
+      select: { id: true },
+    });
+    if (!profile) return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
+
+    const template = await fastify.prisma.vacancyTemplate.findFirst({
+      where: { id, employerId: profile.id },
+    });
+    if (!template) return replyFail(reply, 404, 'NOT_FOUND', 'Template not found');
+
+    const data = template.vacancyData as Record<string, unknown>;
+    const vacancy = await fastify.prisma.vacancy.create({
+      data: {
+        employerId: profile.id,
+        title: String(data.title ?? template.name),
+        category: (data.category as Parameters<typeof fastify.prisma.vacancy.create>[0]['data']['category']) ?? 'other',
+        rate: Number(data.rate ?? 0),
+        rateType: (data.rateType as Parameters<typeof fastify.prisma.vacancy.create>[0]['data']['rateType']) ?? 'per_shift',
+        employmentType: (data.employmentType as Parameters<typeof fastify.prisma.vacancy.create>[0]['data']['employmentType']) ?? 'single_shift',
+        dateStart: new Date(String(data.dateStart ?? new Date().toISOString())),
+        workersNeeded: Number(data.workersNeeded ?? 1),
+        description: data.description ? String(data.description) : undefined,
+        requirements: data.requirements ? String(data.requirements) : undefined,
+        conditions: data.conditions ? String(data.conditions) : undefined,
+        responsibilities: data.responsibilities ? String(data.responsibilities) : undefined,
+        address: data.address ? String(data.address) : undefined,
+        status: 'draft',
+      },
+    });
+
+    return replyOk(reply, vacancy, 201);
+  });
+
+  // ── ANALYTICS ──────────────────────────────────────────────────────────────
+
+  // GET /analytics
+  fastify.get('/analytics', { preHandler: employerAuth }, async (request, reply) => {
+    const profile = await fastify.prisma.employerProfile.findUnique({
+      where: { userId: request.jwtUser.sub },
+      select: { id: true },
+    });
+    if (!profile) return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
+
+    const sub = await subSvc.getEmployerSubscription(profile.id);
+    if (!sub.hasAnalytics) {
+      return replyFail(reply, 403, 'UPGRADE_REQUIRED', 'Аналитика доступна с тарифа Бизнес.');
+    }
+
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const thirtyDaysAgo = new Date(now);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    // All vacancies with applications
+    const vacancies = await fastify.prisma.vacancy.findMany({
+      where: { employerId: profile.id },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        createdAt: true,
+        publishedAt: true,
+        _count: { select: { applications: true } },
+        applications: { select: { status: true, createdAt: true, workerId: true } },
+      },
+    });
+
+    const total = vacancies.length;
+    const active = vacancies.filter((v) => v.status === 'active').length;
+    const archived = vacancies.filter((v) => v.status === 'archived').length;
+    const paused = vacancies.filter((v) => v.status === 'paused').length;
+
+    const allApplications = vacancies.flatMap((v) =>
+      v.applications.map((a) => ({ ...a, vacancyId: v.id })),
+    );
+    const totalResponses = allApplications.length;
+    const thisMonthResponses = allApplications.filter(
+      (a) => (a.createdAt as Date) >= monthStart,
+    ).length;
+
+    // Responses by day (last 30 days)
+    const byDayMap = new Map<string, number>();
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      byDayMap.set(d.toISOString().split('T')[0], 0);
+    }
+    for (const app of allApplications) {
+      if ((app.createdAt as Date) >= thirtyDaysAgo) {
+        const key = (app.createdAt as Date).toISOString().split('T')[0];
+        byDayMap.set(key, (byDayMap.get(key) ?? 0) + 1);
+      }
+    }
+    const byDay = [...byDayMap.entries()]
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    // Top 3 vacancies by responses
+    const topVacancies = [...vacancies]
+      .sort((a, b) => b._count.applications - a._count.applications)
+      .slice(0, 3)
+      .map((v) => ({ id: v.id, title: v.title, responsesCount: v._count.applications }));
+
+    // Invitation / confirmation stats
+    const invited = allApplications.filter(
+      (a) => a.status === 'invited' || a.status === 'confirmed' || a.status === 'rejected',
+    ).length;
+    const accepted = allApplications.filter((a) => a.status === 'confirmed').length;
+    const conversionRate = invited > 0 ? Math.round((accepted / invited) * 100) : 0;
+
+    const result: Record<string, unknown> = {
+      plan: sub.key,
+      period: { from: thirtyDaysAgo.toISOString(), to: now.toISOString() },
+      vacancies: { total, active, archived, paused },
+      responses: { total: totalResponses, thisMonth: thisMonthResponses, byDay },
+      topVacancies,
+      invitations: { sent: invited, accepted, conversionRate },
+    };
+
+    // Advanced analytics for PRO / ENTERPRISE
+    if (sub.key === 'pro' || sub.key === 'enterprise') {
+      // Geography of applicants
+      const workerIds = [...new Set(allApplications.map((a) => a.workerId).filter(Boolean))];
+      const workers = await fastify.prisma.workerProfile.findMany({
+        where: { id: { in: workerIds } },
+        select: { city: { select: { name: true } } },
+      });
+      const geoCounts = new Map<string, number>();
+      for (const w of workers) {
+        if (w.city?.name) geoCounts.set(w.city.name, (geoCounts.get(w.city.name) ?? 0) + 1);
+      }
+      const geography = [...geoCounts.entries()]
+        .map(([city, count]) => ({ city, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10);
+
+      // Avg time to first response (hours)
+      const timesToFirst: number[] = [];
+      for (const v of vacancies) {
+        if (v.publishedAt && v.applications.length > 0) {
+          const sorted = [...v.applications].sort(
+            (a, b) => (a.createdAt as Date).getTime() - (b.createdAt as Date).getTime(),
+          );
+          timesToFirst.push(
+            ((sorted[0].createdAt as Date).getTime() - (v.publishedAt as Date).getTime()) /
+              (1000 * 3600),
+          );
+        }
+      }
+      const avgTimeToFirstResponse =
+        timesToFirst.length > 0
+          ? Math.round(timesToFirst.reduce((a, b) => a + b, 0) / timesToFirst.length)
+          : null;
+
+      result.advanced = { geography, avgTimeToFirstResponse };
+    }
+
+    return replyOk(reply, result);
+  });
 };

@@ -88,6 +88,7 @@ export function renderEmailForType(
       });
     case 'EMAIL_VERIFICATION':
       return emailVerificationEmail({
+        verifyUrl: d.verifyUrl ?? '',
         code: d.code ?? '',
         email: d.email ?? '',
       });

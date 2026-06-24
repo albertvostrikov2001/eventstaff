@@ -52,10 +52,20 @@ export function CategoryMultiSelect({ initial, onChange }: CategoryMultiSelectPr
       toast(`Максимум ${MAX_CATEGORIES} категорий`, 'error');
       return;
     }
+    // Берём реально доступную (ещё не выбранную) категорию: значение селекта могло
+    // остаться от прошлого добавления и совпасть с уже добавленной — тогда upsert
+    // на бэке обновил бы ту же строку, и новая категория «пропадала» бы.
+    const categoryToAdd = usedCategories.has(newCategory)
+      ? availableOptions[0]?.value
+      : newCategory;
+    if (!categoryToAdd) {
+      toast('Все категории уже добавлены', 'error');
+      return;
+    }
     setSaving(true);
     try {
       const res = await apiClient.post<{ data: WorkerCategoryItem }>('/worker/categories', {
-        category: newCategory,
+        category: categoryToAdd,
         level: newLevel,
       });
       const updated = [...categories, res.data];
@@ -127,7 +137,13 @@ export function CategoryMultiSelect({ initial, onChange }: CategoryMultiSelectPr
         {categories.length < MAX_CATEGORIES && !adding && (
           <button
             type="button"
-            onClick={() => { setAdding(true); setShowDropdown(true); }}
+            onClick={() => {
+              setAdding(true);
+              setShowDropdown(true);
+              // Синхронизируем стартовое значение селекта с реально доступными опциями,
+              // иначе сабмит ушёл бы со старым (уже добавленным) значением.
+              if (availableOptions[0]) setNewCategory(availableOptions[0].value);
+            }}
             className="flex items-center gap-1 rounded-badge border border-dashed border-white/20 px-3 py-1 text-sm text-white/40 hover:border-white/40 hover:text-white/70"
           >
             <Plus className="h-3.5 w-3.5" /> Добавить

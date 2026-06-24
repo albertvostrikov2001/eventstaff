@@ -4,10 +4,11 @@ import { publicAssetUrl } from '@/lib/public-asset-url';
 
 type LogoSize = 'sm' | 'md' | 'lg';
 
-const sizeMap: Record<LogoSize, number> = {
-  sm: 28,
-  md: 40,
-  lg: 52,
+// Logo natural aspect ratio: 478 × 512 (≈ 0.934 w:h)
+const sizeMap: Record<LogoSize, { w: number; h: number }> = {
+  sm: { w: 26, h: 28 },
+  md: { w: 37, h: 40 },
+  lg: { w: 49, h: 52 },
 };
 
 const textSizeMap: Record<LogoSize, string> = {
@@ -24,7 +25,7 @@ interface LogoProps {
 }
 
 export function Logo({ size = 'md', showText = true, href = '/', className = '' }: LogoProps) {
-  const imgSize = sizeMap[size];
+  const { w, h } = sizeMap[size];
 
   return (
     <Link
@@ -35,9 +36,10 @@ export function Logo({ size = 'md', showText = true, href = '/', className = '' 
       <Image
         src={publicAssetUrl('/logo.png')}
         alt="Юнити — платформа event-персонала"
-        width={imgSize}
-        height={imgSize}
-        className="block shrink-0 object-contain"
+        width={w}
+        height={h}
+        className="block shrink-0"
+        style={{ width: w, height: h, objectFit: 'contain' }}
         priority
       />
       {showText && (

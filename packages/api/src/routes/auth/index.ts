@@ -28,6 +28,7 @@ const BCRYPT_ROUNDS = 12;
 const REFRESH_TTL = 60 * 60 * 24 * 30; // 30 days in seconds
 const RESET_TOKEN_TTL = 3600; // 1 hour in seconds
 const VERIFY_CODE_TTL = 600; // 10 minutes in seconds
+const VERIFY_LINK_TTL = 60 * 60 * 24; // 24 hours — срок жизни ссылки подтверждения
 const VERIFY_RESEND_COOLDOWN = 60; // 1 minute cooldown between resends
 const MAX_VERIFY_ATTEMPTS = 5; // max wrong attempts before invalidation
 
@@ -67,6 +68,20 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     });
   }
 
+  // Подтверждение почты по ССЫЛКЕ (не код): письмо со ссылкой не триггерит анти-OTP-фильтры
+  // почтовиков и доставляется надёжнее. Токен живёт 24 часа.
+  async function sendVerificationLink(userId: string, email: string): Promise<void> {
+    const token = nanoidToken();
+    await fastify.redis.setex(`verify:email:link:${token}`, VERIFY_LINK_TTL, userId);
+    const verifyUrl = `${publicSiteUrl()}/auth/verify-email?token=${token}`;
+    await fastify.emailService.queue({
+      userId: null, // system email — skip preference checks
+      to: email,
+      type: 'EMAIL_VERIFICATION',
+      templateData: { verifyUrl, email },
+    });
+  }
+
   // POST /register — max 5 per hour per IP
   fastify.post('/register', { config: { rateLimit: { max: 5, timeWindow: '1 hour', keyGenerator: (req) => `register:${req.ip}` } } }, async (request, reply) => {
     const body = registerSchema.parse(request.body);
@@ -81,14 +96,10 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       select: { id: true, emailVerified: true, createdAt: true },
     });
 
-    // If a verified user already exists — conflict
-    if (existing && existing.emailVerified) {
+    // Верификация email больше не обязательна — любой существующий аккаунт
+    // (подтверждён он или нет) считается реальным, поэтому это конфликт.
+    if (existing) {
       return fail(reply, 409, 'CONFLICT', 'Пользователь с таким email уже существует');
-    }
-
-    // If an unverified user exists — delete them and recreate (abandoned registration)
-    if (existing && !existing.emailVerified) {
-      await fastify.prisma.user.delete({ where: { id: existing.id } });
     }
 
     const passwordHash = await bcrypt.hash(body.password, BCRYPT_ROUNDS);
@@ -121,11 +132,13 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
           },
         });
       } else {
+        const isIndividual = body.employerType === 'individual';
         await tx.employerProfile.create({
           data: {
             userId: newUser.id,
             slug,
-            type: 'company',
+            type: isIndividual ? 'individual' : 'company',
+            businessType: isIndividual ? 'individual' : 'other',
           },
         });
       }
@@ -137,16 +150,18 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       return newUser;
     });
 
-    // If user registered with email — send verification code (don't issue tokens yet)
+    // Email-регистрация: обязательное подтверждение почты по ссылке из письма.
+    // Токены НЕ выдаём, пока пользователь не перейдёт по ссылке (verify-email-link).
     if (user.email) {
-      await sendVerificationCode(user.id, user.email);
-      return ok(reply.status(201), {
-        pendingUserId: user.id,
-        email: user.email,
-      });
+      try {
+        await sendVerificationLink(user.id, user.email);
+      } catch {
+        // Сбой доставки не должен валить регистрацию — ссылку можно запросить повторно.
+      }
+      return ok(reply.status(201), { pendingUserId: user.id, email: user.email });
     }
 
-    // Phone-only registration: skip email verification, issue tokens immediately
+    // Phone-only: подтверждение почты не требуется — выдаём токены сразу.
     const roles = [body.role];
     const accessToken = await fastify.signAccessToken({
       sub: user.id,
@@ -274,9 +289,46 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
     }
     await fastify.redis.setex(cooldownKey, VERIFY_RESEND_COOLDOWN, '1');
 
-    await sendVerificationCode(user.id, user.email);
+    await sendVerificationLink(user.id, user.email);
 
-    return ok(reply, { message: 'Код отправлен повторно' });
+    return ok(reply, { message: 'Ссылка для подтверждения отправлена повторно' });
+  });
+
+  // POST /verify-email-link — подтверждение почты по токену из ссылки в письме
+  fastify.post('/verify-email-link', { config: { rateLimit: { max: 20, timeWindow: '1 hour', keyGenerator: (req) => `verify-link:${req.ip}` } } }, async (request, reply) => {
+    const body = z.object({ token: z.string().min(10).max(128) }).parse(request.body);
+
+    const redisKey = `verify:email:link:${body.token}`;
+    const userId = await fastify.redis.get(redisKey);
+    if (!userId) {
+      return fail(reply, 400, 'INVALID_TOKEN', 'Ссылка недействительна или устарела. Запросите письмо повторно.');
+    }
+
+    const user = await fastify.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, phone: true, emailVerified: true, activeRole: true, roles: true },
+    });
+    if (!user) {
+      await fastify.redis.del(redisKey);
+      return fail(reply, 404, 'NOT_FOUND', 'Пользователь не найден');
+    }
+
+    if (!user.emailVerified) {
+      await fastify.prisma.user.update({ where: { id: user.id }, data: { emailVerified: true } });
+    }
+    await fastify.redis.del(redisKey);
+
+    // Подтверждение по ссылке = вход: выдаём токены.
+    const roles = user.roles.map((r) => r.role as string);
+    const activeRole = (user.activeRole as string) ?? roles[0] ?? 'worker';
+    const accessToken = await fastify.signAccessToken({ sub: user.id, email: user.email ?? undefined, phone: user.phone ?? undefined, roles, activeRole });
+    const refreshToken = nanoidToken();
+    await storeRefreshToken(fastify.redis, user.id, refreshToken);
+    reply
+      .setCookie('access_token', accessToken, makeCookieOpts(15 * 60))
+      .setCookie('refresh_token', refreshToken, makeCookieOpts(REFRESH_TTL));
+
+    return ok(reply, { user: { id: user.id, email: user.email, phone: user.phone, roles, activeRole } });
   });
 
   // POST /login — max 5 attempts per 15 min per IP
@@ -302,7 +354,15 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       where: {
         OR: [{ email: body.login }, { phone: body.login }],
       },
-      select: authUserWithRolesSelect,
+      select: {
+        ...authUserWithRolesSelect,
+        workerProfile: {
+          select: { id: true, firstName: true, lastName: true, photoUrl: true, visibility: true },
+        },
+        employerProfile: {
+          select: { id: true, companyName: true, contactName: true, logoUrl: true, isVerified: true },
+        },
+      },
     });
 
     if (!user || !user.passwordHash) {
@@ -318,16 +378,15 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
       return fail(reply, 401, 'UNAUTHORIZED', 'Неверный email или пароль');
     }
 
-    // Block login if email is not verified
+    // Блокируем вход, пока email не подтверждён — повторно отправляем ссылку (с кулдауном).
     if (user.email && !user.emailVerified) {
-      // Re-send verification code (if not on cooldown)
       const cooldownKey = `verify:email:resend:${user.id}`;
       const onCooldown = await fastify.redis.get(cooldownKey);
       if (!onCooldown) {
         await fastify.redis.setex(cooldownKey, VERIFY_RESEND_COOLDOWN, '1');
-        await sendVerificationCode(user.id, user.email);
+        await sendVerificationLink(user.id, user.email);
       }
-      return fail(reply, 403, 'EMAIL_NOT_VERIFIED', 'Подтвердите email. Код отправлен на вашу почту.', { pendingUserId: user.id, email: user.email });
+      return fail(reply, 403, 'EMAIL_NOT_VERIFIED', 'Подтвердите почту — мы отправили ссылку на ваш адрес.', { pendingUserId: user.id, email: user.email });
     }
 
     await fastify.prisma.user.update({
@@ -360,6 +419,8 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
         phone: user.phone,
         roles,
         activeRole,
+        workerProfile: user.workerProfile ?? null,
+        employerProfile: user.employerProfile ?? null,
       },
     });
   });
@@ -493,6 +554,57 @@ export const authRoutes: FastifyPluginAsync = async (fastify) => {
         phone: user.phone,
         roles,
         activeRole: (user.activeRole as string) ?? roles[0],
+        workerProfile: user.workerProfile,
+        employerProfile: user.employerProfile,
+      },
+    });
+  });
+
+  // PATCH /active-role — switch the user's active role (re-signs access token)
+  fastify.patch('/active-role', { preHandler: [fastify.authenticate] }, async (request, reply) => {
+    const body = z.object({ role: z.enum(['worker', 'employer']) }).parse(request.body);
+
+    const user = await fastify.prisma.user.findUnique({
+      where: { id: request.jwtUser.sub },
+      select: {
+        id: true,
+        email: true,
+        phone: true,
+        roles: true,
+        workerProfile: { select: { id: true, firstName: true, lastName: true, photoUrl: true, visibility: true } },
+        employerProfile: { select: { id: true, companyName: true, contactName: true, logoUrl: true, isVerified: true } },
+      },
+    });
+    if (!user) {
+      return fail(reply, 404, 'NOT_FOUND', 'User not found');
+    }
+
+    const roles = user.roles.map((r) => r.role as string);
+    if (!roles.includes(body.role)) {
+      return fail(reply, 403, 'ROLE_NOT_OWNED', 'У вас нет этой роли');
+    }
+
+    await fastify.prisma.user.update({
+      where: { id: user.id },
+      data: { activeRole: body.role },
+    });
+
+    const accessToken = await fastify.signAccessToken({
+      sub: user.id,
+      email: user.email ?? undefined,
+      phone: user.phone ?? undefined,
+      roles,
+      activeRole: body.role,
+    });
+    reply.setCookie('access_token', accessToken, makeCookieOpts(15 * 60));
+
+    return ok(reply, {
+      user: {
+        id: user.id,
+        email: user.email,
+        phone: user.phone,
+        roles,
+        activeRole: body.role,
         workerProfile: user.workerProfile,
         employerProfile: user.employerProfile,
       },

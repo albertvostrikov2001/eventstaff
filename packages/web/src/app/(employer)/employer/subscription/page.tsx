@@ -6,6 +6,8 @@ import { Zap, Check, Crown, BarChart2, Send, FileText, Shield, Repeat } from 'lu
 import { apiClient, ApiError } from '@/lib/api/client';
 import { useToast } from '@/components/ui/toast-context';
 import { cn } from '@/lib/utils';
+import { MyBoostsSection } from '@/components/subscription/MyBoostsSection';
+import { ComparePlansButton } from '@/components/pricing/PlanComparisonModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -37,6 +39,7 @@ interface SubscriptionData {
   currentPeriodEnd: string | null;
   grantedByAdmin: boolean;
   isExpired: boolean;
+  boostCredits?: number;
   usage: {
     vacancies: { allowed: boolean; current: number; limit: number; plan: string };
     invitations: { allowed: boolean; used: number; limit: number; plan: string };
@@ -164,18 +167,30 @@ export default function EmployerSubscriptionPage() {
   const [paying, setPaying] = useState(false);
 
   useEffect(() => {
-    if (searchParams.get('payment_status') === 'success') {
-      toast('Оплата прошла! Тариф активируется в течение нескольких минут.', 'success');
-    }
+    void (async () => {
+      if (searchParams.get('payment_status') === 'success') {
+        try {
+          const res = await apiClient.post<{ data: { granted: number } }>('/payments/verify', {});
+          toast(
+            res.data.granted > 0
+              ? 'Оплата подтверждена! Услуга активирована.'
+              : 'Оплата получена. Статус обновится в течение минуты.',
+            res.data.granted > 0 ? 'success' : 'info',
+          );
+        } catch {
+          toast('Оплата получена, проверяем статус…', 'info');
+        }
+      }
+      try {
+        const r = await apiClient.get<{ data: SubscriptionData }>('/subscriptions/employer/me');
+        setData(r.data);
+      } catch {
+        toast('Не удалось загрузить данные подписки', 'error');
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, [searchParams, toast]);
-
-  useEffect(() => {
-    apiClient
-      .get<{ data: SubscriptionData }>('/subscriptions/employer/me')
-      .then((r) => setData(r.data))
-      .catch(() => toast('Не удалось загрузить данные подписки', 'error'))
-      .finally(() => setLoading(false));
-  }, [toast]);
 
   const handleCheckout = async (plan: string) => {
     setPaying(true);
@@ -210,10 +225,20 @@ export default function EmployerSubscriptionPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-white/90">Подписка</h1>
-        <p className="mt-1 text-sm text-white/45">Управление тарифом и доступными функциями</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-white/90">Подписка</h1>
+          <p className="mt-1 text-sm text-white/45">Управление тарифом и доступными функциями</p>
+        </div>
+        <ComparePlansButton
+          initialAudience="employer"
+          label="Сравнить тарифы наглядно"
+          variant="outline"
+        />
       </div>
+
+      {/* Купленные бусты — ручная активация */}
+      <MyBoostsSection audience="employer" />
 
       {/* Current plan status */}
       <section
@@ -273,6 +298,12 @@ export default function EmployerSubscriptionPage() {
                 <p className="font-semibold text-white/90">
                   {inv.limit === -1 ? `${inv.used} / ∞` : `${inv.used} / ${inv.limit}`}
                 </p>
+              </div>
+            )}
+            {(data?.boostCredits ?? 0) > 0 && (
+              <div className="text-right">
+                <p className="text-white/50">Бусты на балансе</p>
+                <p className="font-semibold text-amber-300">{data!.boostCredits} шт.</p>
               </div>
             )}
           </div>
@@ -384,8 +415,8 @@ export default function EmployerSubscriptionPage() {
           <p>
             <span className="font-medium text-white/85">Нужен тариф Enterprise?</span>{' '}
             Напишите нам:{' '}
-            <a href="mailto:support@unity.ru" className="text-emerald-300 hover:underline">
-              support@unity.ru
+            <a href="mailto:Event-Unity@yandex.ru" className="text-emerald-300 hover:underline">
+              Event-Unity@yandex.ru
             </a>
           </p>
         </div>

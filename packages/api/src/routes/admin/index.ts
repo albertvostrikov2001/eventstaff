@@ -48,7 +48,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
           ...safeUserSelect,
           roles: true,
           workerProfile: { select: { id: true, firstName: true, lastName: true, photoUrl: true, visibility: true, isVerified: true } },
-          employerProfile: { select: { id: true, companyName: true, contactName: true, logoUrl: true, isVerified: true } },
+          employerProfile: { select: { id: true, companyName: true, contactName: true, logoUrl: true, isVerified: true, isHidden: true } },
           userReliabilityScore: { select: { isRestricted: true, strikeCount: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -116,6 +116,24 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     return replyOk(reply, updated);
   });
 
+  // PATCH /employers/:id/visibility — скрыть/показать анкету работодателя
+  fastify.patch('/employers/:id/visibility', { preHandler: adminAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = z.object({ isHidden: z.boolean() }).parse(request.body);
+
+    const profile = await fastify.prisma.employerProfile.findUnique({ where: { id } });
+    if (!profile) {
+      return replyFail(reply, 404, 'NOT_FOUND', 'Employer not found');
+    }
+
+    const updated = await fastify.prisma.employerProfile.update({
+      where: { id },
+      data: { isHidden: body.isHidden },
+    });
+
+    return replyOk(reply, updated);
+  });
+
   // PATCH /workers/:id/visibility
   fastify.patch('/workers/:id/visibility', { preHandler: adminAuth }, async (request, reply) => {
     const { id } = request.params as { id: string };
@@ -131,6 +149,24 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     const updated = await fastify.prisma.workerProfile.update({
       where: { id },
       data: { visibility: body.visibility },
+    });
+
+    return replyOk(reply, updated);
+  });
+
+  // PATCH /vacancies/:id/visibility — скрыть/показать вакансию из публичного каталога
+  fastify.patch('/vacancies/:id/visibility', { preHandler: adminAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const body = z.object({ isHidden: z.boolean() }).parse(request.body);
+
+    const vacancy = await fastify.prisma.vacancy.findUnique({ where: { id } });
+    if (!vacancy) {
+      return replyFail(reply, 404, 'NOT_FOUND', 'Vacancy not found');
+    }
+
+    const updated = await fastify.prisma.vacancy.update({
+      where: { id },
+      data: { isHidden: body.isHidden },
     });
 
     return replyOk(reply, updated);
@@ -339,6 +375,51 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
     });
     const updated = await fastify.prisma.complaint.findUniqueOrThrow({ where: { id } });
     return replyOk(reply, updated);
+  });
+
+  fastify.patch('/users/:id/restrict', { preHandler: adminAuth }, async (request, reply) => {
+    const { id: userId } = request.params as { id: string };
+    const adminId = request.jwtUser.sub;
+    const body = z
+      .object({ reason: z.string().min(5, 'Укажите причину (минимум 5 символов)').max(2000) })
+      .parse(request.body ?? {});
+
+    if (userId === adminId) {
+      return replyFail(reply, 400, 'INVALID', 'Cannot restrict yourself');
+    }
+
+    await fastify.prisma.userReliabilityScore.upsert({
+      where: { userId },
+      create: {
+        userId,
+        isRestricted: true,
+        restrictedAt: new Date(),
+        restrictedReason: body.reason,
+      },
+      update: {
+        isRestricted: true,
+        restrictedAt: new Date(),
+        restrictedReason: body.reason,
+      },
+    });
+    await fastify.prisma.adminAuditLog.create({
+      data: {
+        adminId,
+        action: 'user.restrict',
+        entityType: 'User',
+        entityId: userId,
+        details: { reason: body.reason },
+        ip: request.ip,
+      },
+    });
+    await fastify.notificationService.create({
+      userId,
+      type: 'SYSTEM',
+      title: 'Аккаунт ограничен',
+      body: `Администратор ограничил ваш аккаунт. Причина: ${body.reason}`,
+      data: { restricted: true },
+    });
+    return replyOk(reply, { success: true });
   });
 
   fastify.patch('/users/:id/unrestrict', { preHandler: adminAuth }, async (request, reply) => {
@@ -683,17 +764,20 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       pendingMedia,
       newIndividualRequests,
       restrictedUsers,
+      newContactRequests,
     ] = await fastify.prisma.$transaction([
       fastify.prisma.complaint.count({ where: { status: { in: ['NEW', 'IN_PROGRESS'] } } }),
       fastify.prisma.media.count({ where: { isApproved: false, isRejected: false } }),
       fastify.prisma.individualRequest.count({ where: { status: 'NEW' } }),
       fastify.prisma.userReliabilityScore.count({ where: { isRestricted: true } }),
+      fastify.prisma.contactRequest.count({ where: { status: 'new' } }),
     ]);
     return replyOk(reply, {
       newComplaints,
       pendingMedia,
       newIndividualRequests,
       restrictedUsers,
+      newContactRequests,
     });
   });
 
@@ -934,7 +1018,12 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ]);
 
-    return replyPaginated(reply, items, {
+    // Помечаем, если автор обращения — зарегистрированный пользователь (для кнопки «Перейти в чат»).
+    const enriched = await Promise.all(
+      items.map(async (it) => ({ ...it, chatUserId: await resolveContactUserId(it.email) })),
+    );
+
+    return replyPaginated(reply, enriched, {
       total,
       page: query.page,
       limit: query.limit,
@@ -963,11 +1052,12 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
 
   // ─── Admin chat: open or reuse a room with any registered user ─────────────
 
-  fastify.post('/users/:userId/open-chat', { preHandler: adminAuth }, async (request, reply) => {
-    const { userId: targetUserId } = request.params as { userId: string };
-    const adminId = request.jwtUser.sub;
+  type OpenRoomResult =
+    | { ok: true; roomId: string }
+    | { ok: false; status: number; code: string; msg: string };
 
-    // Load target user profiles
+  /** Создаёт/переиспользует GENERAL-комнату между админом (как «Юнити Поддержка») и пользователем. */
+  async function openAdminRoomWithUser(adminId: string, targetUserId: string): Promise<OpenRoomResult> {
     const targetUser = await fastify.prisma.user.findUnique({
       where: { id: targetUserId },
       include: {
@@ -975,12 +1065,11 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         employerProfile: { select: { id: true } },
       },
     });
-    if (!targetUser) return replyFail(reply, 404, 'NOT_FOUND', 'Пользователь не найден');
+    if (!targetUser) return { ok: false, status: 404, code: 'NOT_FOUND', msg: 'Пользователь не найден' };
     if (!targetUser.workerProfile && !targetUser.employerProfile) {
-      return replyFail(reply, 400, 'NO_PROFILE', 'У пользователя нет профиля для чата');
+      return { ok: false, status: 400, code: 'NO_PROFILE', msg: 'У пользователя нет профиля для чата' };
     }
 
-    // Load admin profiles
     const adminUser = await fastify.prisma.user.findUnique({
       where: { id: adminId },
       include: {
@@ -988,7 +1077,7 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
         employerProfile: { select: { id: true } },
       },
     });
-    if (!adminUser) return replyFail(reply, 404, 'NOT_FOUND', 'Администратор не найден');
+    if (!adminUser) return { ok: false, status: 404, code: 'NOT_FOUND', msg: 'Администратор не найден' };
 
     let workerId: string;
     let employerId: string;
@@ -1033,20 +1122,71 @@ export const adminRoutes: FastifyPluginAsync = async (fastify) => {
       workerId = wp.id;
     }
 
-    // Create or reuse existing GENERAL room
     const room = await fastify.prisma.chatRoom.upsert({
       where: { workerId_employerId: { workerId, employerId } },
-      create: {
-        workerId,
-        employerId,
-        contextType: 'GENERAL',
-        lastMessageAt: new Date(),
-      },
+      create: { workerId, employerId, contextType: 'GENERAL', lastMessageAt: new Date() },
       update: {},
       select: { id: true },
     });
 
-    return replyOk(reply, { roomId: room.id });
+    return { ok: true, roomId: room.id };
+  }
+
+  /** Находит зарегистрированного пользователя (с профилем) по email или телефону из обращения. */
+  async function resolveContactUserId(value: string): Promise<string | null> {
+    const v = (value ?? '').trim();
+    if (!v) return null;
+    const profileSelect = {
+      id: true,
+      workerProfile: { select: { id: true } },
+      employerProfile: { select: { id: true } },
+    } as const;
+    if (v.includes('@')) {
+      const u = await fastify.prisma.user.findFirst({
+        where: { email: v.toLowerCase() },
+        select: profileSelect,
+      });
+      return u && (u.workerProfile || u.employerProfile) ? u.id : null;
+    }
+    const last10 = v.replace(/\D/g, '').slice(-10);
+    if (last10.length < 10) return null;
+    const u = await fastify.prisma.user.findFirst({
+      where: { phone: { contains: last10 } },
+      select: profileSelect,
+    });
+    return u && (u.workerProfile || u.employerProfile) ? u.id : null;
+  }
+
+  fastify.post('/users/:userId/open-chat', { preHandler: adminAuth }, async (request, reply) => {
+    const { userId: targetUserId } = request.params as { userId: string };
+    const res = await openAdminRoomWithUser(request.jwtUser.sub, targetUserId);
+    if (!res.ok) return replyFail(reply, res.status, res.code, res.msg);
+    return replyOk(reply, { roomId: res.roomId });
+  });
+
+  // POST /admin/contact-requests/:id/open-chat — открыть чат с автором обращения
+  fastify.post('/contact-requests/:id/open-chat', { preHandler: adminAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const cr = await fastify.prisma.contactRequest.findUnique({ where: { id } });
+    if (!cr) return replyFail(reply, 404, 'NOT_FOUND', 'Обращение не найдено');
+
+    const targetUserId = await resolveContactUserId(cr.email);
+    if (!targetUserId) {
+      return replyFail(
+        reply,
+        404,
+        'NOT_REGISTERED',
+        'Автор обращения не зарегистрирован на сайте — внутренний чат недоступен',
+      );
+    }
+
+    const res = await openAdminRoomWithUser(request.jwtUser.sub, targetUserId);
+    if (!res.ok) return replyFail(reply, res.status, res.code, res.msg);
+
+    if (cr.status === 'new') {
+      await fastify.prisma.contactRequest.update({ where: { id }, data: { status: 'read' } });
+    }
+    return replyOk(reply, { roomId: res.roomId });
   });
 
   // ── PATCH /admin/users/:userId/subscription — ручная выдача подписки ──────

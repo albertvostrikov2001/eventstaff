@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useChatSocket, MAX_ATTEMPTS } from '@/components/chat/ChatInboxProvider';
 import { UserAvatar } from '@/components/ui/UserAvatar';
+import { PhotoLightbox } from '@/components/media/PhotoLightbox';
 import { resolveMediaUrl } from '@/lib/media/url';
 import { apiClient, ApiError } from '@/lib/api/client';
 import { useAuthStore } from '@/stores/authStore';
@@ -503,7 +504,7 @@ export function ChatRoomView({
         </div>
       )}
 
-      <div className="flex h-[100dvh] flex-col lg:h-[min(100vh-7rem,800px)]">
+      <div className="flex h-[100dvh] flex-col max-lg:fixed max-lg:inset-0 max-lg:z-40 max-lg:bg-[#0b1d14] lg:h-[min(100vh-7rem,800px)]">
         {connection === 'reconnecting' ? (
           <div className="shrink-0 border-b border-white/[0.07] bg-amber-500/10 px-3 py-1.5 text-center text-xs text-white/65">
             Переподключение ({Math.min(reconnectAttempt, MAX_ATTEMPTS)}/{MAX_ATTEMPTS})…
@@ -534,11 +535,18 @@ export function ChatRoomView({
           </button>
           {meta && (
             <>
-              <UserAvatar
-                src={resolveMediaUrl(meta.peer.avatarUrl)}
-                name={meta.peer.displayName}
-                size={48}
-              />
+              <PhotoLightbox
+                src={meta.peer.avatarUrl}
+                alt={meta.peer.displayName}
+                className="rounded-full"
+                disabled={!meta.peer.avatarUrl}
+              >
+                <UserAvatar
+                  src={resolveMediaUrl(meta.peer.avatarUrl)}
+                  name={meta.peer.displayName}
+                  size={48}
+                />
+              </PhotoLightbox>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-1">
                   <p className="truncate font-medium text-white">{meta.peer.displayName}</p>

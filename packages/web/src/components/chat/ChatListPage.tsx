@@ -185,23 +185,25 @@ export function ChatListPage({
                       : 'border-l-transparent bg-white/[0.03] hover:bg-white/[0.06] hover:border-l-emerald-500/50',
                 ].join(' ')}
               >
-                <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full bg-white/10">
-                  {r.peer.avatarUrl ? (
-                    <Image
-                      src={resolveMediaUrl(r.peer.avatarUrl) ?? ''}
-                      alt=""
-                      width={48}
-                      height={48}
-                      className="object-cover"
-                      unoptimized
-                    />
-                  ) : (
-                    <div className="flex h-12 w-12 items-center justify-center text-sm font-medium text-white/50">
-                      {r.peer.displayName.slice(0, 1).toUpperCase()}
-                    </div>
-                  )}
+                <div className="relative h-12 w-12 shrink-0">
+                  <div className="h-12 w-12 overflow-hidden rounded-full bg-white/10">
+                    {r.peer.avatarUrl ? (
+                      <Image
+                        src={resolveMediaUrl(r.peer.avatarUrl) ?? ''}
+                        alt=""
+                        width={48}
+                        height={48}
+                        className="h-full w-full object-cover"
+                        unoptimized
+                      />
+                    ) : (
+                      <div className="flex h-12 w-12 items-center justify-center text-sm font-medium text-white/50">
+                        {r.peer.displayName.slice(0, 1).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
                   {r.unreadCount > 0 && (
-                    <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-emerald-600 px-1 text-[10px] font-bold text-white">
+                    <span className="absolute -right-1 -top-1 z-10 flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-emerald-600 px-1 text-[10px] font-bold text-white ring-2 ring-[#0d1f17]">
                       {r.unreadCount > 99 ? '99+' : r.unreadCount}
                     </span>
                   )}

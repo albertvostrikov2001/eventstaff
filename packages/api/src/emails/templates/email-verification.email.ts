@@ -1,34 +1,40 @@
 import { emailShell, escapeHtml } from '@/emails/brand';
 
 export function emailVerificationEmail(data: {
-  code: string;
+  verifyUrl?: string;
+  code?: string;
   email: string;
 }): { subject: string; html: string } {
-  const subject = 'Подтверждение email — Юнити';
+  const subject = 'Подтвердите почту на платформе Юнити';
+  const verifyUrl = (data.verifyUrl ?? '').trim();
   const body = `
     <p style="margin:0 0 16px 0;">Здравствуйте!</p>
     <p style="margin:0 0 16px 0;">
-      Вы регистрируетесь на платформе <strong>Юнити</strong>. Введите код подтверждения
-      на странице регистрации:
+      Спасибо, что присоединились к Юнити. Чтобы завершить регистрацию, подтвердите
+      адрес <strong>${escapeHtml(data.email)}</strong> — нажмите кнопку ниже.
     </p>
-    <div style="margin:24px 0;text-align:center;">
-      <span style="display:inline-block;letter-spacing:10px;font-size:36px;font-weight:700;font-family:monospace;color:#0d1f17;background:#f0fdf4;border:2px solid #059669;border-radius:12px;padding:16px 28px;user-select:all;">
-        ${escapeHtml(data.code)}
-      </span>
-    </div>
-    <p style="margin:0 0 16px 0;padding:12px 16px;background:#fef3c7;border-radius:8px;font-size:13px;color:#92400e;">
-      ⏱ Код действителен <strong>10 минут</strong>.
+    <p style="margin:0 0 8px 0;font-size:13px;color:#6b7280;">
+      Кнопка не открывается? Скопируйте ссылку в адресную строку браузера:
     </p>
-    <p style="margin:0;font-size:13px;color:#6b7280;">
-      Если вы не регистрировались на платформе Юнити — проигнорируйте это письмо.
+    <p style="margin:0 0 16px 0;font-size:13px;word-break:break-all;">
+      <a href="${escapeHtml(verifyUrl)}" style="color:#059669;">${escapeHtml(verifyUrl)}</a>
+    </p>
+    <p style="margin:0 0 16px 0;font-size:14px;color:#6b7280;">
+      Ссылка действует 24 часа. Если вы не создавали аккаунт на Юнити —
+      просто не отвечайте на это письмо, с вашими данными ничего не произойдёт.
+    </p>
+    <p style="margin:0;font-size:14px;color:#374151;">
+      Хорошего дня,<br/>команда Юнити
     </p>
   `;
   return {
     subject,
     html: emailShell({
-      title: 'Подтверждение регистрации',
-      previewText: `Ваш код подтверждения: ${data.code}`,
+      title: 'Подтверждение почты',
+      previewText: 'Подтвердите адрес почты на Юнити',
       bodyHtml: body,
+      ctaLabel: 'Подтвердить почту',
+      ctaUrl: verifyUrl,
     }),
   };
 }

@@ -10,6 +10,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { useToast } from '@/components/ui/toast-context';
 import { FormField } from '@/components/forms/FormField';
 import { API_UNREACHABLE_HINT, getPublicApiBase } from '@/lib/api/publicApiBase';
+import { popPendingApply } from '@/lib/pending-apply';
+import { apiClient } from '@/lib/api/client';
 
 function LoginForm() {
   const router = useRouter();
@@ -50,6 +52,8 @@ function LoginForm() {
             phone?: string | null;
             roles?: string[];
             activeRole?: string;
+            workerProfile?: { id: string; firstName: string; lastName: string; photoUrl: string | null; visibility: string } | null;
+            employerProfile?: { id: string; companyName: string | null; contactName: string | null; logoUrl: string | null; isVerified: boolean } | null;
           };
         };
       };
@@ -64,11 +68,8 @@ function LoginForm() {
         // Handle unverified email — redirect to verification page
         const errCode = (json as { error?: { code?: string; details?: { pendingUserId?: string; email?: string } } }).error?.code;
         if (errCode === 'EMAIL_NOT_VERIFIED') {
-          const details = (json as { error?: { details?: { pendingUserId?: string; email?: string } } }).error?.details;
-          const uid = details?.pendingUserId ?? '';
-          const em = details?.email ?? '';
-          toast('Подтвердите email. Код отправлен на вашу почту.', 'info');
-          router.push(`/auth/verify-email?userId=${encodeURIComponent(uid)}&email=${encodeURIComponent(em)}`);
+          toast('Подтвердите почту — мы отправили ссылку на ваш адрес. Проверьте «Входящие» и «Спам».', 'info');
+          router.push('/auth/verify-email');
           return;
         }
         toast(json.error?.message ?? 'Неверный email или пароль', 'error');
@@ -86,15 +87,31 @@ function LoginForm() {
         phone: user.phone ?? null,
         roles: (user.roles ?? []) as RoleKey[],
         activeRole: (user.activeRole ?? user.roles?.[0] ?? 'worker') as RoleKey,
+        workerProfile: user.workerProfile ?? null,
+        employerProfile: user.employerProfile ?? null,
       });
 
       const from = searchParams.get('from');
+      const applyParam = searchParams.get('apply');
       const activeRole = user.activeRole ?? user.roles?.[0];
       const defaultRedirect = activeRole === 'employer'
         ? '/employer/dashboard'
         : activeRole === 'admin'
         ? '/admin/dashboard'
         : '/worker/dashboard';
+
+      // Pending apply intent (from vacancy page) — worker only
+      const pendingApply = popPendingApply() ?? applyParam;
+      if (activeRole === 'worker' && pendingApply) {
+        try {
+          await apiClient.post('/worker/applications', { vacancyId: pendingApply });
+          toast('Отклик отправлен!', 'success');
+          router.push(from ?? '/worker/applications');
+          return;
+        } catch {
+          toast('Вход выполнен. Отклик можно отправить из каталога.', 'info');
+        }
+      }
 
       router.push(from ?? defaultRedirect);
     } catch (e) {

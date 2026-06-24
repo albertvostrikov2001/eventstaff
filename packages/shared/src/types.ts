@@ -39,7 +39,7 @@ export interface NotificationPayload {
 
 export type StaffCategoryKey =
   | 'waiter' | 'bartender' | 'cook' | 'administrator'
-  | 'coordinator' | 'technical' | 'hookah_master' | 'banquet_manager'
+  | 'coordinator' | 'technical' | 'banquet_manager'
   | 'dj' | 'barista' | 'sommelier' | 'hostess' | 'cleaner' | 'other';
 
 export type EventTypeKey =

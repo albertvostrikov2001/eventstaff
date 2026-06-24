@@ -485,12 +485,12 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.post('/contact', async (request, reply) => {
     const body = z.object({
       name: z.string().trim().min(2, 'Укажите имя').max(200),
-      email: z.string().email('Некорректный email').max(320),
+      phone: z.string().trim().min(5, 'Укажите телефон').max(40),
       message: z.string().trim().min(10, 'Сообщение слишком короткое').max(4000),
     }).parse(request.body);
 
-    // Rate-limit by email: 5 contact submissions per email per day
-    const contactKey = `contact_req:${body.email.toLowerCase()}`;
+    // Rate-limit by phone: 5 contact submissions per phone per day
+    const contactKey = `contact_req:${body.phone.replace(/\D/g, '')}`;
     const n = await fastify.redis.incr(contactKey);
     if (n === 1) await fastify.redis.expire(contactKey, 86_400);
     if (n > 5) {
@@ -500,7 +500,7 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
     const created = await fastify.prisma.contactRequest.create({
       data: {
         name: body.name,
-        email: body.email.trim().toLowerCase(),
+        email: body.phone.trim(), // stored in email field for compatibility
         message: body.message,
       },
     });
@@ -515,7 +515,7 @@ export const foundationRoutes: FastifyPluginAsync = async (fastify) => {
         userId: a.id,
         type: 'INDIVIDUAL_REQUEST' as InAppNotificationType,
         title: 'Новое обращение с сайта',
-        body: `${body.name} <${body.email}>`,
+        body: `${body.name} — тел: ${body.phone}`,
         data: { contactRequestId: created.id },
       });
     }

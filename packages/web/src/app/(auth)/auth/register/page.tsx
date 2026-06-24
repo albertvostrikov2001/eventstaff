@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -10,8 +10,10 @@ import { useAuthStore } from '@/stores/authStore';
 import { useToast } from '@/components/ui/toast-context';
 import { FormField } from '@/components/forms/FormField';
 import { FormCheckbox } from '@/components/forms/FormField';
-import { Users, Briefcase, Mail, RefreshCw } from 'lucide-react';
+import { Users, Briefcase, UserRound, Mail, RefreshCw } from 'lucide-react';
 import { API_UNREACHABLE_HINT, getPublicApiBase } from '@/lib/api/publicApiBase';
+import { setPendingApply, popPendingApply } from '@/lib/pending-apply';
+import { apiClient } from '@/lib/api/client';
 
 const registerFormSchema = z
   .object({
@@ -42,11 +44,8 @@ export default function RegisterPage() {
   // Pending verification state
   const [pendingUserId, setPendingUserId] = useState('');
   const [pendingEmail, setPendingEmail] = useState('');
-  const [codeDigits, setCodeDigits] = useState(['', '', '', '', '', '']);
-  const [verifying, setVerifying] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const digitRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const form = useForm<RegisterForm>({
     resolver: zodResolver(registerFormSchema),
@@ -54,9 +53,52 @@ export default function RegisterPage() {
   });
 
   const selectedRole = form.watch('role');
+  // Тип работодателя: компания или частное лицо (физлицо). Для специалиста не используется.
+  const [employerType, setEmployerType] = useState<'company' | 'individual'>('company');
+  const [returnTo, setReturnTo] = useState<string | null>(null);
 
-  const onRoleSelect = (role: 'worker' | 'employer') => {
+  // Read role / apply-intent / returnTo from URL (window — avoids Suspense requirement)
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const roleParam = sp.get('role');
+    if (roleParam === 'worker' || roleParam === 'employer') {
+      form.setValue('role', roleParam);
+      setStep(2); // skip role selection
+    }
+    const typeParam = sp.get('type');
+    if (typeParam === 'individual' || typeParam === 'company') {
+      setEmployerType(typeParam);
+    }
+    const applyId = sp.get('apply');
+    if (applyId) setPendingApply(applyId);
+    const rt = sp.get('returnTo');
+    if (rt && rt.startsWith('/')) setReturnTo(rt);
+  }, [form]);
+
+  // After auth success: send pending application (worker only), then redirect.
+  const finishAuth = async (role: string) => {
+    if (role === 'worker') {
+      const vacancyId = popPendingApply();
+      if (vacancyId) {
+        try {
+          await apiClient.post('/worker/applications', { vacancyId });
+          toast('Отклик отправлен!', 'success');
+          router.push(returnTo ?? '/worker/applications');
+          return;
+        } catch {
+          // limit / duplicate / conflict — let user proceed to cabinet
+          toast('Аккаунт создан. Отклик можно отправить из каталога.', 'info');
+          router.push(returnTo ?? '/worker/dashboard');
+          return;
+        }
+      }
+    }
+    router.push(role === 'employer' ? '/employer/profile' : returnTo ?? '/worker/profile');
+  };
+
+  const onRoleSelect = (role: 'worker' | 'employer', type: 'company' | 'individual' = 'company') => {
     form.setValue('role', role);
+    if (role === 'employer') setEmployerType(type);
     setStep(2);
   };
 
@@ -85,7 +127,7 @@ export default function RegisterPage() {
       const res = await fetch(`${API}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: data.email, password: data.password, role: data.role, consentGiven: true, isAdult: true }),
+        body: JSON.stringify({ email: data.email, password: data.password, role: data.role, ...(data.role === 'employer' ? { employerType } : {}), consentGiven: true, isAdult: true }),
         credentials: 'include',
       });
 
@@ -105,7 +147,6 @@ export default function RegisterPage() {
       if (json.data?.pendingUserId) {
         setPendingUserId(json.data.pendingUserId);
         setPendingEmail(json.data.email ?? data.email);
-        setCodeDigits(['', '', '', '', '', '']);
         setStep(3);
         startCooldown(60);
         return;
@@ -116,69 +157,10 @@ export default function RegisterPage() {
       if (user) {
         setUser(user);
         toast('Профиль создан!', 'success');
-        router.push(data.role === 'employer' ? '/employer/profile' : '/worker/profile');
+        await finishAuth(data.role);
       }
     } catch (e) {
       toast(e instanceof TypeError ? API_UNREACHABLE_HINT : 'Ошибка подключения к серверу', 'error');
-    }
-  };
-
-  const handleDigitChange = (index: number, value: string) => {
-    const digit = value.replace(/\D/g, '').slice(-1);
-    const next = [...codeDigits];
-    next[index] = digit;
-    setCodeDigits(next);
-    if (digit && index < 5) {
-      digitRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleDigitKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !codeDigits[index] && index > 0) {
-      digitRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handleDigitPaste = (e: React.ClipboardEvent) => {
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    if (pasted.length === 6) {
-      setCodeDigits(pasted.split(''));
-      digitRefs.current[5]?.focus();
-    }
-  };
-
-  const submitCode = async () => {
-    const code = codeDigits.join('');
-    if (code.length < 6) { toast('Введите все 6 цифр', 'error'); return; }
-    const API = getPublicApiBase();
-    if (!API) return;
-    setVerifying(true);
-    try {
-      const res = await fetch(`${API}/auth/verify-email`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: pendingUserId, code }),
-        credentials: 'include',
-      });
-      const json = await res.json().catch(() => ({})) as { error?: { message?: string }; data?: { user: Parameters<typeof setUser>[0] } };
-
-      if (!res.ok) {
-        toast(json.error?.message ?? 'Неверный код', 'error');
-        setCodeDigits(['', '', '', '', '', '']);
-        digitRefs.current[0]?.focus();
-        return;
-      }
-
-      const user = json.data?.user;
-      if (!user) { toast('Ошибка сервера', 'error'); return; }
-      setUser(user);
-      toast('Email подтверждён! Добро пожаловать.', 'success');
-      const role = user.activeRole as string;
-      router.push(role === 'employer' ? '/employer/profile' : '/worker/profile');
-    } catch {
-      toast('Ошибка подключения', 'error');
-    } finally {
-      setVerifying(false);
     }
   };
 
@@ -194,7 +176,7 @@ export default function RegisterPage() {
         credentials: 'include',
       });
       if (res.ok) {
-        toast('Новый код отправлен на почту', 'success');
+        toast('Ссылка отправлена повторно', 'success');
         startCooldown(60);
       } else {
         const json = await res.json().catch(() => ({})) as { error?: { message?: string } };
@@ -219,31 +201,44 @@ export default function RegisterPage() {
       {step === 1 && (
         <div className="mt-8">
           <p className="mb-4 text-center text-sm font-medium text-gray-700">Я регистрируюсь как...</p>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-3">
             <button
               type="button"
-              onClick={() => onRoleSelect('employer')}
-              className="flex flex-col items-center gap-3 rounded-card border-2 border-gray-200 p-6 text-center transition hover:border-primary-400 hover:bg-primary-50"
+              onClick={() => onRoleSelect('employer', 'company')}
+              className="flex w-full items-center gap-4 rounded-card border-2 border-gray-200 p-4 text-left transition hover:border-primary-400 hover:bg-primary-50"
             >
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-100">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-100">
                 <Briefcase className="h-6 w-6 text-primary-600" />
               </div>
               <div>
-                <div className="font-semibold text-gray-900">Работодатель</div>
-                <div className="mt-1 text-xs text-gray-500">Ищу персонал для мероприятий</div>
+                <div className="font-semibold text-gray-900">Работодатель — компания</div>
+                <div className="mt-0.5 text-xs text-gray-500">Организация, ИП, агентство, заведение</div>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => onRoleSelect('employer', 'individual')}
+              className="flex w-full items-center gap-4 rounded-card border-2 border-gray-200 p-4 text-left transition hover:border-primary-400 hover:bg-primary-50"
+            >
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-100">
+                <UserRound className="h-6 w-6 text-primary-600" />
+              </div>
+              <div>
+                <div className="font-semibold text-gray-900">Работодатель — частное лицо</div>
+                <div className="mt-0.5 text-xs text-gray-500">Физлицо: ищу персонал на своё мероприятие</div>
               </div>
             </button>
             <button
               type="button"
               onClick={() => onRoleSelect('worker')}
-              className="flex flex-col items-center gap-3 rounded-card border-2 border-gray-200 p-6 text-center transition hover:border-primary-400 hover:bg-primary-50"
+              className="flex w-full items-center gap-4 rounded-card border-2 border-gray-200 p-4 text-left transition hover:border-primary-400 hover:bg-primary-50"
             >
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary-100">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-100">
                 <Users className="h-6 w-6 text-primary-600" />
               </div>
               <div>
                 <div className="font-semibold text-gray-900">Специалист</div>
-                <div className="mt-1 text-xs text-gray-500">Ищу работу на мероприятиях</div>
+                <div className="mt-0.5 text-xs text-gray-500">Ищу работу на мероприятиях</div>
               </div>
             </button>
           </div>
@@ -255,7 +250,11 @@ export default function RegisterPage() {
         <form onSubmit={form.handleSubmit(onSubmit)} className="mt-8 space-y-4">
           <div className="flex items-center justify-between">
             <div className="inline-flex items-center gap-2 rounded-full bg-primary-50 px-3 py-1 text-xs font-medium text-primary-700">
-              {selectedRole === 'employer' ? 'Работодатель' : 'Специалист'}
+              {selectedRole === 'employer'
+                ? employerType === 'individual'
+                  ? 'Работодатель — частное лицо'
+                  : 'Работодатель — компания'
+                : 'Специалист'}
             </div>
             <button type="button" onClick={() => setStep(1)} className="text-xs text-gray-500 hover:text-gray-700">
               Изменить
@@ -263,6 +262,7 @@ export default function RegisterPage() {
           </div>
 
           <FormField variant="default" label="Email" type="email" placeholder="your@email.com" required error={form.formState.errors.email?.message} {...form.register('email')} />
+
           <FormField variant="default" label="Пароль" type="password" placeholder="Минимум 8 символов" required error={form.formState.errors.password?.message} {...form.register('password')} />
           <FormField variant="default" label="Подтвердите пароль" type="password" placeholder="Повторите пароль" required error={form.formState.errors.confirmPassword?.message} {...form.register('confirmPassword')} />
 
@@ -296,46 +296,24 @@ export default function RegisterPage() {
         </form>
       )}
 
-      {/* Step 3 — email verification code */}
+      {/* Step 3 — подтверждение почты по ссылке */}
       {step === 3 && (
         <div className="mt-8">
-          <div className="flex flex-col items-center gap-3">
+          <div className="flex flex-col items-center gap-3 text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary-100">
               <Mail className="h-7 w-7 text-primary-600" />
             </div>
-            <h2 className="text-lg font-semibold text-gray-900">Подтвердите email</h2>
-            <p className="text-center text-sm text-gray-500">
-              Мы отправили 6-значный код на{' '}
+            <h2 className="text-lg font-semibold text-gray-900">Подтвердите почту</h2>
+            <p className="text-sm text-gray-500">
+              Мы отправили письмо со ссылкой на{' '}
               <span className="font-medium text-gray-700">{pendingEmail}</span>.<br />
-              Введите его ниже для завершения регистрации.
+              Откройте его и нажмите <span className="font-medium text-gray-700">«Подтвердить почту»</span> — после этого вы автоматически войдёте.
             </p>
           </div>
 
-          {/* OTP input */}
-          <div className="mt-6 flex justify-center gap-2" onPaste={handleDigitPaste}>
-            {codeDigits.map((digit, i) => (
-              <input
-                key={i}
-                ref={(el) => { digitRefs.current[i] = el; }}
-                type="text"
-                inputMode="numeric"
-                maxLength={1}
-                value={digit}
-                onChange={(e) => handleDigitChange(i, e.target.value)}
-                onKeyDown={(e) => handleDigitKeyDown(i, e)}
-                className="h-12 w-11 rounded-lg border-2 border-gray-300 text-center text-xl font-bold text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-200"
-              />
-            ))}
+          <div className="mt-6 rounded-input border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-800">
+            Не пришло письмо? Проверьте папку «Спам». Ссылка действует 24 часа.
           </div>
-
-          <button
-            type="button"
-            onClick={() => void submitCode()}
-            disabled={verifying || codeDigits.join('').length < 6}
-            className="mt-6 w-full rounded-input bg-primary-500 py-2.5 text-sm font-semibold text-white transition hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {verifying ? 'Проверяем...' : 'Подтвердить'}
-          </button>
 
           <div className="mt-4 text-center">
             {resendCooldown > 0 ? (
@@ -349,14 +327,10 @@ export default function RegisterPage() {
                 className="inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:text-primary-700"
               >
                 <RefreshCw className="h-3.5 w-3.5" />
-                Отправить код повторно
+                Отправить ссылку повторно
               </button>
             )}
           </div>
-
-          <p className="mt-4 text-center text-xs text-gray-400">
-            Код действителен 10 минут. Проверьте папку «Спам», если письмо не пришло.
-          </p>
         </div>
       )}
     </div>

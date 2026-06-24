@@ -26,11 +26,11 @@ interface Meta {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
-  invited:   { label: 'Ожидает ответа', color: 'bg-amber-100 text-amber-700' },
-  confirmed: { label: 'Принято',        color: 'bg-green-100 text-green-700' },
-  rejected:  { label: 'Отклонено',      color: 'bg-red-100 text-red-600' },
-  cancelled: { label: 'Отменено',       color: 'bg-gray-100 text-gray-500' },
-  pending:   { label: 'На рассмотрении', color: 'bg-gray-100 text-gray-600' },
+  invited:   { label: 'Ожидает ответа', color: 'bg-amber-500/15 text-amber-300' },
+  confirmed: { label: 'Принято',        color: 'bg-emerald-500/15 text-emerald-300' },
+  rejected:  { label: 'Отклонено',      color: 'bg-red-500/15 text-red-300' },
+  cancelled: { label: 'Отменено',       color: 'bg-white/[0.06] text-white/45' },
+  pending:   { label: 'На рассмотрении', color: 'bg-white/[0.06] text-white/50' },
 };
 
 export default function EmployerInvitationsPage() {
@@ -62,7 +62,7 @@ export default function EmployerInvitationsPage() {
           return (
             <div className="flex items-center gap-2.5">
               <UserAvatar src={inv.worker.photoUrl} name={workerName} size={32} />
-              <span className="font-medium text-gray-900">{workerName}</span>
+              <span className="font-medium text-white/90">{workerName}</span>
             </div>
           );
         },
@@ -71,7 +71,7 @@ export default function EmployerInvitationsPage() {
         key: 'vacancy',
         header: 'Вакансия',
         render: (inv, _i) => (
-          <Link href={`/employer/vacancies/${inv.vacancy.id}`} className="text-emerald-700 hover:underline">
+          <Link href={`/employer/vacancies/${inv.vacancy.id}`} className="text-emerald-300 hover:underline">
             {inv.vacancy.title}
           </Link>
         ),
@@ -84,7 +84,7 @@ export default function EmployerInvitationsPage() {
             ? new Date(inv.vacancy.dateStart).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
             : '—';
           return (
-            <span className="flex items-center gap-1 text-gray-500">
+            <span className="flex items-center gap-1 text-white/50">
               <Calendar className="h-3.5 w-3.5" aria-hidden />
               {dateStr}
             </span>
@@ -95,7 +95,7 @@ export default function EmployerInvitationsPage() {
         key: 'status',
         header: 'Статус',
         render: (inv, _i) => {
-          const st = STATUS_CONFIG[inv.status] ?? { label: inv.status, color: 'bg-gray-100 text-gray-600' };
+          const st = STATUS_CONFIG[inv.status] ?? { label: inv.status, color: 'bg-white/[0.06] text-white/50' };
           return (
             <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${st.color}`}>{st.label}</span>
           );
@@ -105,7 +105,7 @@ export default function EmployerInvitationsPage() {
         key: 'sent',
         header: 'Отправлено',
         render: (inv, _i) => (
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-white/45">
             {new Date(inv.createdAt).toLocaleDateString('ru-RU', {
               day: 'numeric',
               month: 'short',
@@ -119,7 +119,7 @@ export default function EmployerInvitationsPage() {
         render: (inv, _i) => (
           <Link
             href={`/workers/${inv.worker.id}`}
-            className="text-sm font-medium text-emerald-700 hover:underline"
+            className="text-sm font-medium text-emerald-300 hover:underline"
           >
             Профиль
           </Link>
@@ -132,7 +132,7 @@ export default function EmployerInvitationsPage() {
     () => ({
       title: (inv: Invitation) => {
         const workerName = `${inv.worker.firstName} ${inv.worker.lastName}`.trim() || 'Работник';
-        return <span className="text-gray-900">{workerName}</span>;
+        return <span className="text-white/90">{workerName}</span>;
       },
       subtitle: (inv: Invitation) => (
         <Link href={`/employer/vacancies/${inv.vacancy.id}`} className="text-emerald-700 hover:underline">
@@ -140,7 +140,7 @@ export default function EmployerInvitationsPage() {
         </Link>
       ),
       badge: (inv: Invitation) => {
-        const st = STATUS_CONFIG[inv.status] ?? { label: inv.status, color: 'bg-gray-100 text-gray-600' };
+        const st = STATUS_CONFIG[inv.status] ?? { label: inv.status, color: 'bg-white/[0.06] text-white/50' };
         return <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${st.color}`}>{st.label}</span>;
       },
       meta: (inv: Invitation) => (
@@ -157,7 +157,7 @@ export default function EmployerInvitationsPage() {
         ) : (
           <Link
             href={`/workers/${inv.worker.id}`}
-            className="w-full rounded-lg border border-gray-200 bg-white py-2 text-center text-sm font-medium text-emerald-700"
+            className="w-full rounded-lg border border-white/15 bg-white/[0.06] py-2 text-center text-sm font-medium text-emerald-300"
           >
             Просмотреть профиль
           </Link>
@@ -170,11 +170,10 @@ export default function EmployerInvitationsPage() {
     <div>
       <Breadcrumbs
         items={[{ label: 'Кабинет', href: '/employer/dashboard' }, { label: 'Приглашения' }]}
-        tone="light"
         className="!mb-4 max-sm:text-xs"
       />
-      <h1 className="text-2xl font-bold text-gray-900">Отправленные приглашения</h1>
-      <p className="mt-1 text-sm text-gray-500">История прямых приглашений работников на ваши вакансии</p>
+      <h1 className="text-2xl font-bold text-white">Отправленные приглашения</h1>
+      <p className="mt-1 text-sm text-white/55">История прямых приглашений работников на ваши вакансии</p>
 
       <div className="mt-6">
         <ResponsiveTable
@@ -183,12 +182,12 @@ export default function EmployerInvitationsPage() {
           mobileCard={mobileCard}
           keyExtractor={(i) => i.id}
           isLoading={loading}
-          variant="light"
+          variant="dark"
           emptyState={
-            <div className="flex flex-col items-center justify-center rounded-card border border-gray-200 bg-white py-16 text-center">
-              <Send className="mb-4 h-12 w-12 text-gray-200" />
-              <p className="text-sm text-gray-500">Вы ещё не отправляли приглашений</p>
-              <p className="mt-1 text-xs text-gray-400">
+            <div className="flex flex-col items-center justify-center rounded-card border border-white/10 bg-white/[0.04] py-16 text-center">
+              <Send className="mb-4 h-12 w-12 text-white/25" />
+              <p className="text-sm text-white/55">Вы ещё не отправляли приглашений</p>
+              <p className="mt-1 text-xs text-white/40">
                 Перейдите в раздел «Найти персонал», чтобы пригласить работника
               </p>
             </div>
@@ -197,7 +196,7 @@ export default function EmployerInvitationsPage() {
 
         {meta.totalPages > 1 && (
           <div className="mt-4 flex items-center justify-between">
-            <span className="text-sm text-gray-500">{meta.total} приглашений</span>
+            <span className="text-sm text-white/50">{meta.total} приглашений</span>
             <div className="flex items-center gap-2">
               <Button
                 type="button"
@@ -210,7 +209,7 @@ export default function EmployerInvitationsPage() {
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <span className="text-sm text-gray-500">
+              <span className="text-sm text-white/50">
                 {page} / {meta.totalPages}
               </span>
               <Button

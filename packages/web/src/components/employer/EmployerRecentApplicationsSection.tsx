@@ -266,8 +266,10 @@ export function EmployerRecentApplicationsSection({ hasVacancies }: { hasVacanci
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Portal>
                   <DropdownMenu.Content
-                    className="z-[80] min-w-[200px] rounded-xl border border-white/10 bg-[#111f18] py-1.5 shadow-2xl"
+                    className="z-[80] max-w-[calc(100vw-1.5rem)] min-w-[200px] rounded-xl border border-white/10 bg-[#111f18] py-1.5 shadow-2xl"
+                    align="end"
                     sideOffset={4}
+                    collisionPadding={12}
                   >
                     <DropdownMenu.Item asChild>
                       <Link

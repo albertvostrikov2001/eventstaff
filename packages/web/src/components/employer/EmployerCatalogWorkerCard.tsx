@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import { Heart, Plane, Zap, BadgeCheck } from 'lucide-react';
-import { STAFF_CATEGORIES } from '@unity/shared';
-import { cn } from '@/lib/utils';
+import { STAFF_CATEGORIES, RATE_TYPE_SHORT } from '@unity/shared';
+import { cn, pluralRu, yearsLabel } from '@/lib/utils';
 import { OpenChatButton } from '@/components/chat/OpenChatButton';
 
 export interface EmployerCatalogWorker {
@@ -15,6 +15,7 @@ export interface EmployerCatalogWorker {
   categories: { category: string }[];
   city: { name: string } | null;
   desiredRate: string | number | null;
+  rateType?: string | null;
   experienceYears: number;
   ratingScore: string | number;
   totalReviews: number;
@@ -101,13 +102,13 @@ export function EmployerCatalogWorkerCard({
             ★ <span className="font-semibold">{stars}</span>
             <span className="text-white/50">{' · '}</span>
             <span className="text-white/50">
-              {worker.totalReviews} {worker.totalReviews === 1 ? 'отзыв' : 'отзывов'}
+              {worker.totalReviews} {pluralRu(worker.totalReviews, ['отзыв', 'отзыва', 'отзывов'])}
             </span>
             <span className="text-white/50">{' · '}</span>
             {worker.city?.name ?? 'Город не указан'}
             <span className="text-white/50">{' · '}</span>
             опыт{' '}
-            {worker.experienceYears === 0 ? 'нет' : `${worker.experienceYears} ${worker.experienceYears >= 5 ? 'лет' : 'г.'}`}
+            {worker.experienceYears === 0 ? 'нет' : yearsLabel(worker.experienceYears)}
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             {worker.readyForTrips ? (
@@ -135,7 +136,7 @@ export function EmployerCatalogWorkerCard({
       <div className="flex flex-col gap-2 border-t border-white/[0.06] bg-black/15 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:p-4">
         {displayRate !== null ? (
           <div className="text-[15px] font-bold tracking-tight text-white">
-            {displayRate}&nbsp;<span className="text-[13px] font-medium text-emerald-200/85">₽/ч</span>
+            {displayRate}&nbsp;<span className="text-[13px] font-medium text-emerald-200/85">₽{worker.rateType && RATE_TYPE_SHORT[worker.rateType] ? ` ${RATE_TYPE_SHORT[worker.rateType]}` : ''}</span>
           </div>
         ) : (
           <div className="text-sm text-white/45">Ставка не указана</div>

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { apiClient } from '@/lib/api/client';
 import { useToast } from '@/components/ui/toast-context';
 import { Button } from '@/components/ui/button';
+import { Breadcrumbs } from '@/components/common/Breadcrumbs';
 
 interface Prefs {
   emailInvitation: boolean;
@@ -72,6 +73,12 @@ export default function EmployerNotificationSettingsPage() {
 
   return (
     <div className="mx-auto max-w-xl space-y-8 pb-10">
+      <Breadcrumbs
+        items={[
+          { label: 'Настройки', href: '/employer/settings' },
+          { label: 'Email-рассылка' },
+        ]}
+      />
       <header>
         <h1 className="text-2xl font-bold text-white">Уведомления по email</h1>
         <p className="mt-1 text-sm text-white/55">

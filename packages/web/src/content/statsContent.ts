@@ -7,7 +7,7 @@ export const statsContent = {
     { id: 'profiles', target: 500, suffix: '+', label: 'Анкет в базе' },
     { id: 'time', target: 48, suffix: 'ч', label: 'Среднее время закрытия вакансии' },
     { id: 'retention', target: 97, suffix: '%', label: 'Работодателей вернулись повторно' },
-    { id: 'year', target: 2026, suffix: '', label: 'Год основания' },
+    { id: 'experience', target: 10, suffix: '', label: 'лет опыта в подборе персонала' },
   ],
 } as const;
 

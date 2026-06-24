@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Zap, Check, Lock, TrendingUp, Eye, MessageCircle, Crown } from 'lucide-react';
+import { Zap, Check, TrendingUp, Eye, MessageCircle, Crown, Loader2 } from 'lucide-react';
 import { apiClient, ApiError } from '@/lib/api/client';
 import { useToast } from '@/components/ui/toast-context';
 import { cn } from '@/lib/utils';
+import { MyBoostsSection } from '@/components/subscription/MyBoostsSection';
+import { ComparePlansButton } from '@/components/pricing/PlanComparisonModal';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -37,6 +39,13 @@ interface SubscriptionData {
     applications: { allowed: boolean; used: number; limit: number; plan: string };
   };
   plans: Record<string, WorkerPlanDef>;
+  // профиль-статистика (приходит из /stats если premium)
+  profileStats?: {
+    viewsCount: number;
+    isBoosted: boolean;
+    boostUntil: string | null;
+    boostAvailable: boolean;
+  };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -71,20 +80,58 @@ export default function WorkerSubscriptionPage() {
   const [data, setData] = useState<SubscriptionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState(false);
+  const [boosting, setBoosting] = useState(false);
 
   useEffect(() => {
-    if (searchParams.get('payment_status') === 'success') {
-      toast('Оплата прошла успешно! Подписка активируется в течение нескольких минут.', 'success');
-    }
+    void (async () => {
+      // Возврат с оплаты — перепроверяем платёж на сервере (страховка от пропуска вебхука).
+      if (searchParams.get('payment_status') === 'success') {
+        try {
+          const res = await apiClient.post<{ data: { granted: number } }>('/payments/verify', {});
+          toast(
+            res.data.granted > 0
+              ? 'Оплата подтверждена! Услуга активирована.'
+              : 'Оплата получена. Статус обновится в течение минуты.',
+            res.data.granted > 0 ? 'success' : 'info',
+          );
+        } catch {
+          toast('Оплата получена, проверяем статус…', 'info');
+        }
+      }
+      try {
+        const r = await apiClient.get<{ data: SubscriptionData }>('/subscriptions/worker/me');
+        const sub = r.data;
+        if (sub.key === 'premium' && sub.hasProfileStats) {
+          try {
+            const statsRes = await apiClient.get<{ data: SubscriptionData['profileStats'] }>('/worker/stats');
+            sub.profileStats = statsRes.data;
+          } catch {
+            // stats недоступны — не критично
+          }
+        }
+        setData(sub);
+      } catch {
+        toast('Не удалось загрузить данные подписки', 'error');
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, [searchParams, toast]);
 
-  useEffect(() => {
-    apiClient
-      .get<{ data: SubscriptionData }>('/subscriptions/worker/me')
-      .then((r) => setData(r.data))
-      .catch(() => toast('Не удалось загрузить данные подписки', 'error'))
-      .finally(() => setLoading(false));
-  }, [toast]);
+  const handleBoost = async () => {
+    setBoosting(true);
+    try {
+      await apiClient.post('/worker/boost', {});
+      toast('Буст активирован! Анкета поднята в топ каталога на 3 дня 🚀', 'success');
+      // Обновляем данные
+      const r = await apiClient.get<{ data: SubscriptionData }>('/subscriptions/worker/me');
+      setData(r.data);
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Не удалось активировать буст', 'error');
+    } finally {
+      setBoosting(false);
+    }
+  };
 
   const handleCheckout = async (plan: string) => {
     setPaying(true);
@@ -116,10 +163,20 @@ export default function WorkerSubscriptionPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-white/90">Подписка</h1>
-        <p className="mt-1 text-sm text-white/45">Управление тарифом и преимуществами</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold text-white/90">Подписка</h1>
+          <p className="mt-1 text-sm text-white/45">Управление тарифом и преимуществами</p>
+        </div>
+        <ComparePlansButton
+          initialAudience="worker"
+          label="Сравнить тарифы наглядно"
+          variant="outline"
+        />
       </div>
+
+      {/* Купленные бусты — ручная активация */}
+      <MyBoostsSection audience="worker" />
 
       {/* Current plan banner */}
       <section
@@ -177,6 +234,39 @@ export default function WorkerSubscriptionPage() {
         </div>
       </section>
 
+      {/* Profile stats for Premium */}
+      {isPremium && data?.profileStats && (
+        <section className="rounded-[16px] border border-emerald-500/20 bg-emerald-500/5 p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-emerald-300" />
+            <h2 className="text-[15px] font-semibold text-white/90">Статистика профиля</h2>
+          </div>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            <div className="rounded-[12px] border border-white/[0.06] bg-white/[0.03] p-4 text-center">
+              <div className="text-2xl font-bold text-white">{data.profileStats.viewsCount}</div>
+              <div className="mt-1 text-xs text-white/50">Просмотров профиля</div>
+            </div>
+            <div className="rounded-[12px] border border-white/[0.06] bg-white/[0.03] p-4 text-center">
+              <div className="text-lg font-bold leading-tight text-white sm:text-2xl">
+                {data.profileStats.isBoosted ? (
+                  <span className="text-amber-400">Активен</span>
+                ) : data.profileStats.boostAvailable ? (
+                  <span className="text-white/60">Доступен</span>
+                ) : (
+                  <span className="text-white/30">Использован</span>
+                )}
+              </div>
+              <div className="mt-1 text-xs text-white/50">Буст анкеты</div>
+            </div>
+          </div>
+          {data.profileStats.isBoosted && data.profileStats.boostUntil && (
+            <p className="mt-3 text-xs text-amber-300/70">
+              ⚡ Анкета поднята в топ каталога до {formatDate(data.profileStats.boostUntil)}
+            </p>
+          )}
+        </section>
+      )}
+
       {/* Plan comparison */}
       <div className="grid gap-4 sm:grid-cols-2">
         {/* Free plan */}
@@ -226,12 +316,11 @@ export default function WorkerSubscriptionPage() {
           <div className="space-y-2.5">
             <FeatureRow included text="Полная анкета" />
             <FeatureRow included text="Безлимитные отклики" />
-            <FeatureRow included text="Стандартное место в каталоге" />
-            <FeatureRow included text="Безлимитные отклики" />
-            <FeatureRow included text="Бейдж «Premium»" />
+            <FeatureRow included text="Бейдж «Premium» в каталоге" />
             <FeatureRow included text="Выделение анкеты цветом в каталоге" />
             <FeatureRow included text="Статистика просмотров профиля" />
-            <FeatureRow included text="Разовый буст анкеты в подарок" />
+            <FeatureRow included text="Разовый буст анкеты в топ (+3 дня)" />
+            <FeatureRow included text="Приоритет в сортировке каталога" />
           </div>
 
           {!isPremium && (
@@ -243,6 +332,31 @@ export default function WorkerSubscriptionPage() {
             >
               {paying ? 'Перенаправляем…' : 'Подключить Premium — 290 ₽/мес'}
             </button>
+          )}
+
+          {/* Boost section for active Premium */}
+          {isPremium && (
+            <div className="mt-4 rounded-[12px] border border-amber-500/30 bg-amber-500/8 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-white/90">Буст анкеты</p>
+                  <p className="mt-0.5 text-xs text-white/50">
+                    {data?.hasFreeBoost
+                      ? 'Разовый бесплатный буст — анкета поднимается в топ на 3 дня'
+                      : 'Буст уже был использован'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={boosting || !data?.hasFreeBoost}
+                  onClick={() => void handleBoost()}
+                  className="flex shrink-0 items-center gap-1.5 rounded-[10px] bg-amber-500/20 px-3 py-2 text-xs font-semibold text-amber-300 transition hover:bg-amber-500/30 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {boosting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                  {boosting ? 'Активируем...' : 'Активировать'}
+                </button>
+              </div>
+            </div>
           )}
         </section>
       </div>
@@ -335,8 +449,8 @@ export default function WorkerSubscriptionPage() {
           <p>
             <span className="font-medium text-white/85">Вопросы по оплате?</span>{' '}
             Пишите на{' '}
-            <a href="mailto:support@unity.ru" className="text-emerald-300 hover:underline">
-              support@unity.ru
+            <a href="mailto:Event-Unity@yandex.ru" className="text-emerald-300 hover:underline">
+              Event-Unity@yandex.ru
             </a>
           </p>
         </div>

@@ -60,7 +60,7 @@ async function uploadWithShimProgress(
   }
 }
 
-export function EmployerProfileMediaClient() {
+export function EmployerProfileMediaClient({ embedded = false }: { embedded?: boolean }) {
   const { toast } = useToast();
   const [basics, setBasics] = useState<EmployerBasics | null>(null);
   const [pack, setPack] = useState<MediaMyDto | null>(null);
@@ -173,32 +173,38 @@ export function EmployerProfileMediaClient() {
   const companyName = basics?.companyName ?? null;
   const contactName = basics?.contactName ?? null;
 
+  const cropModal = cropState ? (
+    <ImageCropModal
+      file={cropState.file}
+      aspect={cropState.aspect}
+      onConfirm={(croppedFile) => {
+        const { type, setProg } = cropState;
+        setCropState(null);
+        void uploadKind(croppedFile, type, setProg);
+      }}
+      onCancel={() => setCropState(null)}
+    />
+  ) : null;
+
   return (
-    <div className="mx-auto max-w-3xl space-y-10 py-6">
-      {cropState && (
-        <ImageCropModal
-          file={cropState.file}
-          aspect={cropState.aspect}
-          onConfirm={(croppedFile) => {
-            const { type, setProg } = cropState;
-            setCropState(null);
-            void uploadKind(croppedFile, type, setProg);
-          }}
-          onCancel={() => setCropState(null)}
-        />
+    <div className={embedded ? 'space-y-6' : 'mx-auto max-w-3xl space-y-10 py-6'}>
+      {cropModal}
+      {!embedded && (
+        <>
+          <Breadcrumbs
+            items={[
+              { label: 'Профиль', href: '/employer/profile' },
+              { label: 'Медиафайлы' },
+            ]}
+          />
+          <div>
+            <h1 className="text-2xl font-bold text-white">Медиа компании</h1>
+            <p className="mt-1 text-sm text-white/50">
+              Логотип, баннер и фотографии мероприятий в публичном профиле и в каталоге вакансий.
+            </p>
+          </div>
+        </>
       )}
-      <Breadcrumbs
-        items={[
-          { label: 'Профиль', href: '/employer/profile' },
-          { label: 'Медиафайлы' },
-        ]}
-      />
-      <div>
-        <h1 className="text-2xl font-bold text-white">Медиа компании</h1>
-        <p className="mt-1 text-sm text-white/50">
-          Логотип, баннер и фотографии мероприятий в публичном профиле и в каталоге вакансий.
-        </p>
-      </div>
 
       <section className="rounded-[14px] border border-white/[0.08] bg-white/[0.04] p-5">
         <h2 className="text-base font-semibold text-white">Логотип компании</h2>
@@ -385,3 +391,4 @@ export function EmployerProfileMediaClient() {
     </div>
   );
 }
+

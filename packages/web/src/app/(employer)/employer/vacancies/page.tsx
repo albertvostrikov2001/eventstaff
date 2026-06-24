@@ -49,6 +49,7 @@ interface VacancyListItem {
   coverImageUrl: string | null;
   rate: string;
   rateType: string;
+  isUrgent?: boolean;
   city: { name: string } | null;
   _count: { applications: number };
 }
@@ -402,12 +403,19 @@ export default function EmployerVacanciesPage() {
                         >
                           {v.title}
                         </Link>
-                        <span
-                          className={`mt-2 inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${b.cls}`}
-                        >
-                          <span aria-hidden>{b.emoji}</span>
-                          {b.label}
-                        </span>
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${b.cls}`}
+                          >
+                            <span aria-hidden>{b.emoji}</span>
+                            {b.label}
+                          </span>
+                          {v.isUrgent && (
+                            <span className="inline-flex items-center rounded-full border border-red-500/30 bg-red-500/15 px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-red-300">
+                              Срочно
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <DropdownMenu.Root>
                         <DropdownMenu.Trigger asChild>
@@ -523,10 +531,19 @@ export default function EmployerVacanciesPage() {
                           {v.city.name}
                         </span>
                       )}
-                      <span className="inline-flex items-center gap-1">
+                      <Link
+                        href={`/employer/vacancies/${v.id}/applications`}
+                        className="inline-flex items-center gap-1 rounded transition-colors hover:text-white"
+                        title="Посмотреть отклики"
+                      >
                         <Users className="h-3.5 w-3.5 shrink-0 text-white/50" aria-hidden />
-                        {v._count.applications}
-                      </span>
+                        <span className={v._count.applications > 0 ? 'font-semibold text-white/90' : ''}>
+                          {v._count.applications}
+                        </span>
+                        {v._count.applications > 0 && (
+                          <span className="text-[11px] text-white/35">откл.</span>
+                        )}
+                      </Link>
                       <span className="font-medium text-white/78">
                         {Number(v.rate).toLocaleString('ru-RU')} ₽ —{' '}
                         {RATE_TYPES[v.rateType as keyof typeof RATE_TYPES] ?? v.rateType}

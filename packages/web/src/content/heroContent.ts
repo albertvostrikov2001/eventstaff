@@ -3,10 +3,10 @@ export const heroContent = {
   h1: 'Нужный персонал —\nв нужное время',
   subtitle:
     'Юнити — платформа для подбора event-персонала. Официанты, бармены, повара, хостес и координаторы — под любое мероприятие, с проверенными профилями.',
-  cta1Label: 'Найти персонал',
-  cta1Href: '/workers',
-  cta2Label: 'Разместить вакансию',
-  cta2Href: '/auth/register?role=employer',
+  cta1Label: 'Я работодатель — найти персонал',
+  cta1Href: '/auth/register?role=employer',
+  cta2Label: 'Я ищу работу',
+  cta2Href: '/auth/register?role=worker',
   trustItems: [
     '500+ проверенных анкет',
     'Отклик за 24 часа',

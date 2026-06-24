@@ -1,4 +1,20 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
+
+// Homepage: title intentionally omitted — root layout's
+// `default: 'Юнити — Платформа event-персонала'` applies directly
+// without the `template: '%s | Юнити'` suffix.
+export const metadata: Metadata = {
+  description:
+    'Специализированная платформа для подбора официантов, барменов и другого event-персонала в ресторанный бизнес. Проверенные специалисты. Быстрый найм.',
+  alternates: { canonical: '/' },
+  openGraph: {
+    title: 'Юнити — Платформа event-персонала',
+    description: 'Подбор официантов, барменов и event-персонала для вашего заведения.',
+    url: '/',
+    type: 'website',
+  },
+};
 import {
   Search,
   MessageSquare,
@@ -200,136 +216,137 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ── Benefits grid ── */}
+      {/* ── Pricing teaser ── */}
       <section
         className="py-20"
         style={{ background: '#ffffff' }}
-        aria-labelledby="benefits-heading"
+        aria-labelledby="pricing-heading"
       >
         <div className="container-page">
           <ScrollReveal>
             <div className="section-header">
-              <h2 id="benefits-heading" className="section-title-dark">
-                Всё что нужно — в одном месте
+              <h2 id="pricing-heading" className="section-title-dark">
+                Простые и честные тарифы
               </h2>
+              <p className="section-subtitle-dark">
+                Начните бесплатно — платите, только когда нужно больше
+              </p>
             </div>
           </ScrollReveal>
 
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {/* Employers card */}
-            <ScrollReveal>
-              <div
-                className="rounded-[var(--u-radius-lg)] border p-8 h-full"
-                style={{
-                  borderColor: 'var(--u-border-dark)',
-                  boxShadow: 'var(--u-shadow-card)',
-                }}
-              >
+          <ScrollReveal>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+              {[
+                {
+                  name: 'Старт',
+                  price: '0 ₽',
+                  period: 'навсегда',
+                  features: ['До 3 активных вакансий', 'Входящие отклики', 'Базовая поддержка'],
+                  highlighted: false,
+                  badge: null as string | null,
+                },
+                {
+                  name: 'Бизнес',
+                  price: '1 990 ₽',
+                  period: 'в месяц',
+                  features: ['До 15 вакансий', 'Полный каталог + Vip', '30 приглашений в месяц', 'Аналитика и бусты'],
+                  highlighted: true,
+                  badge: 'Рекомендуем',
+                },
+                {
+                  name: 'Про',
+                  price: '4 490 ₽',
+                  period: 'в месяц',
+                  features: ['Безлимит вакансий', 'Безлимит приглашений', 'Расширенная аналитика'],
+                  highlighted: false,
+                  badge: 'Для агентств',
+                },
+              ].map((plan) => (
                 <div
-                  className="flex h-12 w-12 items-center justify-center rounded-xl mb-5"
-                  style={{ background: 'rgba(45,106,74,0.08)' }}
+                  key={plan.name}
+                  className="relative flex flex-col rounded-[var(--u-radius-lg)] border p-7"
+                  style={
+                    plan.highlighted
+                      ? {
+                          borderColor: 'var(--u-emerald)',
+                          boxShadow: '0 8px 32px rgba(45,106,74,0.14)',
+                          background: 'linear-gradient(180deg, rgba(45,106,74,0.05) 0%, #ffffff 100%)',
+                        }
+                      : { borderColor: 'var(--u-border-dark)', boxShadow: 'var(--u-shadow-card)' }
+                  }
                 >
-                  <Briefcase
-                    className="h-6 w-6"
-                    strokeWidth={1.5}
-                    style={{ color: 'var(--u-emerald)' }}
-                    aria-hidden="true"
-                  />
-                </div>
-                <h3
-                  className="text-xl font-semibold mb-5"
-                  style={{ color: 'var(--u-text-dark)' }}
-                >
-                  Для работодателей
-                </h3>
-                <ul className="space-y-3 mb-6">
-                  {[
-                    'Публикуйте вакансию за 5 минут',
-                    'Получите отклики от проверенных специалистов',
-                    'Бронируйте работника на конкретную дату',
-                    'Оценивайте и приглашайте повторно',
-                  ].map((item) => (
-                    <li
-                      key={item}
-                      className="flex items-start gap-3 text-sm"
-                      style={{ color: 'var(--u-text-dark-sub)' }}
+                  {plan.badge && (
+                    <span
+                      className="absolute -top-3 right-6 rounded-full px-3 py-1 text-xs font-semibold text-white"
+                      style={{ background: 'var(--u-emerald)' }}
                     >
-                      <CheckCircle
-                        className="mt-0.5 h-4 w-4 flex-shrink-0"
-                        style={{ color: 'var(--u-emerald)' }}
-                        aria-hidden="true"
-                      />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  href="/for-employers"
-                  className="inline-flex items-center gap-1 text-sm font-semibold transition-colors"
-                  style={{ color: 'var(--u-emerald)' }}
-                >
-                  Подробнее <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-                </Link>
-              </div>
-            </ScrollReveal>
+                      {plan.badge}
+                    </span>
+                  )}
+                  <h3 className="text-lg font-semibold" style={{ color: 'var(--u-text-dark)' }}>
+                    {plan.name}
+                  </h3>
+                  <div className="mt-2 flex items-baseline gap-1.5">
+                    <span className="text-3xl font-bold" style={{ color: 'var(--u-text-dark)' }}>
+                      {plan.price}
+                    </span>
+                    <span className="text-sm" style={{ color: 'var(--u-text-dark-sub)' }}>
+                      / {plan.period}
+                    </span>
+                  </div>
+                  <ul className="mt-5 flex-1 space-y-2.5">
+                    {plan.features.map((f) => (
+                      <li key={f} className="flex items-start gap-2.5 text-sm" style={{ color: 'var(--u-text-dark-sub)' }}>
+                        <CheckCircle
+                          className="mt-0.5 h-4 w-4 flex-shrink-0"
+                          style={{ color: 'var(--u-emerald)' }}
+                          aria-hidden="true"
+                        />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                  <Link
+                    href="/auth/register?role=employer"
+                    className="mt-6 inline-flex w-full items-center justify-center rounded-input py-2.5 text-sm font-semibold transition-colors"
+                    style={
+                      plan.highlighted
+                        ? { background: 'var(--u-emerald)', color: '#ffffff' }
+                        : { border: '1.5px solid var(--u-border-dark)', color: 'var(--u-text-dark)' }
+                    }
+                  >
+                    {plan.price === '0 ₽' ? 'Начать бесплатно' : `Подключить ${plan.name}`}
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </ScrollReveal>
 
-            {/* Workers card */}
-            <ScrollReveal>
-              <div
-                className="rounded-[var(--u-radius-lg)] border p-8 h-full"
-                style={{
-                  borderColor: 'var(--u-border-dark)',
-                  boxShadow: 'var(--u-shadow-card)',
-                }}
+          <ScrollReveal>
+            <div className="mt-8 flex flex-col items-center gap-4 text-center">
+              <p className="text-sm" style={{ color: 'var(--u-text-dark-sub)' }}>
+                Специалистам — <span style={{ color: 'var(--u-text-dark)', fontWeight: 600 }}>бесплатно</span>,
+                Premium от 290 ₽/мес за безлимит откликов и продвижение.
+              </p>
+              <Link
+                href="/pricing"
+                className="inline-flex items-center gap-1.5 rounded-input px-6 py-2.5 text-sm font-semibold text-white transition-colors"
+                style={{ background: 'var(--u-emerald)' }}
               >
-                <div
-                  className="flex h-12 w-12 items-center justify-center rounded-xl mb-5"
-                  style={{ background: 'rgba(139,90,58,0.1)' }}
-                >
-                  <Users
-                    className="h-6 w-6"
-                    strokeWidth={1.5}
-                    style={{ color: '#8b5a3a' }}
-                    aria-hidden="true"
-                  />
-                </div>
-                <h3
-                  className="text-xl font-semibold mb-5"
-                  style={{ color: 'var(--u-text-dark)' }}
-                >
-                  Для специалистов
-                </h3>
-                <ul className="space-y-3 mb-6">
-                  {[
-                    'Создайте профессиональный профиль',
-                    'Управляйте расписанием и доступностью',
-                    'Получайте приглашения напрямую',
-                    'Развивайте репутацию через отзывы',
-                  ].map((item) => (
-                    <li
-                      key={item}
-                      className="flex items-start gap-3 text-sm"
-                      style={{ color: 'var(--u-text-dark-sub)' }}
-                    >
-                      <CheckCircle
-                        className="mt-0.5 h-4 w-4 flex-shrink-0"
-                        style={{ color: '#8b5a3a' }}
-                        aria-hidden="true"
-                      />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-                <Link
-                  href="/for-workers"
-                  className="inline-flex items-center gap-1 text-sm font-semibold transition-colors"
-                  style={{ color: '#8b5a3a' }}
-                >
-                  Подробнее <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                Все тарифы и услуги <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </Link>
+              <p className="text-xs" style={{ color: 'var(--u-text-dark-sub)' }}>
+                Подробнее о возможностях:{' '}
+                <Link href="/for-employers" className="font-medium underline" style={{ color: 'var(--u-emerald)' }}>
+                  для работодателей
                 </Link>
-              </div>
-            </ScrollReveal>
-          </div>
+                {' · '}
+                <Link href="/for-workers" className="font-medium underline" style={{ color: '#8b5a3a' }}>
+                  для специалистов
+                </Link>
+              </p>
+            </div>
+          </ScrollReveal>
         </div>
       </section>
 

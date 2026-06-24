@@ -1,20 +1,43 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { Prisma, StaffCategory, EventType, EmploymentType, BusinessType } from '@prisma/client';
+import { STAFF_CATEGORIES } from '@unity/shared';
 import { replyFail, replyOk, replyPaginated } from '../../lib/api-reply';
+import { isAdminRequest } from '../../lib/optional-jwt';
+
+// Нормализация входных категорий: принимаем enum-ключ ИЛИ русскую подпись,
+// неизвестные значения отбрасываем (чтобы не падать 500 на невалидном фильтре).
+const VALID_CATEGORY_KEYS = new Set<string>(Object.values(StaffCategory));
+const LABEL_TO_CATEGORY: Record<string, string> = Object.fromEntries(
+  Object.entries(STAFF_CATEGORIES).map(([key, label]) => [String(label).toLowerCase(), key]),
+);
+function normalizeCategories(input: string[]): StaffCategory[] {
+  const out: StaffCategory[] = [];
+  for (const raw of input) {
+    const s = raw.trim();
+    if (!s) continue;
+    if (VALID_CATEGORY_KEYS.has(s)) {
+      out.push(s as StaffCategory);
+      continue;
+    }
+    const key = LABEL_TO_CATEGORY[s.toLowerCase()];
+    if (key) out.push(key as StaffCategory);
+  }
+  return out;
+}
 
 export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
-  async function getVerifiedActiveEmployerPage(idOrSlug: string) {
+  async function getVerifiedActiveEmployerPage(idOrSlug: string, isAdmin = false) {
     const employer = await fastify.prisma.employerProfile.findFirst({
       where: {
         OR: [{ id: idOrSlug }, { slug: idOrSlug }],
-        isVerified: true,
-        user: { status: 'active' },
+        // Админ видит любую анкету работодателя, даже скрытую/непроверенную.
+        ...(isAdmin ? {} : { isVerified: true, isHidden: false, user: { status: 'active' } }),
       },
       include: {
         city: true,
         vacancies: {
-          where: { status: 'active' },
+          where: isAdmin ? {} : { status: 'active', isHidden: false },
           include: { city: true },
           take: 20,
           orderBy: { createdAt: 'desc' },
@@ -89,11 +112,9 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
       })
       .parse(request.query);
 
-    const categories = query.category
-      ? Array.isArray(query.category)
-        ? query.category
-        : [query.category]
-      : undefined;
+    const categories = normalizeCategories(
+      query.category ? (Array.isArray(query.category) ? query.category : [query.category]) : [],
+    );
 
     const limit = Math.min(100, query.perPage ?? query.limit ?? 20);
     const page = Math.max(1, query.page);
@@ -103,6 +124,10 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
 
     const where: Prisma.WorkerProfileWhereInput = {
       visibility: 'public',
+      // Показываем только реально заполненные анкеты — с именем и фамилией.
+      // Пустые профили (без заполнения) не должны попадать в каталог.
+      firstName: { not: '' },
+      lastName: { not: '' },
       ...(query.cityId ? { cityId: query.cityId } : {}),
       ...(query.rateMin !== undefined || query.rateMax !== undefined
         ? {
@@ -119,8 +144,8 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
       ...(query.readyForOvertime === true ? { readyForOvertime: true } : {}),
       ...(query.verified === true ? { isVerified: true } : {}),
       ...(query.minRating !== undefined ? { ratingScore: { gte: query.minRating } } : {}),
-      ...(categories?.length
-        ? { categories: { some: { category: { in: categories as StaffCategory[] } } } }
+      ...(categories.length
+        ? { categories: { some: { category: { in: categories } } } }
         : {}),
       ...(searchNorm
         ? {
@@ -163,6 +188,44 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
               : [{ createdAt: sortOrder }];
     }
 
+    // Determine if requester is an employer with paid catalog access
+    let hiddenCount = 0;
+    let upgradeRequired = false;
+
+    const authHeader = request.headers.authorization;
+    let employerHasFullCatalog = false;
+    if (authHeader?.startsWith('Bearer ')) {
+      try {
+        const decoded = await fastify.jwt.verify<{ sub: string; roles?: string[] }>(
+          authHeader.slice(7),
+        );
+        const roles = decoded.roles ?? [];
+        if (roles.includes('employer')) {
+          const empProfile = await fastify.prisma.employerProfile.findUnique({
+            where: { userId: decoded.sub },
+            select: { id: true },
+          });
+          if (empProfile) {
+            const empSub = await fastify.prisma.subscription.findUnique({
+              where: { employerId: empProfile.id },
+              select: { plan: true, status: true, currentPeriodEnd: true },
+            });
+            const now2 = new Date();
+            const isActiveSub =
+              empSub?.status === 'active' &&
+              (!empSub.currentPeriodEnd || empSub.currentPeriodEnd > now2);
+            const empPlan = isActiveSub ? (empSub!.plan as string) : 'free';
+            employerHasFullCatalog = ['basic', 'pro', 'enterprise'].includes(empPlan);
+          }
+        }
+      } catch {
+        // Invalid token — treat as unauthenticated
+      }
+    }
+
+    // Все работники видны всем пользователям (VIP-статус только улучшает позицию в каталоге)
+    void employerHasFullCatalog; // сохраняется для будущей логики
+
     const [total, workers] = await fastify.prisma.$transaction([
       fastify.prisma.workerProfile.count({ where }),
       fastify.prisma.workerProfile.findMany({
@@ -171,6 +234,7 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
           city: true,
           categories: true,
           user: { select: { id: true, userReliabilityScore: { select: { level: true, score: true } } } },
+          subscription: { select: { plan: true, status: true, currentPeriodEnd: true } },
         },
         orderBy,
         skip: (page - 1) * limit,
@@ -178,17 +242,44 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ]);
 
-    const workersSerialized = workers.map((w) => ({
-      ...w,
-      desiredRate: w.desiredRate != null ? parseFloat(w.desiredRate.toString()) : null,
-    }));
+    const now = new Date();
+    const workersSerialized = workers.map((w) => {
+      const isPremium =
+        w.subscription?.plan === 'premium' &&
+        w.subscription.status === 'active' &&
+        (!w.subscription.currentPeriodEnd || w.subscription.currentPeriodEnd > now);
+      const isBoosted = isPremium && !!w.boostUntil && w.boostUntil > now;
+      const isRecommended = !!w.recommendedUntil && w.recommendedUntil > now;
+      return {
+        ...w,
+        subscription: undefined, // не раскрываем данные подписки в каталоге
+        isPremium,
+        isBoosted,
+        isRecommended,
+        desiredRate: w.desiredRate != null ? parseFloat(w.desiredRate.toString()) : null,
+        ratingScore: w.ratingScore != null ? parseFloat(w.ratingScore.toString()) : null,
+      };
+    });
 
-    return replyPaginated(reply, workersSerialized, {
-      total,
-      page,
-      limit,
-      perPage: limit,
-      totalPages: Math.ceil(total / limit),
+    // Буст-сортировка: сначала boosted, потом premium, потом остальные
+    workersSerialized.sort((a, b) => {
+      const aScore = a.isBoosted ? 2 : a.isPremium ? 1 : 0;
+      const bScore = b.isBoosted ? 2 : b.isPremium ? 1 : 0;
+      return bScore - aScore; // только если отличаются, иначе исходный порядок
+    });
+
+    return reply.send({
+      success: true,
+      data: workersSerialized,
+      meta: {
+        total,
+        page,
+        limit,
+        perPage: limit,
+        totalPages: Math.ceil(total / limit),
+        upgradeRequired,
+        hiddenCount,
+      },
     });
   });
 
@@ -196,10 +287,13 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/workers/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
 
+    // Админ видит любую анкету, даже скрытую самим пользователем.
+    const isAdmin = await isAdminRequest(request);
+
     const worker = await fastify.prisma.workerProfile.findFirst({
       where: {
         OR: [{ id }, { slug: id }],
-        visibility: { in: ['public', 'verified_only'] },
+        ...(isAdmin ? {} : { visibility: { in: ['public', 'verified_only'] } }),
       },
       include: {
         city: true,
@@ -207,12 +301,25 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
         workHistory: { orderBy: { dateFrom: 'desc' } },
         portfolio: true,
         user: { select: { email: true } },
+        subscription: true,
       },
     });
 
     if (!worker) {
       return replyFail(reply, 404, 'NOT_FOUND', 'Worker not found');
     }
+
+    const nowSub = new Date();
+    const isPremium =
+      worker.subscription?.plan === 'premium' &&
+      worker.subscription.status === 'active' &&
+      (!worker.subscription.currentPeriodEnd || worker.subscription.currentPeriodEnd > nowSub);
+    const isRecommended = !!worker.recommendedUntil && worker.recommendedUntil > nowSub;
+
+    // Инкрементируем счётчик просмотров профиля (fire-and-forget)
+    fastify.prisma.workerProfile
+      .update({ where: { id: worker.id }, data: { viewsCount: { increment: 1 } } })
+      .catch(() => {});
 
     // Загружаем доступность на текущий + следующие 2 месяца
     const todayStart = new Date();
@@ -231,7 +338,11 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
 
     return replyOk(reply, {
       ...worker,
+      subscription: undefined, // не раскрываем данные подписки
+      isPremium,
+      isRecommended,
       desiredRate: worker.desiredRate != null ? parseFloat(worker.desiredRate.toString()) : null,
+      ratingScore: worker.ratingScore != null ? parseFloat(worker.ratingScore.toString()) : null,
       userId: worker.userId,
       availability: availability.map((a) => ({
         date: (a.date as Date).toISOString().split('T')[0],
@@ -260,11 +371,9 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
       })
       .parse(request.query);
 
-    const categories = query.category
-      ? Array.isArray(query.category)
-        ? query.category
-        : [query.category]
-      : undefined;
+    const categories = normalizeCategories(
+      query.category ? (Array.isArray(query.category) ? query.category : [query.category]) : [],
+    );
     const eventTypes = query.eventType
       ? Array.isArray(query.eventType)
         ? query.eventType
@@ -273,9 +382,10 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
 
     const where: Prisma.VacancyWhereInput = {
       status: 'active',
+      isHidden: false,
       ...(query.cityId ? { cityId: query.cityId } : {}),
-      ...(categories?.length
-        ? { category: { in: categories as StaffCategory[] } }
+      ...(categories.length
+        ? { category: { in: categories } }
         : {}),
       ...(query.rateMin !== undefined || query.rateMax !== undefined
         ? {
@@ -318,6 +428,7 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
             },
           },
           city: true,
+          boosts: { where: { expiresAt: { gt: new Date() } }, select: { id: true } },
         },
         orderBy,
         skip: (query.page - 1) * query.limit,
@@ -325,10 +436,17 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
       }),
     ]);
 
-    const vacanciesSerialized = vacancies.map((v) => ({
-      ...v,
-      rate: v.rate != null ? parseFloat(v.rate.toString()) : null,
-    }));
+    const nowV = new Date();
+    const vacanciesSerialized = vacancies
+      .map((v) => ({
+        ...v,
+        boosts: undefined, // служебное поле не отдаём
+        isBoosted: Array.isArray(v.boosts) && v.boosts.length > 0,
+        isHighlighted: !!v.highlightUntil && v.highlightUntil > nowV,
+        rate: v.rate != null ? parseFloat(v.rate.toString()) : null,
+      }))
+      // Буст-сортировка в пределах страницы: сначала boosted (как в каталоге работников)
+      .sort((a, b) => (b.isBoosted ? 1 : 0) - (a.isBoosted ? 1 : 0));
 
     return replyPaginated(reply, vacanciesSerialized, {
       total,
@@ -346,6 +464,7 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
       where: {
         id,
         status: { in: ['active', 'closed'] },
+        isHidden: false,
       },
       include: {
         employer: {
@@ -365,9 +484,22 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
       data: { viewsCount: { increment: 1 } },
     });
 
+    // Trust signal: completed shifts of this employer
+    const completedShifts = await fastify.prisma.shift.count({
+      where: { employerId: vacancy.employer.userId, status: 'COMPLETED' },
+    });
+
     return replyOk(reply, {
       ...vacancy,
       rate: vacancy.rate != null ? parseFloat(vacancy.rate.toString()) : null,
+      employer: {
+        ...vacancy.employer,
+        ratingScore:
+          vacancy.employer.ratingScore != null
+            ? parseFloat(vacancy.employer.ratingScore.toString())
+            : null,
+        completedShifts,
+      },
     });
   });
 
@@ -388,6 +520,7 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
     const where: Prisma.EmployerProfileWhereInput = {
       companyName: { not: null },
       NOT: { companyName: '' },
+      isHidden: false,
       user: { status: 'active' },
       ...(query.businessType ? { businessType: query.businessType as BusinessType } : {}),
       ...(query.cityId ? { cityId: query.cityId } : {}),
@@ -432,7 +565,7 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /employers/:id
   fastify.get('/employers/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const pack = await getVerifiedActiveEmployerPage(id);
+    const pack = await getVerifiedActiveEmployerPage(id, await isAdminRequest(request));
 
     if (!pack) {
       return replyFail(reply, 404, 'NOT_FOUND', 'Employer not found');
@@ -459,7 +592,7 @@ export const catalogRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /employers/:id/profile — плоский объект для интеграций (те же ограничения видимости)
   fastify.get('/employers/:id/profile', async (request, reply) => {
     const { id } = request.params as { id: string };
-    const pack = await getVerifiedActiveEmployerPage(id);
+    const pack = await getVerifiedActiveEmployerPage(id, await isAdminRequest(request));
 
     if (!pack) {
       return replyFail(reply, 404, 'NOT_FOUND', 'Employer not found');

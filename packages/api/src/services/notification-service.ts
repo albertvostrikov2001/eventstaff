@@ -80,6 +80,30 @@ export class NotificationService {
     });
   }
 
+  /** Unread counts grouped by notification type (for per-section nav badges). */
+  async getUnreadSummary(userId: string): Promise<Record<string, number>> {
+    const rows = await this.prisma.inAppNotification.groupBy({
+      by: ['type'],
+      where: { userId, isRead: false },
+      _count: { _all: true },
+    });
+    const out: Record<string, number> = {};
+    for (const r of rows) {
+      out[r.type as string] = r._count._all;
+    }
+    return out;
+  }
+
+  /** Mark all unread notifications of the given types as read (clears a section badge). */
+  async markReadByTypes(userId: string, types: NotificationType[]): Promise<number> {
+    if (types.length === 0) return 0;
+    const res = await this.prisma.inAppNotification.updateMany({
+      where: { userId, isRead: false, type: { in: types } },
+      data: { isRead: true, readAt: new Date() },
+    });
+    return res.count;
+  }
+
   async ensurePreferences(userId: string) {
     await this.prisma.notificationPreferences.upsert({
       where: { userId },

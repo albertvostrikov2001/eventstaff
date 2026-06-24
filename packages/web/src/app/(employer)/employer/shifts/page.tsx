@@ -70,7 +70,6 @@ interface Shift {
   completedAt?: string | null;
   booking: ShiftBooking;
   reviews: ShiftReview[];
-  payments: { id: string; status: string; amount: number }[];
 }
 
 interface TabCounts {
@@ -899,9 +898,9 @@ function EmployerShiftsInner() {
                     type="button"
                     variant="link"
                     className="inline h-auto min-h-0 p-0 font-semibold text-white underline shadow-none"
-                    onClick={() => window.open('mailto:support@unity.ru', '_blank')}
+                    onClick={() => window.open('mailto:Event-Unity@yandex.ru', '_blank')}
                   >
-                    support@unity.ru
+                    Event-Unity@yandex.ru
                   </Button>
                 </div>
               ) : null}

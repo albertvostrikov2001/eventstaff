@@ -7,10 +7,12 @@ import { workerProfileUpdateSchema, type WorkerProfileUpdateInput } from '@unity
 import { FormField, FormTextarea, FormSelect, FormCheckbox } from '@/components/forms/FormField';
 import { useToast } from '@/components/ui/toast-context';
 import { apiClient } from '@/lib/api/client';
-import { Eye, EyeOff, AlertCircle, CheckCircle, Info } from 'lucide-react';
+import Link from 'next/link';
+import { Eye, EyeOff, AlertCircle, CheckCircle, Info, ExternalLink } from 'lucide-react';
 import { CategoryMultiSelect, type WorkerCategoryItem } from '@/components/worker/CategoryMultiSelect';
 import { AvatarUpload } from '@/components/media/AvatarUpload';
 import { MediaUpload, type MediaItemDto } from '@/components/media/MediaUpload';
+import { ProfileCompletion } from '@/components/profile/ProfileCompletion';
 
 interface City {
   id: string;
@@ -39,13 +41,13 @@ interface WorkerProfile {
 
 interface MediaMyDto {
   avatar: MediaItemDto | null;
+  portfolio: MediaItemDto[];
   documents: MediaItemDto[];
 }
 
 const RATE_TYPE_OPTIONS = [
-  { value: 'hourly',      label: 'В час' },
   { value: 'per_shift',   label: 'За смену' },
-  { value: 'fixed',       label: 'Фиксированная' },
+  { value: 'monthly',     label: 'За месяц' },
 ];
 
 const MONTHS_OPTIONS = Array.from({ length: 12 }, (_, i) => ({
@@ -65,6 +67,7 @@ export default function WorkerProfilePage() {
   // Media state
   const [photoUrl, setPhotoUrl]       = useState<string | null>(null);
   const [mediaAvatar, setMediaAvatar] = useState<MediaItemDto | null>(null);
+  const [portfolio, setPortfolio]     = useState<MediaItemDto[]>([]);
   const [documents, setDocuments]     = useState<MediaItemDto[]>([]);
 
   // Experience: split into years + months for the UI
@@ -80,6 +83,7 @@ export default function WorkerProfilePage() {
       .get<{ data: MediaMyDto }>('/media/my')
       .then((m) => {
         setMediaAvatar(m.data.avatar);
+        setPortfolio(m.data.portfolio ?? []);
         setDocuments(m.data.documents ?? []);
       })
       .catch(() => {});
@@ -98,6 +102,7 @@ export default function WorkerProfilePage() {
         setCategories(p.categories ?? []);
         setCities(citiesRes.data);
         setMediaAvatar(mediaRes.data.avatar);
+        setPortfolio(mediaRes.data.portfolio ?? []);
         setDocuments(mediaRes.data.documents ?? []);
 
         // Split experienceYears into years + months
@@ -118,7 +123,7 @@ export default function WorkerProfilePage() {
           readyForTrips:  p.readyForTrips,
           readyForOvertime: p.readyForOvertime,
           desiredRate:    p.desiredRate ? Number(p.desiredRate) : undefined,
-          rateType:       (p.rateType as WorkerProfileUpdateInput['rateType']) ?? 'hourly',
+          rateType:       (p.rateType as WorkerProfileUpdateInput['rateType']) ?? 'per_shift',
           visibility:     (p.visibility as WorkerProfileUpdateInput['visibility']) ?? 'hidden',
           cityId:         p.cityId ?? undefined,
         });
@@ -157,7 +162,7 @@ export default function WorkerProfilePage() {
         readyForTrips:   saved.readyForTrips,
         readyForOvertime: saved.readyForOvertime,
         desiredRate:     saved.desiredRate ? Number(saved.desiredRate) : undefined,
-        rateType:        (saved.rateType as WorkerProfileUpdateInput['rateType']) ?? 'hourly',
+        rateType:        (saved.rateType as WorkerProfileUpdateInput['rateType']) ?? 'per_shift',
         visibility:      (saved.visibility as WorkerProfileUpdateInput['visibility']) ?? 'hidden',
         cityId:          saved.cityId ?? undefined,
       });
@@ -215,24 +220,50 @@ export default function WorkerProfilePage() {
   return (
     <div className="space-y-8">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white">Мой профиль</h1>
           <p className="mt-1 text-sm text-white/50">Заполните анкету для поиска работы</p>
         </div>
-        <button
-          onClick={toggleVisibility}
-          disabled={togglingVisibility}
-          className={`flex items-center gap-2 rounded-[var(--r-3)] px-4 py-2 text-sm font-medium transition ${
-            isPublic
-              ? 'border border-white/20 bg-white/[0.06] text-white/80 hover:bg-white/[0.10]'
-              : 'bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]'
-          }`}
-        >
-          {isPublic ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-          {isPublic ? 'Анкета видна' : 'Анкета скрыта'}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {isPublic && profile && (
+            <Link
+              href={`/workers/${profile.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-[var(--r-3)] border border-white/[0.12] bg-white/[0.04] px-4 py-2 text-sm font-medium text-white/60 transition hover:bg-white/[0.08] hover:text-white/90"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Как видят меня
+            </Link>
+          )}
+          <button
+            onClick={toggleVisibility}
+            disabled={togglingVisibility}
+            className={`flex items-center gap-2 rounded-[var(--r-3)] px-4 py-2 text-sm font-medium transition ${
+              isPublic
+                ? 'border border-white/20 bg-white/[0.06] text-white/80 hover:bg-white/[0.10]'
+                : 'bg-[var(--accent)] text-white hover:bg-[var(--accent-hover)]'
+            }`}
+          >
+            {isPublic ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+            {isPublic ? 'Анкета видна' : 'Анкета скрыта'}
+          </button>
+        </div>
       </div>
+
+      {/* Profile completion indicator */}
+      <ProfileCompletion
+        items={[
+          { label: 'Имя и фамилия', done: !!(profile?.firstName && profile?.lastName) },
+          { label: 'Город', done: !!profile?.cityId },
+          { label: 'Специализация', done: categories.length > 0 },
+          { label: 'Ставка', done: !!profile?.desiredRate },
+          { label: 'О себе', done: !!(profile?.bio && profile.bio.length > 20) },
+          { label: 'Фото профиля', done: !!photoUrl },
+          { label: 'Публикация анкеты', done: profile?.visibility === 'public' },
+        ]}
+      />
 
       {/* Visibility banners */}
       {!isPublic && !showPublicHint && (
@@ -341,9 +372,12 @@ export default function WorkerProfilePage() {
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
+                    inputMode="numeric"
                     min={0}
                     max={50}
-                    value={expYears}
+                    placeholder="0"
+                    value={expYears === 0 ? '' : expYears}
+                    onFocus={(e) => e.target.select()}
                     onChange={(e) => setExpYears(Math.max(0, Math.min(50, Number(e.target.value) || 0)))}
                     className="w-20 rounded-[var(--r-2)] border border-[var(--border-default)] bg-[rgba(255,255,255,.03)] px-3 py-2.5 text-center text-[14px] text-[var(--text-primary)] outline-none transition focus:border-[var(--accent)] focus:ring-[3px] focus:ring-[var(--accent-faint)] [color-scheme:dark]"
                   />
@@ -398,6 +432,41 @@ export default function WorkerProfilePage() {
           </button>
         </div>
       </form>
+
+      {/* ── Portfolio ── */}
+      <div className="rounded-[12px] border border-white/[0.08] bg-white/[0.04] p-6">
+        <h2 className="mb-1 text-base font-semibold text-white">Портфолио</h2>
+        <p className="mb-4 text-sm text-white/50">
+          Покажите свою работу — фото с мероприятий. До 10 фото, до 5 МБ каждое.
+        </p>
+        <MediaUpload
+          uploadType="PORTFOLIO_PHOTO"
+          accept="image/jpeg,image/png,image/webp"
+          label="Добавить фото"
+          description="JPG, PNG, WEBP · до 5 МБ"
+          item={null}
+          onChange={() => void reloadMedia()}
+          onUploaded={(item) =>
+            setPortfolio((prev) => [item, ...prev.filter((p) => p.id !== item.id)])
+          }
+          hideUploadWhenPresent={false}
+        />
+        {portfolio.length > 0 && (
+          <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {portfolio.map((item) => (
+              <MediaUpload
+                key={item.id}
+                uploadType="PORTFOLIO_PHOTO"
+                accept="image/jpeg,image/png,image/webp"
+                label="Фото портфолио"
+                item={item}
+                onChange={() => void reloadMedia()}
+                hideUploadWhenPresent
+              />
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* ── Documents / Resume ── */}
       <div className="rounded-[12px] border border-white/[0.08] bg-white/[0.04] p-6">

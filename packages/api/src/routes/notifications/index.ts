@@ -46,6 +46,25 @@ export const notificationRoutes: FastifyPluginAsync = async (fastify) => {
     return replyOk(reply, { count });
   });
 
+  // Unread counts grouped by type — powers per-section nav badges.
+  fastify.get('/notifications/unread-summary', { preHandler: auth }, async (request, reply) => {
+    const byType = await fastify.notificationService.getUnreadSummary(request.jwtUser.sub);
+    const total = Object.values(byType).reduce((a, b) => a + b, 0);
+    return replyOk(reply, { byType, total });
+  });
+
+  // Mark all unread notifications of given types as read (clears a section badge on visit).
+  fastify.post('/notifications/read-by-types', { preHandler: auth }, async (request, reply) => {
+    const body = z
+      .object({ types: z.array(z.string()).min(1).max(20) })
+      .parse(request.body ?? {});
+    const count = await fastify.notificationService.markReadByTypes(
+      request.jwtUser.sub,
+      body.types as Parameters<typeof fastify.notificationService.markReadByTypes>[1],
+    );
+    return replyOk(reply, { success: true, count });
+  });
+
   fastify.patch<{ Params: { id: string } }>(
     '/notifications/:id/read',
     { preHandler: auth },

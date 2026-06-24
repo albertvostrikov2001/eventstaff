@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=1440"/>
+<title>Юнити · Михаил Костров</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"/>
+<style>:root{--bg-0:#08120e;--bg-1:#0f1d16;--bg-2:#16271e;--bg-3:#1e3327;--bg-4:#28402f;--bg-warm-1:#1a120b;--bg-warm-2:#271a10;--bg-cream-1:#f4efe7;--text-primary:#f1eee7;--text-secondary:#a5b0a8;--text-muted:#6a7670;--text-disabled:#424b46;--text-on-accent:#08120e;--ink-primary:#1a2218;--ink-secondary:#4a5249;--ink-muted:#6a7670;--border-subtle:rgba(255,255,255,.06);--border-default:rgba(255,255,255,.10);--border-strong:rgba(255,255,255,.18);--border-emerald:rgba(91,184,128,.35);--border-ink:rgba(0,0,0,.10);--accent:#5bb880;--accent-hover:#6cc792;--accent-active:#4ea16f;--accent-soft:#2c5d44;--accent-faint:rgba(91,184,128,.10);--accent-glow:rgba(91,184,128,.22);--accent-warm:#c6845c;--state-success:#5bb880;--state-success-bg:rgba(91,184,128,.10);--state-warning:#d6a55c;--state-warning-bg:rgba(214,165,92,.10);--state-danger:#d96a6a;--state-danger-bg:rgba(217,106,106,.10);--state-info:#6aa4d9;--state-info-bg:rgba(106,164,217,.10);--font-display:'Onest','Inter',system-ui,sans-serif;--font-body:'Onest','Inter',system-ui,sans-serif;--font-mono:'JetBrains Mono','SF Mono',Menlo,monospace;--r-1:4px;--r-2:6px;--r-3:8px;--r-4:10px;--r-5:14px;--r-6:20px;--el-1:inset 0 0 0 1px var(--border-subtle);--el-2:inset 0 0 0 1px var(--border-default),0 1px 0 rgba(255,255,255,.04) inset;--el-3:inset 0 0 0 1px var(--border-default),0 1px 0 rgba(255,255,255,.05) inset,0 12px 32px -16px rgba(0,0,0,.6);--el-4:inset 0 0 0 1px var(--border-strong),0 1px 0 rgba(255,255,255,.06) inset,0 24px 60px -20px rgba(0,0,0,.75);--el-focus:0 0 0 2px var(--bg-0),0 0 0 4px var(--accent);--el-glow-emerald:0 0 0 1px var(--border-emerald),0 0 24px -4px var(--accent-glow);--ease-out:cubic-bezier(.2,.7,.2,1);--d-micro:120ms;--d-standard:200ms}
+*{box-sizing:border-box}html,body{margin:0;padding:0;font-family:var(--font-body);-webkit-font-smoothing:antialiased;font-feature-settings:'ss01'}body{background:var(--bg-cream-1);color:var(--ink-primary);font-size:15px;line-height:1.4;min-height:100vh}body[data-shell='dark']{background:var(--bg-0);color:var(--text-primary)}a{color:inherit;text-decoration:none}::selection{background:var(--accent-soft);color:var(--text-primary)}@media (prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:1ms!important;animation-duration:1ms!important}}h1,h2,h3,h4,h5,h6{font-family:var(--font-display);font-weight:500;letter-spacing:-.01em;margin:0}.container{max-width:1280px;margin:0 auto;padding:0 24px}
+.hdr{position:sticky;top:0;z-index:50;height:72px;background:rgba(8,18,14,.78);backdrop-filter:blur(20px) saturate(140%);border-bottom:1px solid var(--border-subtle);box-shadow:0 4px 24px -12px rgba(0,0,0,.5);color:var(--text-primary)}.hdr-inner{max-width:1280px;margin:0 auto;height:100%;padding:0 24px;display:flex;align-items:center;justify-content:space-between;gap:16px}.hdr-left{display:flex;align-items:center;gap:32px}.brand{display:flex;align-items:center;gap:10px;font-family:var(--font-display);font-weight:600;font-size:18px;letter-spacing:-.01em;color:var(--text-primary)}.brand-mark{width:26px;height:26px;border-radius:7px;background:linear-gradient(135deg,var(--accent) 0%,#1f5a3d 100%);position:relative}.brand-mark::after{content:'';position:absolute;inset:7px;border-radius:2px;background:var(--bg-0)}.brand-mark::before{content:'';position:absolute;inset:10px;background:var(--accent);border-radius:1px}.hdr-nav{display:flex;gap:28px}.hdr-link{font-size:15px;font-weight:500;color:var(--text-secondary);transition:color var(--d-micro) var(--ease-out);padding:6px 0}.hdr-link:hover{color:var(--text-primary)}.hdr-link.active{color:var(--text-primary);border-bottom:2px solid var(--accent-hover);padding-bottom:4px}.hdr-right{display:flex;align-items:center;gap:8px}.hdr-phone{display:flex;align-items:center;gap:6px;font-size:14px;color:var(--text-secondary);padding:8px 12px;transition:color var(--d-micro)}.hdr-phone:hover{color:var(--text-primary)}.hdr-burger{display:none;width:40px;height:40px;align-items:center;justify-content:center;border-radius:var(--r-4);color:var(--text-secondary);background:transparent;border:0;cursor:pointer}
+.ftr{background:var(--bg-0);border-top:1px solid var(--border-subtle);padding:60px 24px 40px;color:var(--text-secondary)}.ftr-inner{max-width:1280px;margin:0 auto;display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:40px}.ftr h6{margin:0 0 14px;font-family:var(--font-mono);font-size:11px;letter-spacing:.10em;text-transform:uppercase;color:var(--text-muted);font-weight:400}.ftr a{display:block;padding:5px 0;font-size:13px;color:var(--text-secondary);transition:color var(--d-micro)}.ftr a:hover{color:var(--text-primary)}.ftr-brand{display:flex;flex-direction:column;gap:10px}.ftr-brand p{font-size:13px;margin:0;line-height:1.55;max-width:38ch}.ftr-bot{max-width:1280px;margin:32px auto 0;padding-top:20px;border-top:1px solid var(--border-subtle);display:flex;justify-content:space-between;font-family:var(--font-mono);font-size:11px;color:var(--text-muted);letter-spacing:.04em}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid transparent;font-family:var(--font-body);font-weight:500;cursor:pointer;white-space:nowrap;transition:all var(--d-micro) var(--ease-out);text-decoration:none;outline:none;font-size:14px}.btn:focus-visible{box-shadow:var(--el-focus)}.btn[disabled]{opacity:.4;pointer-events:none}.btn-sm{height:32px;padding:0 12px;border-radius:var(--r-3);font-size:13px}.btn-md{height:40px;padding:0 16px;border-radius:var(--r-4)}.btn-lg{height:48px;padding:0 22px;border-radius:var(--r-4);font-size:15px}.btn-primary{background:var(--accent);color:var(--text-on-accent)}.btn-primary:hover{background:var(--accent-hover)}.btn-secondary{background:transparent;color:var(--text-primary);border-color:var(--border-emerald)}.btn-secondary:hover{background:var(--accent-faint);border-color:var(--accent)}.btn-outline{background:#fff;color:var(--ink-primary);border-color:var(--border-ink)}.btn-outline:hover{background:#f6f3ec;border-color:var(--ink-muted)}.btn-muted{background:rgba(255,255,255,.04);color:var(--text-primary);border-color:var(--border-default)}.btn-muted:hover{background:rgba(255,255,255,.08);border-color:var(--border-strong)}.btn-ghost{background:transparent;color:var(--text-secondary)}.btn-ghost:hover{background:rgba(255,255,255,.05);color:var(--text-primary)}.btn-ghost-ink{background:transparent;color:var(--ink-secondary)}.btn-ghost-ink:hover{background:rgba(0,0,0,.04);color:var(--ink-primary)}.btn-block{width:100%}
+.input{height:40px;padding:0 14px;border-radius:var(--r-2);font:inherit;font-size:14px;width:100%;transition:all var(--d-micro) var(--ease-out);background:#fff;border:1px solid var(--border-ink);color:var(--ink-primary)}.input::placeholder{color:var(--ink-muted)}.input:hover{border-color:var(--ink-muted)}.input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-faint);outline:none}.input-err{border-color:var(--state-danger)!important}.input-label{display:block;font-size:13px;font-weight:500;color:var(--ink-primary);margin-bottom:6px}.helper-err{margin-top:6px;font-size:12px;color:var(--state-danger)}.input-wrap{position:relative}.input-wrap > svg{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--ink-muted);width:14px;height:14px}.input-wrap .input{padding-left:38px}textarea.input{height:auto;min-height:96px;padding:10px 14px;line-height:1.5;resize:vertical}
+.check{display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;line-height:1.5;color:var(--ink-primary)}.check input{display:none}.check-box{width:18px;height:18px;border-radius:4px;border:1.5px solid var(--border-ink);background:#fff;flex-shrink:0;margin-top:1px;position:relative;transition:all var(--d-micro)}.check input:checked + .check-box{background:var(--accent);border-color:var(--accent)}.check input:checked + .check-box::after{content:'';position:absolute;left:4px;top:0;width:5px;height:10px;border:solid var(--bg-0);border-width:0 2px 2px 0;transform:rotate(45deg)}
+.bdg{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:var(--r-1);font-family:var(--font-mono);font-size:11px;font-weight:500;letter-spacing:.04em;text-transform:uppercase}.bdg-default{background:rgba(106,118,112,.14);color:var(--text-muted)}.bdg-primary{background:var(--accent-faint);color:var(--accent);border:1px solid var(--border-emerald)}.bdg-success{background:var(--state-success-bg);color:var(--state-success)}.bdg-warning{background:var(--state-warning-bg);color:var(--state-warning)}.bdg-error{background:var(--state-danger-bg);color:var(--state-danger)}.bdg-info{background:var(--state-info-bg);color:var(--state-info)}.dot{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent-glow);display:inline-block;flex-shrink:0}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:9999px;font-size:13px;color:var(--ink-secondary);background:#fff;border:1px solid var(--border-ink);cursor:pointer;transition:all var(--d-micro) var(--ease-out)}.chip:hover{border-color:var(--ink-muted);color:var(--ink-primary)}.chip-active{background:var(--accent);color:var(--text-on-accent);border-color:var(--accent)}
+.card{background:#fff;border:1px solid var(--border-ink);border-radius:var(--r-4);box-shadow:0 1px 0 rgba(0,0,0,.04);padding:24px}
+.av{border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:500;flex-shrink:0;color:var(--text-primary);font-family:var(--font-display)}.av-sm{width:32px;height:32px;font-size:12px}.av-md{width:40px;height:40px;font-size:14px}.av-lg{width:64px;height:64px;font-size:18px}.av-xl{width:96px;height:96px;font-size:24px}.av-em{background:linear-gradient(135deg,#2d6a4a 0%,#1a3d2b 100%);color:var(--accent)}.av-moc{background:linear-gradient(135deg,#523426 0%,#2e1f14 100%);color:var(--accent-warm)}.av-slate{background:linear-gradient(135deg,#2c3a35 0%,#1a2422 100%);color:#b8c2bb}.av-ind{background:linear-gradient(135deg,#2d3b58 0%,#18243a 100%);color:#8bb0e0}
+.alert{padding:12px 14px;border-radius:var(--r-3);font-size:13px;line-height:1.5;display:flex;gap:10px;align-items:flex-start}.alert-info{background:#e8eff7;border:1px solid #b3cbe3;color:#1d4f8a}.alert-error{background:#fbeded;border:1px solid #e8b4b4;color:#7a2a2a}.alert-success{background:#e7f3eb;border:1px solid #b3d6c0;color:#0c2e1f}.alert-warning{background:#fff4e0;border:1px solid #f0d49c;color:#7a5a0c}
+.skel{position:relative;overflow:hidden;background:rgba(0,0,0,.06);border-radius:var(--r-2)}.skel::after{content:'';position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(0,0,0,.06) 50%,transparent);animation:shim 1.5s infinite}@keyframes shim{to{transform:translateX(100%)}}
+.viewport-toggle{position:fixed;top:8px;right:8px;z-index:9999;display:inline-flex;padding:3px;border-radius:8px;background:rgba(8,18,14,.85);border:1px solid var(--border-default);gap:2px;font-family:var(--font-mono);font-size:11px;letter-spacing:.04em}.viewport-toggle button{padding:5px 10px;border:0;background:transparent;color:var(--text-secondary);cursor:pointer;border-radius:5px;font-family:inherit;font-size:11px}.viewport-toggle button.active{background:rgba(255,255,255,.08);color:var(--text-primary)}.viewport-toggle button:hover{color:var(--text-primary)}
+.vp-mobile{max-width:390px;margin:0 auto;border-left:1px solid var(--border-default);border-right:1px solid var(--border-default)}.vp-mobile .hdr-inner{padding:0 16px}.vp-mobile .hdr-nav,.vp-mobile .hdr-phone,.vp-mobile .hdr-right .btn{display:none}.vp-mobile .hdr-burger{display:inline-flex}.vp-mobile .container{padding:0 16px}.vp-mobile .ftr{padding:40px 16px 24px}.vp-mobile .ftr-inner{grid-template-columns:1fr;gap:20px}.vp-mobile .ftr-bot{flex-direction:column;gap:8px;font-size:10px}
+.wd-wrap{background:var(--bg-cream-1);min-height:calc(100vh - 72px);padding:32px 0;color:var(--ink-primary)}
+.wd-back{display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--ink-muted);margin-bottom:24px;background:none;border:0;cursor:pointer;font:inherit}
+.wd-grid{display:grid;grid-template-columns:2fr 1fr;gap:24px}
+.wd-card{background:#fff;border:1px solid var(--border-ink);border-radius:var(--r-4);padding:24px}
+.wd-hero{display:flex;gap:20px}
+.wd-hero-info{flex:1;min-width:0}
+.wd-name-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.wd-h1{font-size:24px;font-weight:600;margin:0}
+.wd-h1 + svg{color:var(--accent)}
+.wd-age{font-size:13px;color:var(--ink-muted)}
+.wd-cat-bdg{display:inline-block;margin-top:6px;background:var(--accent-faint);color:var(--accent);border:1px solid var(--border-emerald);padding:3px 10px;border-radius:var(--r-1);font-weight:500;font-size:13px}
+.wd-meta-row{margin-top:12px;display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--ink-muted)}
+.wd-meta-row span{display:inline-flex;gap:4px;align-items:center}
+.wd-meta-row .rt{color:#caa050;font-weight:600}
+.wd-meta-row .rt strong{color:var(--ink-primary)}
+.wd-tags{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}
+.wd-tag{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:var(--r-1);font-size:11px;font-family:var(--font-mono);text-transform:uppercase;letter-spacing:.04em;font-weight:500}
+.wd-tag-med{background:var(--state-success-bg);color:var(--state-success)}
+.wd-tag-trv{background:var(--state-info-bg);color:var(--state-info)}
+.wd-tag-ot{background:#fef3e2;color:#a4751c}
+.wd-bio{margin-top:20px;padding-top:20px;border-top:1px solid var(--border-ink);font-size:14px;color:var(--ink-secondary);line-height:1.65}
+.wd-sect-h{font-size:15px;font-weight:600;margin:0 0 14px}
+.wd-portfolio{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.wd-portfolio div{aspect-ratio:1;background:linear-gradient(135deg,#d8e6dd,#b8cfc1);border-radius:var(--r-3);cursor:pointer;display:flex;align-items:center;justify-content:center;color:#6a7670;font-family:var(--font-mono);font-size:11px;letter-spacing:.04em}
+.wd-spec-row{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:#f6f3ec;border-radius:var(--r-2);font-size:14px;color:var(--ink-primary)}
+.wd-spec-row + .wd-spec-row{margin-top:8px}
+.wd-spec-row .level{padding:2px 8px;border-radius:var(--r-1);font-family:var(--font-mono);font-size:10px;text-transform:uppercase;letter-spacing:.04em;font-weight:500}
+.wd-spec-row .level-exp{background:#e9d8f0;color:#7a3aab}
+.wd-spec-row .level-mid{background:#d4e5f0;color:#1d4f8a}
+.wd-spec-row .level-jr{background:rgba(0,0,0,.05);color:var(--ink-secondary)}
+.wd-review{padding:12px 0;border-bottom:1px solid var(--border-ink);font-size:14px}
+.wd-review:last-child{border:0}
+.wd-review-h{display:flex;justify-content:space-between}
+.wd-review-h span{font-weight:500;color:var(--ink-primary)}
+.wd-review-h em{color:#caa050;font-weight:600;font-style:normal}
+.wd-review p{margin:6px 0 0;color:var(--ink-secondary);line-height:1.55}
+.wd-work-item{border-left:2px solid var(--border-emerald);padding:0 0 0 14px;margin-bottom:14px}
+.wd-work-row{display:flex;justify-content:space-between;gap:8px}
+.wd-work-row strong{font-weight:600;color:var(--ink-primary)}
+.wd-work-row .comp{color:var(--accent);font-size:13px}
+.wd-work-row .dates{color:var(--ink-muted);font-size:11px;font-family:var(--font-mono);flex-shrink:0;letter-spacing:.04em}
+.wd-work-row p{margin:4px 0 0;font-size:13px;color:var(--ink-secondary)}
+.wd-side .wd-card{margin-bottom:14px}
+.wd-rate-num{font-family:var(--font-display);font-size:30px;font-weight:600;color:var(--ink-primary);letter-spacing:-.02em}
+.wd-rate-unit{font-size:15px;color:var(--ink-muted);font-weight:400}
+.vp-mobile .wd-grid{grid-template-columns:1fr;gap:14px}
+.vp-mobile .wd-portfolio{grid-template-columns:1fr 1fr}
+.vp-mobile .wd-hero{flex-direction:column;align-items:flex-start;gap:14px}
+@media (max-width:1023px){.wd-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="viewport-toggle"><button id="vt-d" class="active" onclick="setVP('d')">Desktop</button><button id="vt-m" onclick="setVP('m')">Mobile</button></div><script>function setVP(m){const root=document.body;if(m==='m'){root.classList.add('vp-mobile');document.getElementById('vt-d').classList.remove('active');document.getElementById('vt-m').classList.add('active')}else{root.classList.remove('vp-mobile');document.getElementById('vt-d').classList.add('active');document.getElementById('vt-m').classList.remove('active')}}</script>
+<header class="hdr"><div class="hdr-inner"><div class="hdr-left"><a class="brand" href="/"><span class="brand-mark"></span>Юнити</a><nav class="hdr-nav"><a class="hdr-link " href="/vacancies">Вакансии</a><a class="hdr-link active" href="/workers">Специалисты</a><a class="hdr-link " href="/employers">Работодатели</a><a class="hdr-link " href="/pricing">Тарифы</a><a class="hdr-link " href="/how-it-works">Как работает</a></nav></div><div class="hdr-right"><a class="hdr-phone" href="tel:+74959881234"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>+7 (495) 988-12-34</a><a class="btn btn-ghost btn-md" href="/auth/login">Войти</a><a class="btn btn-primary btn-md" href="/auth/register">Регистрация</a><button class="hdr-burger"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button></div></div></header>
+<main>
+<div class="wd-wrap"><div class="container">
+<button class="wd-back"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 19"/></svg>Назад</button>
+<div class="wd-grid">
+<div>
+<div class="wd-card">
+<div class="wd-hero">
+<div class="av av-xl av-em">МК</div>
+<div class="wd-hero-info">
+<div class="wd-name-row"><h1 class="wd-h1">Михаил Костров</h1><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg><span class="wd-age">29 лет</span></div>
+<span class="wd-cat-bdg">Бармен</span>
+<div class="wd-meta-row">
+<span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="11" r="3"/><path d="M12 21s-7-6-7-11a7 7 0 0114 0c0 5-7 11-7 11z"/></svg>Москва, Краснодарский край</span>
+<span class="rt"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15 8.5 22 9.3 17 14.1 18.5 21 12 17.8 5.5 21 7 14.1 2 9.3 9 8.5"/></svg><strong>4.9</strong><span style="color:var(--ink-muted);font-weight:400">(189 отзывов)</span></span>
+<span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>4 года опыта</span>
+<span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4"/></svg>247 смен</span>
+</div>
+<div class="wd-tags">
+<span class="wd-tag wd-tag-med"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2zM22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>Медкнижка</span>
+<span class="wd-tag wd-tag-trv"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.8 19.2L16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></svg>Готов к выезду</span>
+<span class="wd-tag wd-tag-ot"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>Готов к переработкам</span>
+</div>
+</div>
+</div>
+<p class="wd-bio">Работаю в банкетном сегменте: свадьбы, корпоративы, конференции до 200 персон. Знаю классическое меню, винную карту, базовую миксологию. На смену прихожу за 30 минут до начала. Готов к разъездам по Москве и области.</p>
+</div>
+
+<div class="wd-card" style="margin-top:14px">
+<h2 class="wd-sect-h">Портфолио</h2>
+<div class="wd-portfolio">
+<div>фото 1</div><div>фото 2</div><div>фото 3</div><div>фото 4</div><div>фото 5</div><div>фото 6</div>
+</div>
+</div>
+
+<div class="wd-card" style="margin-top:14px">
+<h2 class="wd-sect-h">Специализации</h2>
+<div>
+<div class="wd-spec-row"><div><strong>Бармен</strong> <span style="color:var(--ink-muted)">— классические коктейли, флейринг</span></div><span class="level level-exp">Эксперт</span></div>
+<div class="wd-spec-row"><div><strong>Официант</strong> <span style="color:var(--ink-muted)">— банкетный сервис</span></div><span class="level level-mid">Опытный</span></div>
+</div>
+</div>
+
+<div class="wd-card" style="margin-top:14px">
+<h2 class="wd-sect-h">Отзывы смен</h2>
+<div class="wd-review">
+<div class="wd-review-h"><span>Жан-Поль К. · Жульверн</span><em>5.0</em></div>
+<p>«Чёткий, инициативный. Брал бы на каждую смену.»</p>
+</div>
+<div class="wd-review">
+<div class="wd-review-h"><span>Олеся К. · Будуар</span><em>4.8</em></div>
+<p>«Уверенно за стойкой, держал темп. На паре коктейлей не угадал с балансом — пересолил мохито.»</p>
+</div>
+<div class="wd-review">
+<div class="wd-review-h"><span>Иван М. · Catering Group</span><em>5.0</em></div>
+<p>«Не было ни одной нареканий за смену.»</p>
+</div>
+</div>
+
+<div class="wd-card" style="margin-top:14px">
+<h2 class="wd-sect-h">Опыт работы</h2>
+<div class="wd-work-item"><div class="wd-work-row"><div><strong>Бармен</strong><div class="comp">Будуар</div><p>Главный бар на 2 точки, средний чек 4500₽, ивент-формат.</p></div><span class="dates">МАЙ 2024 — наст. время</span></div></div>
+<div class="wd-work-item"><div class="wd-work-row"><div><strong>Официант-бармен</strong><div class="comp">Catering Group</div><p>Банкеты до 200 чел., участие во всех крупных мероприятиях.</p></div><span class="dates">МАРТ 2022 — АПРЕЛЬ 2024</span></div></div>
+<div class="wd-work-item"><div class="wd-work-row"><div><strong>Бармен-стажёр</strong><div class="comp">Старт</div></div><span class="dates">ЯНВАРЬ 2022 — ФЕВРАЛЬ 2022</span></div></div>
+</div>
+</div>
+
+<aside class="wd-side">
+<div class="wd-card">
+<p style="margin:0;font-size:13px;color:var(--ink-muted)">Желаемая ставка</p>
+<p style="margin:4px 0 0"><span class="wd-rate-num">650 ₽</span><span class="wd-rate-unit">/ч</span></p>
+</div>
+<div class="wd-card" style="display:flex;flex-direction:column;gap:10px">
+<button class="btn btn-outline btn-md btn-block"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0016.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 002 8.5c0 2.29 1.51 4.04 3 5.5l7 7z"/></svg>В избранное</button>
+<button class="btn btn-primary btn-md btn-block">Написать в чат</button>
+</div>
+<div class="wd-card" style="font-size:14px">
+<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:12px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" style="color:var(--ink-muted);flex-shrink:0;margin-top:2px"><path d="M5 8l6 6 6-6"/></svg><div><p style="margin:0;font-weight:500">Языки</p><p style="margin:2px 0 0;color:var(--ink-secondary)">Русский, английский B2</p></div></div>
+<div style="display:flex;gap:10px;align-items:flex-start"><span style="color:var(--ink-muted)">👔</span><div><p style="margin:0;font-weight:500">Размер одежды</p><p style="margin:2px 0 0;color:var(--ink-secondary)">M (рост 178)</p></div></div>
+</div>
+</aside>
+</div>
+<div style="margin-top:32px;background:#fff;border:1px dashed var(--border-ink);border-radius:var(--r-4);padding:32px;text-align:center">
+<div style="font-family:var(--font-mono);font-size:11px;letter-spacing:.04em;color:var(--ink-muted);text-transform:uppercase;margin-bottom:14px">Состояние · 404 / профиль скрыт</div>
+<p style="font-size:18px;font-weight:600;margin:0">Профиль не найден</p>
+<p style="font-size:14px;color:var(--ink-muted);margin:6px 0 14px">Возможно, специалист скрыл свой профиль</p>
+<a href="/workers" class="btn btn-primary btn-md">Назад к каталогу</a>
+</div>
+</div></div>
+</main>
+<footer class="ftr"><div class="ftr-inner"><div class="ftr-brand"><a class="brand" href="/" style="color:var(--text-primary)"><span class="brand-mark"></span>Юнити</a><p>Специализированная платформа для подбора event-персонала: рестораны, кейтеринг, площадки, агентства.</p></div><div><h6>Платформа</h6><a href="/vacancies">Вакансии</a><a href="/workers">Специалисты</a><a href="/employers">Работодатели</a><a href="/pricing">Тарифы</a></div><div><h6>Компания</h6><a href="/about">О сервисе</a><a href="/contacts">Контакты</a><a href="/help">Помощь</a><a href="/how-it-works">Как работает</a></div><div><h6>Документы</h6><a href="/legal/offer">Оферта</a><a href="/legal/privacy">Конфиденциальность</a><a href="/legal/terms">Условия</a></div></div><div class="ftr-bot"><span>© 2026 Юнити · 353900, г. Новороссийск</span><span>info@unity-staff.ru · +7 (495) 988-12-34 · Пн–Пт 10:00–19:00 МСК</span></div></footer>
+</body>
+</html>

@@ -31,10 +31,26 @@ import { paymentRoutes } from './routes/payments';
 import { subscriptionRoutes } from './routes/subscriptions';
 import { attachChatSocket } from './socket/chat-socket';
 import { processStaleShiftConfirmations } from './lib/shift-escalation';
+import { reconcilePendingPayments } from './services/payment-fulfillment';
+import { yookassaFromEnv } from './payment/yookassa-adapter';
+import { SubscriptionService } from './services/subscription-service';
 
 const PORT = Number(process.env.API_PORT) || 4000;
 const HOST = process.env.API_HOST || '0.0.0.0';
 const isDev = process.env.NODE_ENV !== 'production';
+
+/** В проде запрещаем старт с дефолтными секретами (иначе токены/cookie подделываемы). */
+function assertProdSecrets(): void {
+  if (isDev) return;
+  const required = ['JWT_SECRET', 'JWT_REFRESH_SECRET'];
+  const missing = required.filter((k) => !process.env[k]?.trim());
+  if (missing.length > 0) {
+    throw new Error(
+      `[FATAL] Не заданы обязательные секреты в проде: ${missing.join(', ')}. ` +
+        'Задайте их в /opt/unity/.env и перезапустите API.',
+    );
+  }
+}
 
 function isLocalBrowserOrigin(origin: string): boolean {
   try {
@@ -169,6 +185,7 @@ async function buildApp() {
 }
 
 async function start() {
+  assertProdSecrets();
   const app = await buildApp();
   attachChatSocket(app);
   await startEmailWorkers(app);
@@ -183,6 +200,22 @@ async function start() {
         if (n > 0) app.log.info({ msg: 'shift_stale_escalations', n });
       });
     }, 60 * 60 * 1000);
+
+    // Сверка «висящих» платежей — страховка от пропущенного вебхука YooKassa.
+    setInterval(() => {
+      const adapter = yookassaFromEnv();
+      if (!adapter) return;
+      void reconcilePendingPayments({
+        prisma: app.prisma,
+        subSvc: new SubscriptionService(app.prisma),
+        notify: app.notificationService,
+        adapter,
+      })
+        .then((n) => {
+          if (n > 0) app.log.info({ msg: 'payment_reconcile_granted', n });
+        })
+        .catch((e) => app.log.warn({ err: e }, 'payment_reconcile_failed'));
+    }, 5 * 60 * 1000);
   } catch (err) {
     app.log.error(err);
     process.exit(1);

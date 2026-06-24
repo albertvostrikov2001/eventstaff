@@ -10,6 +10,9 @@ import { ArrowLeft, MapPin, Check, X, User } from 'lucide-react';
 import { Breadcrumbs } from '@/components/ui/Breadcrumbs';
 import { Button } from '@/components/ui/button';
 import { OpenChatButton } from '@/components/chat/OpenChatButton';
+import { ShiftGuidelinesModal } from '@/components/shifts/ShiftGuidelinesModal';
+import { NextStepReminderModal } from '@/components/shifts/NextStepReminderModal';
+import { yearsLabel } from '@/lib/utils';
 
 interface Application {
   id: string;
@@ -36,6 +39,8 @@ export function VacancyApplicationsPageClient() {
   const [loading, setLoading] = useState(true);
   const [vacancyTitle, setVacancyTitle] = useState('Вакансия');
   const [statusUpdatingId, setStatusUpdatingId] = useState<string | null>(null);
+  const [confirmMemoId, setConfirmMemoId] = useState<string | null>(null);
+  const [showReminder, setShowReminder] = useState(false);
   const [loadError, setLoadError] = useState(false);
 
   const CHAT_READY = new Set(['confirmed', 'shift_started', 'completed', 'invited']);
@@ -65,7 +70,7 @@ export function VacancyApplicationsPageClient() {
       .catch(() => {});
   }, [id, toast, loadApplications]);
 
-  const updateStatus = async (appId: string, status: 'confirmed' | 'rejected') => {
+  const updateStatus = async (appId: string, status: 'confirmed' | 'rejected'): Promise<boolean> => {
     setStatusUpdatingId(appId);
     try {
       await apiClient.patch(`/employer/applications/${appId}/status`, { status });
@@ -78,11 +83,21 @@ export function VacancyApplicationsPageClient() {
           : 'Отклик отклонён',
         'success',
       );
+      return true;
     } catch (e) {
       toast(e instanceof ApiError ? e.message : 'Ошибка обновления статуса', 'error');
+      return false;
     } finally {
       setStatusUpdatingId(null);
     }
+  };
+
+  const confirmFromMemo = async () => {
+    const appId = confirmMemoId;
+    if (!appId) return;
+    const ok = await updateStatus(appId, 'confirmed');
+    setConfirmMemoId(null);
+    if (ok) setShowReminder(true);
   };
 
   return (
@@ -131,19 +146,19 @@ export function VacancyApplicationsPageClient() {
           {applications.map((app) => (
             <div key={app.id} className="rounded-card border border-white/10 bg-white/[0.04] p-5">
               <div className="flex items-start gap-4">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gray-100">
-                  <User className="h-6 w-6 text-gray-400" />
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/[0.08]">
+                  <User className="h-6 w-6 text-white/40" />
                 </div>
                 <div className="flex-1">
                   <div className="flex items-center justify-between">
                     <div>
                       <Link
                         href={`/workers/${app.worker.id}`}
-                        className="font-semibold text-gray-900 hover:text-primary-600"
+                        className="font-semibold text-white/90 hover:text-emerald-300"
                       >
                         {app.worker.firstName} {app.worker.lastName}
                       </Link>
-                      <div className="mt-0.5 flex flex-wrap gap-2 text-xs text-gray-500">
+                      <div className="mt-0.5 flex flex-wrap gap-2 text-xs text-white/45">
                         {app.worker.categories[0] && (
                           <span>
                             {STAFF_CATEGORIES[app.worker.categories[0].category as keyof typeof STAFF_CATEGORIES] ?? app.worker.categories[0].category}
@@ -155,26 +170,26 @@ export function VacancyApplicationsPageClient() {
                           </span>
                         )}
                         {app.worker.desiredRate && (
-                          <span className="font-medium text-gray-700">
-                            {Number(app.worker.desiredRate).toLocaleString('ru-RU')} ₽/ч
+                          <span className="font-medium text-white/65">
+                            {Number(app.worker.desiredRate).toLocaleString('ru-RU')} ₽
                           </span>
                         )}
-                        <span>{app.worker.experienceYears} лет опыта</span>
+                        <span>{yearsLabel(app.worker.experienceYears)} опыта</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                        app.status === 'pending' ? 'bg-amber-100 text-amber-700' :
-                        app.status === 'confirmed' ? 'bg-green-100 text-green-700' :
-                        app.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                        'bg-gray-100 text-gray-600'
+                        app.status === 'pending'   ? 'bg-amber-500/15 text-amber-300' :
+                        app.status === 'confirmed' ? 'bg-emerald-500/15 text-emerald-300' :
+                        app.status === 'rejected'  ? 'bg-red-500/15 text-red-300' :
+                        'bg-white/[0.06] text-white/50'
                       }`}>
                         {APPLICATION_STATUSES[app.status as keyof typeof APPLICATION_STATUSES] ?? app.status}
                       </span>
                     </div>
                   </div>
                   {app.coverMessage && (
-                    <p className="mt-2 text-sm text-gray-600">{app.coverMessage}</p>
+                    <p className="mt-2 text-sm text-white/60">{app.coverMessage}</p>
                   )}
                   {['pending', 'viewed', 'invited', 'interview'].includes(app.status) && (
                     <div className="mt-3 flex flex-col gap-2 sm:flex-row">
@@ -183,7 +198,7 @@ export function VacancyApplicationsPageClient() {
                         variant="primary"
                         size="sm"
                         disabled={statusUpdatingId === app.id}
-                        onClick={() => void updateStatus(app.id, 'confirmed')}
+                        onClick={() => setConfirmMemoId(app.id)}
                         leftIcon={<Check className="h-3 w-3" />}
                         className="flex-1 rounded-input bg-green-600 hover:bg-green-700"
                       >
@@ -195,7 +210,7 @@ export function VacancyApplicationsPageClient() {
                         size="sm"
                         onClick={() => void updateStatus(app.id, 'rejected')}
                         leftIcon={<X className="h-3 w-3" />}
-                        className="flex-1 rounded-input border-red-200 text-red-600 hover:bg-red-50"
+                        className="flex-1 rounded-input border-red-500/40 text-red-300 hover:bg-red-500/10"
                       >
                         Отклонить
                       </Button>
@@ -217,6 +232,20 @@ export function VacancyApplicationsPageClient() {
             </div>
           ))}
         </div>
+      )}
+
+      {confirmMemoId && (
+        <ShiftGuidelinesModal
+          variant="employer"
+          confirmLabel="Понятно, назначить смену"
+          loading={statusUpdatingId === confirmMemoId}
+          onConfirm={() => void confirmFromMemo()}
+          onClose={() => setConfirmMemoId(null)}
+        />
+      )}
+
+      {showReminder && (
+        <NextStepReminderModal variant="employer" onClose={() => setShowReminder(false)} />
       )}
     </div>
   );

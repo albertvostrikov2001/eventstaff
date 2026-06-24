@@ -9,9 +9,10 @@ function computeLevel(
   totalTerminal: number,
   _successful: number,
   score: number,
-  strikeCount: number,
+  isRestricted: boolean,
 ): ReliabilityLevel {
-  if (score < 40 || strikeCount >= 3) return ReliabilityLevel.RESTRICTED;
+  // Ограничение — только ручное (админ). Автоматически по рейтингу/страйкам не выставляется.
+  if (isRestricted) return ReliabilityLevel.RESTRICTED;
   if (totalTerminal === 0) return ReliabilityLevel.NEW;
   if (totalTerminal >= 20 && score >= 90) return ReliabilityLevel.VERIFIED;
   if (totalTerminal >= 6 && totalTerminal <= 20 && score >= 75) return ReliabilityLevel.TRUSTED;
@@ -60,15 +61,10 @@ export class ReliabilityService {
     if (score < 0) score = 0;
     if (score > 100) score = 100;
 
-    const level = computeLevel(totalTerminal, successful, score, strikeCount);
-    const isRestricted = score < 40 || strikeCount >= 3;
-    const wasRestricted = existing?.isRestricted ?? false;
-
-    const restrictedReason = isRestricted
-      ? score < 40
-        ? 'Низкий рейтинг надёжности'
-        : 'Превышен лимит нарушений (3 страйка)'
-      : undefined;
+    // Ограничение аккаунта выставляется ТОЛЬКО администратором вручную.
+    // Здесь сохраняем уже существующее значение и не накладываем ограничения автоматически.
+    const isRestricted = existing?.isRestricted ?? false;
+    const level = computeLevel(totalTerminal, successful, score, isRestricted);
 
     await this.prisma.userReliabilityScore.upsert({
       where: { userId },
@@ -81,9 +77,7 @@ export class ReliabilityService {
         score,
         level,
         strikeCount,
-        isRestricted,
-        restrictedAt: isRestricted ? new Date() : undefined,
-        restrictedReason: isRestricted ? restrictedReason : undefined,
+        isRestricted: false,
       },
       update: {
         totalShifts: totalTerminal,
@@ -92,22 +86,10 @@ export class ReliabilityService {
         cancelledShifts: cancelled,
         score,
         level,
-        isRestricted,
-        ...(isRestricted && !wasRestricted
-          ? { restrictedAt: new Date(), restrictedReason }
-          : {}),
+        // isRestricted / restrictedAt / restrictedReason намеренно не трогаем —
+        // ими управляет только администратор.
       },
     });
-
-    if (isRestricted && !wasRestricted) {
-      await this.notifications.create({
-        userId,
-        type: 'SYSTEM',
-        title: 'Аккаунт ограничен',
-        body: String(restrictedReason ?? 'Обратитесь в поддержку.'),
-        data: { restricted: true },
-      });
-    }
   }
 
   async addStrikeAndRecalculate(userId: string, reason: string): Promise<void> {

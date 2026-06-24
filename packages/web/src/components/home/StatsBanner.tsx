@@ -16,7 +16,9 @@ function formatValue(item: StatsContentItem, n: number) {
 
 export function StatsBanner() {
   const sectionRef = useRef<HTMLElement>(null);
-  const [values, setValues] = useState(() => statsContent.items.map(() => 0));
+  // Старт с реальных значений: в SSR-HTML сразу настоящие числа (важно для ИИ/SEO),
+  // count-up отрабатывает как прогрессивное улучшение при попадании в зону видимости.
+  const [values, setValues] = useState<number[]>(() => statsContent.items.map((i) => i.target));
   const [reduceMotion, setReduceMotion] = useState(false);
   const rafRef = useRef<number | null>(null);
   const hasAnimatedRef = useRef(false);

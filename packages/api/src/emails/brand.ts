@@ -12,7 +12,6 @@ export function emailShell(params: {
   ctaUrl?: string;
 }): string {
   const site = publicSiteUrl();
-  const logoUrl = `${site}/logo.svg`;
   const prefsUrl = `${site}/dashboard/settings/notifications`;
   const ctaBlock =
     params.ctaLabel && params.ctaUrl
@@ -53,8 +52,8 @@ export function emailShell(params: {
       <td align="center">
         <table role="presentation" class="container" width="600" cellspacing="0" cellpadding="0" border="0" style="width:600px;max-width:600px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(13,31,23,0.08);">
           <tr>
-            <td style="background:${HEADER_BG};padding:20px 24px;text-align:center;">
-              <img src="${logoUrl}" alt="Юнити" width="120" height="auto" style="display:inline-block;max-width:140px;height:auto;" />
+            <td style="background:${HEADER_BG};padding:24px;text-align:center;">
+              <span style="display:inline-block;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:34px;font-weight:800;color:#ffffff;letter-spacing:0.5px;">Юнити</span>
             </td>
           </tr>
           <tr>

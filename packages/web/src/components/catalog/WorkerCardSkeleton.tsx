@@ -1,6 +1,6 @@
 export function WorkerCardSkeleton() {
   return (
-    <div className="rounded-card border border-gray-200 bg-white p-5">
+    <div className="rounded-card border border-white/[0.08] bg-white/[0.04] p-5">
       {/* Avatar + name row */}
       <div className="flex items-center gap-3">
         <div className="skeleton-light h-12 w-12 shrink-0 rounded-full" />

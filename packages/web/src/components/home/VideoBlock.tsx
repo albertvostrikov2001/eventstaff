@@ -9,12 +9,18 @@ interface VideoBlockProps {
   src?: string;
   poster?: string;
   caption?: string;
+  /** Длительность ролика, e.g. "0:48" — показывается бейджем в углу превью */
+  duration?: string;
+  /** Короткая строка-подводка над видео (со стрелкой ↓) */
+  leadIn?: string;
 }
 
 export function VideoBlock({
-  src     = '/assets/platform-intro.mp4',
-  poster  = '/assets/video-poster.jpg',
-  caption = 'Узнать о платформе за 1 минуту',
+  src      = '/assets/platform-intro.mp4',
+  poster   = '/assets/video-poster.jpg',
+  caption  = 'Смотрите, как платформа закрывает смену',
+  duration = '1:07',
+  leadIn   = 'Чуть больше минуты — и понятно, как это работает',
 }: VideoBlockProps) {
   const videoSrc  = publicAssetUrl(src);
   const posterSrc = publicAssetUrl(poster);
@@ -78,6 +84,14 @@ export function VideoBlock({
     <>
       {/* ── In-page thumbnail (always in document flow) ─────────────────── */}
       <div className="w-full max-w-[540px]">
+        {/* Lead-in line (вариант 5 — подводка с выгодой) */}
+        {leadIn && (
+          <p className="video-leadin">
+            <span className="video-leadin-arrow" aria-hidden="true">↓</span>
+            {leadIn}
+          </p>
+        )}
+
         <div
           className="video-wrapper cursor-pointer group"
           onClick={handleOpen}
@@ -106,6 +120,14 @@ export function VideoBlock({
           >
             <Play className="h-6 w-6 translate-x-0.5" fill="currentColor" />
           </button>
+
+          {/* Duration badge (маркер живого контента) */}
+          {duration && (
+            <span className="video-duration" aria-hidden="true">
+              <Play className="h-2.5 w-2.5" fill="currentColor" />
+              {duration}
+            </span>
+          )}
         </div>
 
         <p className="video-caption">{caption}</p>

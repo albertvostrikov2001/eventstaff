@@ -5,12 +5,12 @@ import Link from 'next/link';
 import type { Resolver } from 'react-hook-form';
 import { Controller, useForm } from 'react-hook-form';
 import { addHours, isValid, parseISO, startOfMinute } from 'date-fns';
-import { useMemo } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   EMPLOYMENT_TYPES,
   EVENT_TYPES,
   type VacancyCreateInput,
-  RATE_TYPES,
+  RATE_TYPE_CHOICES,
   STAFF_CATEGORIES,
   VACANCY_QUICK_TAGS,
 } from '@unity/shared';
@@ -25,6 +25,9 @@ import {
   employerFormSectionShellClass,
   employerFormSectionTitleClass,
 } from '@/components/forms/form-styles';
+import { Upload, X, MapPin, ImageIcon } from 'lucide-react';
+import { apiClient, ApiError } from '@/lib/api/client';
+import { useToast } from '@/components/ui/toast-context';
 
 interface City {
   id: string;
@@ -38,6 +41,8 @@ interface VacancyFormProps {
   /** Новая форма — черновик / публикация; правка — одна кнопка сохранения. */
   mode?: 'create' | 'edit';
   submitLabel?: string;
+  /** URL логотипа компании из профиля — позволяет подставить как обложку вакансии */
+  existingLogoUrl?: string | null;
 }
 
 const CATEGORY_OPTIONS = Object.entries(STAFF_CATEGORIES).map(([value, label]) => ({
@@ -45,7 +50,7 @@ const CATEGORY_OPTIONS = Object.entries(STAFF_CATEGORIES).map(([value, label]) =
   label,
 }));
 const EVENT_TYPE_OPTIONS = Object.entries(EVENT_TYPES).map(([value, label]) => ({ value, label }));
-const RATE_TYPE_OPTIONS = Object.entries(RATE_TYPES).map(([value, label]) => ({ value, label }));
+const RATE_TYPE_OPTIONS = Object.entries(RATE_TYPE_CHOICES).map(([value, label]) => ({ value, label }));
 
 /** Три главных режима занятости по ТЗ интерфейса (остальные значения сохраним при редактировании). */
 const PRIMARY_EMPLOYMENT_KEYS = ['single_shift', 'series', 'permanent'] as const;
@@ -62,6 +67,7 @@ export function VacancyForm({
   onSubmit,
   mode = 'create',
   submitLabel,
+  existingLogoUrl,
 }: VacancyFormProps) {
   const minStartLead = useMemo(() => addHours(startOfMinute(new Date()), 1), []);
 
@@ -72,7 +78,7 @@ export function VacancyForm({
       foodProvided: false,
       transportProvided: false,
       isUrgent: false,
-      rateType: 'hourly',
+      rateType: 'per_shift',
       employmentType: 'single_shift',
       tags: [],
       coverImageUrl: '',
@@ -88,6 +94,38 @@ export function VacancyForm({
   });
 
   const fv = form.formState.errors;
+  const { toast } = useToast();
+  const coverInputRef = useRef<HTMLInputElement>(null);
+  const [coverUploading, setCoverUploading] = useState(false);
+
+  const handleCoverUpload = async (file: File) => {
+    if (file.size > 5 * 1024 * 1024) {
+      toast('Файл слишком большой (макс 5 МБ)', 'error');
+      return;
+    }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      toast('Только PNG, JPG или WebP', 'error');
+      return;
+    }
+    setCoverUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('type', 'COMPANY_GALLERY');
+      const res = await apiClient.postMultipart<{ data: { url: string | null } }>(
+        '/employer/media/upload',
+        fd,
+      );
+      if (res.data.url) {
+        form.setValue('coverImageUrl', res.data.url, { shouldDirty: true });
+        toast('Обложка загружена', 'success');
+      }
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Ошибка загрузки', 'error');
+    } finally {
+      setCoverUploading(false);
+    }
+  };
 
   const cityOptions = cities.map((c) => ({ value: c.id, label: c.name }));
 
@@ -239,6 +277,77 @@ export function VacancyForm({
             {!showExtraEmployment && fv.employmentType?.message && (
               <p className="mt-3 text-[13px] text-red-400">{fv.employmentType.message}</p>
             )}
+          </div>
+        </div>
+      </section>
+
+      <section className={employerFormSectionShellClass('cabinet')}>
+        <h2 className={employerFormSectionTitleClass('cabinet')}>Место проведения</h2>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <Controller
+              name="address"
+              control={form.control}
+              render={({ field }) => (
+                <>
+                  <FormField
+                    variant="cabinet"
+                    label="Адрес"
+                    required
+                    placeholder="Москва, ул. Тверская, 1"
+                    helper="Укажите точный адрес места проведения"
+                    error={(fv as Record<string, { message?: string } | undefined>).address?.message}
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                  />
+                  {field.value && field.value.trim() && (
+                    <div className="mt-1.5">
+                      <a
+                        href={`https://yandex.ru/maps/?text=${encodeURIComponent(field.value)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 hover:underline"
+                      >
+                        <MapPin className="h-3 w-3" />
+                        Проверить на карте
+                      </a>
+                    </div>
+                  )}
+                </>
+              )}
+            />
+          </div>
+          <div>
+            <FormField
+              variant="cabinet"
+              label="Начало смены"
+              placeholder="09:00"
+              helper="Время в формате ЧЧ:ММ"
+              error={(fv as Record<string, { message?: string } | undefined>).timeStart?.message}
+              {...form.register('timeStart')}
+            />
+          </div>
+          <div>
+            <FormField
+              variant="cabinet"
+              label="Конец смены"
+              placeholder="18:00"
+              helper="Время в формате ЧЧ:ММ"
+              error={(fv as Record<string, { message?: string } | undefined>).timeEnd?.message}
+              {...form.register('timeEnd')}
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <FormField
+              variant="cabinet"
+              label="Дресс-код"
+              placeholder="Белая рубашка, чёрные брюки"
+              helper="Требования к внешнему виду (необязательно)"
+              error={(fv as Record<string, { message?: string } | undefined>).dressCode?.message}
+              {...form.register('dressCode')}
+            />
           </div>
         </div>
       </section>
@@ -404,15 +513,63 @@ export function VacancyForm({
       </section>
 
       <section className={employerFormSectionShellClass('cabinet')}>
-        <h2 className={employerFormSectionTitleClass('cabinet')}>Изображение</h2>
-        <FormField
-          variant="cabinet"
-          label="Обложка (URL)"
-          placeholder="https://…"
-          type="url"
-          error={(fv as Record<string, { message?: string }>).coverImageUrl?.message}
-          {...form.register('coverImageUrl')}
-        />
+        <h2 className={employerFormSectionTitleClass('cabinet')}>Обложка вакансии</h2>
+        <div className="space-y-3">
+          {form.watch('coverImageUrl') ? (
+            <div className="relative h-36 w-full max-w-sm overflow-hidden rounded-xl border border-white/15">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={form.watch('coverImageUrl')!}
+                alt="Обложка"
+                className="h-full w-full object-cover"
+              />
+              <button
+                type="button"
+                onClick={() => form.setValue('coverImageUrl', '', { shouldDirty: true })}
+                className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white/80 transition hover:text-white"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : null}
+          <input
+            ref={coverInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = '';
+              if (file) void handleCoverUpload(file);
+            }}
+          />
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => coverInputRef.current?.click()}
+              disabled={coverUploading}
+              className="inline-flex items-center gap-2 rounded-input border border-white/15 px-4 py-2 text-sm font-medium text-white/90 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Upload className="h-4 w-4" />
+              {coverUploading
+                ? 'Загружаем...'
+                : form.watch('coverImageUrl')
+                ? 'Заменить обложку'
+                : 'Загрузить обложку'}
+            </button>
+            {existingLogoUrl && (
+              <button
+                type="button"
+                onClick={() => form.setValue('coverImageUrl', existingLogoUrl, { shouldDirty: true })}
+                className="inline-flex items-center gap-2 rounded-input border border-emerald-500/30 bg-emerald-500/[0.08] px-4 py-2 text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/15"
+              >
+                <ImageIcon className="h-4 w-4" />
+                Использовать логотип профиля
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-white/40">PNG, JPG или WebP, до 5 МБ. Рекомендуем 16:9.</p>
+        </div>
       </section>
 
       <section className={employerFormSectionShellClass('cabinet')}>
@@ -423,6 +580,11 @@ export function VacancyForm({
             variant="cabinet"
             label="Трансфер предоставляется"
             {...form.register('transportProvided')}
+          />
+          <FormCheckbox
+            variant="cabinet"
+            label="Чаевые возможны"
+            {...form.register('tipsPossible')}
           />
         </div>
       </section>

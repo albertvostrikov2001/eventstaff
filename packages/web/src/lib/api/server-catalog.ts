@@ -49,3 +49,27 @@ export function fetchEmployerForMetadata(slug: string) {
 export function fetchVacancyForMetadata(id: string) {
   return fetchJson<CatalogVacancyMeta>(`/catalog/vacancies/${id}`);
 }
+
+/* ── Sitemap: списки публичных сущностей ──────────────────────────────── */
+
+export type SitemapEntity = {
+  id: string;
+  slug?: string | null;
+  updatedAt?: string | null;
+  publishedAt?: string | null;
+};
+
+async function fetchList(path: string): Promise<SitemapEntity[]> {
+  try {
+    const res = await fetch(`${config.apiUrl}${path}`, { next: { revalidate: 3600 } });
+    if (!res.ok) return [];
+    const json = (await res.json()) as { data?: SitemapEntity[] };
+    return Array.isArray(json.data) ? json.data : [];
+  } catch {
+    return [];
+  }
+}
+
+export const fetchVacanciesForSitemap = () => fetchList('/catalog/vacancies?limit=1000');
+export const fetchWorkersForSitemap = () => fetchList('/catalog/workers?limit=1000');
+export const fetchEmployersForSitemap = () => fetchList('/catalog/employers?limit=1000');

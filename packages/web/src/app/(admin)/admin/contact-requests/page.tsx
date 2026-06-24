@@ -1,9 +1,10 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api/client';
 import { useToast } from '@/components/ui/toast-context';
-import { Mail, ChevronLeft, ChevronRight, MessageSquare, CheckCheck, Clock } from 'lucide-react';
+import { Mail, ChevronLeft, ChevronRight, MessageSquare, MessageCircle, CheckCheck, Clock } from 'lucide-react';
 import { AdminEmptyState } from '@/components/admin/AdminEmptyState';
 
 type ContactReq = {
@@ -14,6 +15,7 @@ type ContactReq = {
   status: 'new' | 'read' | 'replied';
   adminNote: string | null;
   createdAt: string;
+  chatUserId: string | null;
 };
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -24,7 +26,9 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 
 export default function AdminContactRequestsPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const [rows, setRows] = useState<ContactReq[]>([]);
+  const [openingChat, setOpeningChat] = useState<string | null>(null);
   const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
   const [page, setPage] = useState(1);
   const [filterStatus, setFilterStatus] = useState('');
@@ -52,6 +56,20 @@ export default function AdminContactRequestsPage() {
 
   useEffect(() => { void load(); }, [load]);
 
+  const openChat = async (id: string) => {
+    setOpeningChat(id);
+    try {
+      const res = await apiClient.post<{ data: { roomId: string } }>(
+        `/admin/contact-requests/${id}/open-chat`,
+        {},
+      );
+      router.push(`/admin/messages/${res.data.roomId}`);
+    } catch {
+      toast('Не удалось открыть чат', 'error');
+      setOpeningChat(null);
+    }
+  };
+
   const updateStatus = async (id: string, status: string, note?: string) => {
     setSaving(id);
     try {
@@ -70,14 +88,14 @@ export default function AdminContactRequestsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-xl font-bold text-white">Обращения с сайта</h1>
           <p className="mt-0.5 text-sm text-white/50">
             Сообщения из формы обратной связи на странице /contacts
           </p>
         </div>
-        <span className="text-sm text-white/40">{meta.total} обращений</span>
+        <span className="shrink-0 text-sm text-white/40">{meta.total} обращений</span>
       </div>
 
       {/* Filter */}
@@ -175,6 +193,21 @@ export default function AdminContactRequestsPage() {
                     </div>
 
                     <div className="flex flex-wrap gap-2">
+                      {row.chatUserId ? (
+                        <button
+                          type="button"
+                          disabled={openingChat === row.id}
+                          onClick={() => void openChat(row.id)}
+                          className="inline-flex items-center gap-1.5 rounded-input border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50"
+                        >
+                          <MessageCircle className="h-3.5 w-3.5" />
+                          {openingChat === row.id ? 'Открываем…' : 'Перейти в чат'}
+                        </button>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 rounded-input border border-white/10 px-3 py-1.5 text-xs text-white/35">
+                          Не зарегистрирован — чат недоступен
+                        </span>
+                      )}
                       <a
                         href={`mailto:${row.email}?subject=Ответ на ваше обращение`}
                         className="inline-flex items-center gap-1.5 rounded-input border border-white/15 px-3 py-1.5 text-xs font-medium text-white/80 hover:bg-white/[0.06]"

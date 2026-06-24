@@ -11,6 +11,7 @@ import { processStaleShiftConfirmations } from '@/lib/shift-escalation';
 import {
   ShiftConfirmationError,
   confirmShiftParticipation,
+  acceptShift,
 } from '@/lib/shift-confirmation';
 import { replyFail, replyOk } from '@/lib/api-reply';
 import { safeUserSelect } from '@/lib/safe-user-select';
@@ -33,7 +34,26 @@ export const shiftActionRoutes: FastifyPluginAsync = async (fastify) => {
     },
   );
 
-  // POST /shifts/:id/confirm
+  // POST /shifts/:id/accept — принять назначенную смену (PENDING → ACTIVE)
+  fastify.post<{ Params: { id: string } }>('/shifts/:id/accept', { preHandler: auth }, async (request, reply) => {
+    const { id } = request.params;
+    const uid = request.jwtUser.sub;
+    try {
+      const shift = await acceptShift(
+        { prisma: fastify.prisma, notificationService: fastify.notificationService },
+        id,
+        uid,
+      );
+      return replyOk(reply, shift);
+    } catch (e) {
+      if (e instanceof ShiftConfirmationError) {
+        return replyFail(reply, e.statusCode, String(e.code), e.messageRu);
+      }
+      throw e;
+    }
+  });
+
+  // POST /shifts/:id/confirm — подтвердить завершение смены (двусторонне → COMPLETED)
   fastify.post<{ Params: { id: string } }>('/shifts/:id/confirm', { preHandler: auth }, async (request, reply) => {
     const { id } = request.params;
     const uid = request.jwtUser.sub;

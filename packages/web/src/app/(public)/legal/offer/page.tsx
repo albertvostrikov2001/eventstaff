@@ -1,106 +1,53 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { FileText, ChevronRight } from 'lucide-react';
+import { Breadcrumbs } from '@/components/ui/Breadcrumbs';
 
 export const metadata: Metadata = {
-  title: 'Оферта',
-  description: 'Публичная оферта на оказание услуг платформы Юнити. Черновой текст для юридического согласования.',
+  title: 'Документы и оферты',
+  description: 'Публичные оферты, пользовательское соглашение, политика конфиденциальности и согласия на обработку персональных данных.',
+  alternates: { canonical: '/legal/offer' },
 };
 
-export default function OfferPage() {
+const DOCS: { href: string; title: string; desc: string }[] = [
+  { href: '/legal/offer/employers', title: 'Публичная оферта для работодателей', desc: 'Условия оказания платных услуг для работодателей.' },
+  { href: '/legal/offer/workers', title: 'Публичная оферта для соискателей', desc: 'Условия оказания платных услуг для соискателей.' },
+  { href: '/legal/terms', title: 'Пользовательское соглашение', desc: 'Правила использования платформы для всех пользователей.' },
+  { href: '/legal/privacy', title: 'Политика конфиденциальности', desc: 'Как обрабатываются и защищаются персональные данные.' },
+  { href: '/legal/consent/employers', title: 'Согласие на обработку ПД — работодатели', desc: 'Согласие на распространение персональных данных представителя работодателя.' },
+  { href: '/legal/consent/workers', title: 'Согласие на обработку ПД — соискатели', desc: 'Согласие на распространение персональных данных соискателя.' },
+];
+
+export default function LegalHubPage() {
   return (
-    <div className="container-page py-16">
-      <div className="mx-auto max-w-3xl">
-        <h1 className="text-4xl font-bold text-gray-900">Публичная оферта</h1>
-        <p className="mt-2 text-sm text-gray-500">Черновая редакция — март 2026 г.</p>
-
-        <div className="mt-8 rounded-card border border-secondary-200 bg-secondary-50/40 p-5 text-sm text-gray-800">
-          <p className="font-semibold text-secondary-800">[ТРЕБУЕТ ПРОВЕРКИ ЮРИСТОМ]</p>
-          <p className="mt-2">
-            Ниже приведена упрощённая структура договора присоединения. Реквизиты сторон, предмет, цена,
-            порядок оплаты, ответственность и порядок разрешения споров должны быть заполнены и согласованы с
-            юристом перед размещением на сайте.
+    <div className="min-h-screen" style={{ background: 'var(--u-bg-dark)' }}>
+      <div className="container-page py-12 sm:py-16">
+        <div className="mx-auto max-w-3xl">
+          <Breadcrumbs items={[{ label: 'Документы' }]} />
+          <h1 className="text-3xl font-bold text-white sm:text-4xl">Документы платформы</h1>
+          <p className="mt-2 text-sm text-white/50">
+            Правовые документы, регулирующие использование платформы и обработку персональных данных.
           </p>
+
+          <div className="mt-8 space-y-3">
+            {DOCS.map((d) => (
+              <Link
+                key={d.href}
+                href={d.href}
+                className="group flex items-center gap-4 rounded-card border border-white/[0.08] bg-white/[0.04] p-5 transition hover:border-white/20 hover:bg-white/[0.06]"
+              >
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-[var(--accent)]">
+                  <FileText className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h2 className="font-semibold text-white/90 group-hover:text-white">{d.title}</h2>
+                  <p className="mt-0.5 text-sm text-white/50">{d.desc}</p>
+                </div>
+                <ChevronRight className="h-5 w-5 shrink-0 text-white/30 transition group-hover:text-white/60" />
+              </Link>
+            ))}
+          </div>
         </div>
-
-        <div className="mt-10 space-y-8 text-gray-700">
-          <section>
-            <h2 className="text-xl font-bold text-gray-900">1. Термины</h2>
-            <p className="mt-3 leading-relaxed">
-              <strong className="text-gray-900">Исполнитель</strong> — лицо, предоставляющее доступ к сервису
-              Юнити на условиях настоящей оферты. <strong className="text-gray-900">Заказчик</strong> — лицо,
-              акцептовавшее оферту и оплатившее услуги (или пользующееся бесплатным функционалом в рамках
-              тарифа). <strong className="text-gray-900">Услуги</strong> — предоставление доступа к
-              программным функциям Платформы в соответствии с выбранным тарифом.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-xl font-bold text-gray-900">2. Предмет договора</h2>
-            <p className="mt-3 leading-relaxed">
-              Исполнитель обязуется предоставить Заказчику возможность использования Платформы, а Заказчик
-              обязуется соблюдать правила сервиса и при наличии платной подписки — своевременно оплачивать
-              услуги. Услуги носят информационно-технический характер; Исполнитель не является стороной
-              трудовых или гражданско-правовых сделок между пользователями Платформы, если прямо не
-              предусмотрено дополнительным соглашением.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-xl font-bold text-gray-900">3. Акцепт оферты</h2>
-            <p className="mt-3 leading-relaxed">
-              Акцептом признаётся совершение Заказчиком действий: регистрация на сайте с принятием условий,
-              оплата счёта или подтверждение заказа услуги в интерфейсе Платформы — в зависимости от выбранной
-              модели (конкретный момент акцепта уточняется в финальной редакции).
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-xl font-bold text-gray-900">4. Стоимость и порядок расчётов</h2>
-            <p className="mt-3 leading-relaxed">
-              Стоимость услуг, валюта, НДС, способы оплаты и сроки указаны на странице тарифов и/или в счёте.
-              Исполнитель вправе изменять цены для новых периодов подписки с уведомлением в интерфейсе или по
-              email. [Детали подлежат заполнению.]
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-xl font-bold text-gray-900">5. Срок и прекращение</h2>
-            <p className="mt-3 leading-relaxed">
-              Договор действует до момента удаления аккаунта или до окончания оплаченного периода — в
-              зависимости от модели. Стороны вправе расторгнуть договор в случаях, предусмотренных
-              законодательством и финальной редакцией оферты (неисполнение оплаты, существенное нарушение
-              правил Платформы и т.д.).
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-xl font-bold text-gray-900">6. Ответственность</h2>
-            <p className="mt-3 leading-relaxed">
-              Стороны несут ответственность в пределах, установленных законом и настоящей офертой. Исполнитель
-              не отвечает за косвенные убытки и упущенную выгоду Заказчика. [Ограничения и исключения —
-              по согласованию с юристом.]
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-xl font-bold text-gray-900">7. Реквизиты Исполнителя</h2>
-            <p className="mt-3 leading-relaxed text-gray-500">
-              [Полное наименование, ИНН, КПП, юридический адрес, банковские реквизиты — вставить после
-              регистрации юридического лица.]
-            </p>
-          </section>
-        </div>
-
-        <p className="mt-10 text-sm text-gray-500">
-          Связанные документы:{' '}
-          <Link href="/legal/terms" className="text-primary-600 hover:text-primary-700">
-            Пользовательское соглашение
-          </Link>
-          {' · '}
-          <Link href="/legal/privacy" className="text-primary-600 hover:text-primary-700">
-            Политика конфиденциальности
-          </Link>
-        </p>
       </div>
     </div>
   );

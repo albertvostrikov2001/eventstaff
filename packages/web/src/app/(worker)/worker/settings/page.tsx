@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
+import { Mail, ChevronRight } from 'lucide-react';
 import { z } from 'zod';
 import { apiClient, ApiError } from '@/lib/api/client';
 import { useToast } from '@/components/ui/toast-context';
@@ -46,10 +48,10 @@ function DeleteConfirmModal({ onClose }: { onClose: () => void }) {
           <br />
           Для удаления аккаунта свяжитесь с&nbsp;поддержкой:{' '}
           <a
-            href="mailto:support@unity.ru"
+            href="mailto:Event-Unity@yandex.ru"
             className="text-[var(--accent)] underline"
           >
-            support@unity.ru
+            Event-Unity@yandex.ru
           </a>
         </p>
         <button
@@ -203,13 +205,30 @@ export default function WorkerSettingsPage() {
               />
             </div>
           </div>
-          <p className="mt-3 text-[12px] text-white/35">
+          <p className="mt-3 text-[12px] text-white/50">
             Для изменения контактных данных обратитесь в поддержку:{' '}
-            <a href="mailto:support@unity.ru" className="text-[var(--accent)] hover:underline">
-              support@unity.ru
+            <a href="mailto:Event-Unity@yandex.ru" className="text-[var(--accent)] hover:underline">
+              Event-Unity@yandex.ru
             </a>
           </p>
         </section>
+
+        {/* ── Email notifications link ── */}
+        <Link
+          href="/worker/settings/notifications"
+          className="flex items-center gap-3 rounded-[14px] border border-white/[0.06] bg-white/[0.04] p-5 transition hover:bg-white/[0.06]"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-white/[0.06] text-[var(--accent)]">
+            <Mail className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] font-semibold text-white/90">Email-рассылка</span>
+            <span className="block text-[13px] text-white/45">
+              Уведомления о приглашениях, откликах и сообщениях на почту
+            </span>
+          </span>
+          <ChevronRight className="h-5 w-5 shrink-0 text-white/30" />
+        </Link>
 
         {/* ── 2. Password ── */}
         <section className="rounded-[14px] border border-white/[0.06] bg-white/[0.04] p-5">

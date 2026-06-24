@@ -17,6 +17,10 @@ dist/
 .env.development
 .env.*.local
 
+# Deploy credentials — NEVER commit these
+.env.deploy
+deploy_tasks_*.py
+
 # Vercel
 .vercel
 
@@ -63,3 +67,10 @@ next-env.d.ts
 # Local backup copies (do not commit)
 *.bak
 *.bak.*
+
+# Large media / videos (do not commit)
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.webm

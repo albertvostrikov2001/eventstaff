@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { apiClient } from '@/lib/api/client';
 import { useToast } from '@/components/ui/toast-context';
 import { Button } from '@/components/ui/button';
+import { Breadcrumbs } from '@/components/common/Breadcrumbs';
 
 interface Prefs {
   emailInvitation: boolean;
@@ -69,6 +70,12 @@ export default function WorkerNotificationSettingsPage() {
 
   return (
     <div className="max-w-xl">
+      <Breadcrumbs
+        items={[
+          { label: 'Настройки', href: '/worker/settings' },
+          { label: 'Email-рассылка' },
+        ]}
+      />
       <h1 className="text-2xl font-bold text-white">Уведомления по email</h1>
       <p className="mt-2 text-sm text-white/50">
         Выберите категории писем. In-app уведомления остаются доступны всегда.

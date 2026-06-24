@@ -78,6 +78,7 @@ enum RateType {
   daily
   weekly
   after_event
+  monthly
 }
 
 enum EmploymentType {
@@ -427,6 +428,10 @@ model WorkerProfile {
   totalShifts     Int        @default(0) @map("total_shifts")
   languages       String[]   @default([])
   dressSizes      String?    @map("dress_sizes")
+  viewsCount      Int        @default(0) @map("views_count")
+  boostUntil      DateTime?  @map("boost_until")
+  unlimitedUntil  DateTime?  @map("unlimited_until")
+  recommendedUntil DateTime? @map("recommended_until")
   createdAt       DateTime   @default(now()) @map("created_at")
   updatedAt       DateTime   @updatedAt @map("updated_at")
 
@@ -530,22 +535,26 @@ model EmployerProfile {
   website                 String?
   inn                     String?
   isVerified              Boolean      @default(false) @map("is_verified")
+  verifiedByAdmin         Boolean      @default(false) @map("verified_by_admin")
   verifiedAt              DateTime?    @map("verified_at")
   verificationRequestedAt DateTime?    @map("verification_requested_at")
+  isHidden                Boolean      @default(false) @map("is_hidden")
   reliabilityScore        Decimal      @default(0) @map("reliability_score") @db.Decimal(5, 2)
   responseRate            Decimal      @default(0) @map("response_rate") @db.Decimal(5, 2)
   ratingScore             Decimal?     @map("rating_score") @db.Decimal(3, 2)
   commissionRate          Decimal      @default(0) @map("commission_rate") @db.Decimal(5, 4)
+  boostCredits            Int          @default(0) @map("boost_credits")
   createdAt               DateTime     @default(now()) @map("created_at")
   updatedAt               DateTime     @updatedAt @map("updated_at")
 
-  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  city         City?              @relation(fields: [cityId], references: [id])
-  vacancies    Vacancy[]
-  templates    VacancyTemplate[]
-  bookings     Booking[]
-  subscription Subscription?
-  chatRooms    ChatRoom[]     @relation("ChatRoomEmployer")
+  user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  city          City?              @relation(fields: [cityId], references: [id])
+  vacancies     Vacancy[]
+  templates     VacancyTemplate[]
+  bookings      Booking[]
+  subscription  Subscription?
+  vacancyBoosts VacancyBoost[]
+  chatRooms     ChatRoom[]     @relation("ChatRoomEmployer")
 
   @@index([cityId])
   @@index([businessType])
@@ -600,6 +609,8 @@ model Vacancy {
   transportProvided Boolean        @default(false) @map("transport_provided")
   tipsPossible      Boolean?       @map("tips_possible")
   isUrgent          Boolean        @default(false) @map("is_urgent")
+  isHidden          Boolean        @default(false) @map("is_hidden")
+  highlightUntil    DateTime?      @map("highlight_until")
   coverImageUrl     String?        @map("cover_image_url")
   tags              Json?
   isTemplate        Boolean        @default(false) @map("is_template")
@@ -617,6 +628,7 @@ model Vacancy {
   city         City?           @relation(fields: [cityId], references: [id])
   applications Application[]
   bookings     Booking[]
+  boosts       VacancyBoost[]
 
   @@index([cityId, status, dateStart])
   @@index([category, status])
@@ -637,6 +649,39 @@ model VacancyTemplate {
 
   @@index([employerId])
   @@map("vacancy_templates")
+}
+
+model VacancyBoost {
+  id         String   @id @default(cuid())
+  vacancyId  String   @map("vacancy_id")
+  employerId String   @map("employer_id")
+  expiresAt  DateTime @map("expires_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  vacancy  Vacancy         @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+  employer EmployerProfile @relation(fields: [employerId], references: [id], onDelete: Cascade)
+
+  @@index([employerId, createdAt])
+  @@index([vacancyId])
+  @@map("vacancy_boosts")
+}
+
+/// Купленный, но не обязательно активированный буст (инвентарь пользователя).
+/// Пользователь активирует его вручную из кабинета; для бустов вакансии
+/// конкретная вакансия выбирается в момент активации.
+model PurchasedBoost {
+  id          String    @id @default(cuid())
+  userId      String    @map("user_id")
+  audience    String // 'worker' | 'employer'
+  sku         String
+  status      String    @default("available") // 'available' | 'activated'
+  paymentId   String?   @map("payment_id")
+  vacancyId   String?   @map("vacancy_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  activatedAt DateTime? @map("activated_at")
+
+  @@index([userId, status])
+  @@map("purchased_boosts")
 }
 
 model Application {
@@ -1041,6 +1086,10 @@ model Shift {
   workerId            String         @map("worker_id")
   employerId          String         @map("employer_id")
   status              ShiftStatus    @default(PENDING)
+  workerAccepted      Boolean        @default(false) @map("worker_accepted")
+  employerAccepted    Boolean        @default(false) @map("employer_accepted")
+  workerAcceptedAt    DateTime?      @map("worker_accepted_at")
+  employerAcceptedAt  DateTime?      @map("employer_accepted_at")
   workerConfirmed     Boolean        @default(false) @map("worker_confirmed")
   employerConfirmed   Boolean        @default(false) @map("employer_confirmed")
   workerConfirmedAt   DateTime?      @map("worker_confirmed_at")

@@ -4,6 +4,11 @@ export type CreatePaymentParams = {
   returnUrl: string;
   idempotenceKey: string;
   metadata: Record<string, string>;
+  /**
+   * Email покупателя для фискального чека (54-ФЗ). Если задан и у адаптера
+   * включена фискализация — в платёж добавляется объект receipt.
+   */
+  customerEmail?: string;
 };
 
 export type PaymentResult = {

@@ -1,6 +1,7 @@
 'use client';
 
 import type { EmployerProfileUpdateInput } from '@unity/shared';
+import { EmployerProfileMediaClient } from '@/components/employer/EmployerProfileMediaClient';
 import { EMPLOYER_COMPANY_ACTIVITY_OPTIONS } from '@unity/shared';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ApiError, apiClient } from '@/lib/api/client';
@@ -16,7 +17,9 @@ import { FormSelect } from '@/components/forms/FormSelect';
 import { FormTextarea } from '@/components/forms/FormTextarea';
 import { useToast } from '@/components/ui/toast-context';
 import { Button } from '@/components/ui/button';
-import { Shield, ShieldCheck } from 'lucide-react';
+import { ProfileCompletion } from '@/components/profile/ProfileCompletion';
+import Link from 'next/link';
+import { Shield, ShieldCheck, ExternalLink } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
@@ -274,22 +277,47 @@ export default function EmployerProfilePage() {
           </p>
         </div>
         {profileMeta && (
-          <div
-            className={`inline-flex items-center gap-2 self-start rounded-full border px-3 py-1.5 text-sm font-medium ${
-              profileMeta.isVerified
-                ? 'border-[color:var(--u-emerald-light,#3d8a62)]/35 bg-[rgba(45,106,74,0.15)] text-emerald-100'
-                : 'border-white/10 bg-white/[0.04] text-white/60'
-            }`}
-          >
-            {profileMeta.isVerified ? (
-              <ShieldCheck className="h-4 w-4 text-[color:var(--u-emerald-light,#6ee7b7)]" />
-            ) : (
-              <Shield className="h-4 w-4 opacity-70" />
+          <div className="flex flex-wrap items-center gap-2 self-start">
+            {profileMeta.isVerified && (
+              <Link
+                href={`/employers/${profileMeta.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-full border border-white/[0.10] bg-white/[0.04] px-3 py-1.5 text-sm font-medium text-white/60 transition hover:bg-white/[0.08] hover:text-white/85"
+              >
+                <ExternalLink className="h-4 w-4" />
+                Публичная страница
+              </Link>
             )}
-            {profileMeta.isVerified ? 'Верифицирован' : 'Не верифицирован'}
+            <div
+              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium ${
+                profileMeta.isVerified
+                  ? 'border-[color:var(--u-emerald-light,#3d8a62)]/35 bg-[rgba(45,106,74,0.15)] text-emerald-100'
+                  : 'border-white/10 bg-white/[0.04] text-white/60'
+              }`}
+            >
+              {profileMeta.isVerified ? (
+                <ShieldCheck className="h-4 w-4 text-[color:var(--u-emerald-light,#6ee7b7)]" />
+              ) : (
+                <Shield className="h-4 w-4 opacity-70" />
+              )}
+              {profileMeta.isVerified ? 'Верифицирован' : 'Не верифицирован'}
+            </div>
           </div>
         )}
       </div>
+
+      <ProfileCompletion
+        items={[
+          { label: 'Название компании', done: !!watch('companyName') },
+          { label: 'Контактное лицо', done: !!(watch('contactFirstName') || watch('contactLastName')) },
+          { label: 'Телефон', done: !!watch('phone') },
+          { label: 'Email подтверждён', done: emailVerifiedState },
+          { label: 'Сфера деятельности', done: watch('businessType') !== 'other' },
+          { label: 'Город', done: !!watch('cityId') },
+          { label: 'О компании', done: (watch('description') ?? '').length > 20 },
+        ]}
+      />
 
       <form onSubmit={onSubmit} noValidate className="space-y-8">
         <section className={employerFormSectionShellClass('cabinet')}>
@@ -440,6 +468,17 @@ export default function EmployerProfilePage() {
           </Button>
         </div>
       </form>
+
+      {/* Media section embedded directly in profile */}
+      <div className="border-t border-white/[0.08] pt-8">
+        <div className="mb-6">
+          <h2 className="text-xl font-bold text-white">Медиафайлы</h2>
+          <p className="mt-1 text-sm text-white/50">
+            Логотип, баннер и фотогалерея для вашего профиля в каталоге
+          </p>
+        </div>
+        <EmployerProfileMediaClient embedded />
+      </div>
     </div>
   );
 }

@@ -10,16 +10,15 @@ import {
   Heart,
   MessageSquare,
   Search,
-  Bell,
-  ImagePlus,
   Zap,
   Briefcase,
   Send,
   ExternalLink,
   Settings,
-  Mail,
+  BarChart2,
+  Copy,
 } from 'lucide-react';
-import { DashboardSidebar } from '@/components/layout/DashboardSidebar';
+import { DashboardSidebar, type SidebarEntry } from '@/components/layout/DashboardSidebar';
 import { DashboardTopBar } from '@/components/layout/DashboardTopBar';
 import { useChatInboxStore } from '@/stores/chatInboxStore';
 import { RestrictionBanner } from '@/components/layout/RestrictionBanner';
@@ -27,22 +26,27 @@ import {
   useEmployerFavoriteWorkerIdsQuery,
   useIsEmployerFavoritesLoaded,
 } from '@/hooks/useEmployerFavoriteWorkerIds';
-import { useNotificationUnreadCount } from '@/hooks/useNotificationUnreadCount';
+import { useNavNotifications, EMPLOYER_SECTION_TYPES } from '@/lib/notifications/useNavNotifications';
 
 export function EmployerDashboardShell({ children }: { children: React.ReactNode }) {
   const chatUnread = useChatInboxStore((s) => s.unreadTotal);
-  const notifUnread = useNotificationUnreadCount();
   const isEmployer = useIsEmployerFavoritesLoaded();
   const { data: favIds } = useEmployerFavoriteWorkerIdsQuery(isEmployer);
   const favCount = favIds?.length ?? 0;
+  const { sectionCounts } = useNavNotifications(EMPLOYER_SECTION_TYPES);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const sidebarItems = useMemo(
+  const sidebarItems = useMemo<SidebarEntry[]>(
     () => [
       { href: '/employer/dashboard', label: 'Дашборд', icon: LayoutDashboard },
-      { href: '/employer/profile', label: 'Профиль компании', icon: Building2 },
-      { href: '/employer/vacancies', label: 'Мои вакансии', icon: FileText },
-      { href: '/employer/shifts', label: 'Смены', icon: Briefcase },
-      { href: '/employer/invitations', label: 'Приглашения', icon: Send },
+
+      { type: 'divider', label: 'Вакансии и найм' },
+      {
+        href: '/employer/vacancies',
+        label: 'Мои вакансии',
+        icon: FileText,
+        ctaHref: '/employer/vacancies/new',
+        ctaLabel: 'Создать вакансию',
+      },
       { href: '/employer/search', label: 'Найти персонал', icon: Search },
       {
         href: '/employer/favorites',
@@ -50,15 +54,23 @@ export function EmployerDashboardShell({ children }: { children: React.ReactNode
         icon: Heart,
         badge: favCount > 0 ? favCount : undefined,
       },
+
+      { type: 'divider', label: 'Работа' },
+      { href: '/employer/applications', label: 'Отклики', icon: Users, badge: sectionCounts['/employer/applications'] },
+      { href: '/employer/shifts', label: 'Смены', icon: Briefcase, badge: sectionCounts['/employer/shifts'] },
+      { href: '/employer/invitations', label: 'Приглашения', icon: Send },
+
+      { type: 'divider', label: 'Связь' },
       { href: '/employer/messages', label: 'Сообщения', icon: MessageSquare, badge: chatUnread },
-      { href: '/employer/applications', label: 'Все отклики', icon: Users },
+
+      { type: 'divider', label: 'Кабинет' },
+      { href: '/employer/profile', label: 'Профиль компании', icon: Building2 },
+      { href: '/employer/analytics', label: 'Аналитика', icon: BarChart2 },
       { href: '/employer/subscription', label: 'Подписка', icon: Zap },
-      { href: '/employer/notifications', label: 'Уведомления', icon: Bell, badge: notifUnread || undefined },
+      { href: '/employer/templates', label: 'Шаблоны', icon: Copy },
       { href: '/employer/settings', label: 'Настройки', icon: Settings },
-      { href: '/employer/settings/notifications', label: 'Email-рассылка', icon: Mail },
-      { href: '/employer/profile/media', label: 'Медиа', icon: ImagePlus },
     ],
-    [chatUnread, favCount, notifUnread],
+    [chatUnread, favCount, sectionCounts],
   );
 
   const sidebarFooter = (
@@ -87,13 +99,13 @@ export function EmployerDashboardShell({ children }: { children: React.ReactNode
     >
       <DashboardSidebar
         items={sidebarItems}
-        logoHref="/employer/dashboard"
+        logoHref="/"
         footer={sidebarFooter}
         dark
         mobileOpen={mobileMenuOpen}
         onMobileClose={() => setMobileMenuOpen(false)}
       />
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <DashboardTopBar variant="cabinet" onMenuToggle={() => setMobileMenuOpen((v) => !v)} />
         <main className="flex-1 overflow-auto">
           <div className="mx-auto max-w-[1100px] px-4 py-8 sm:px-8">

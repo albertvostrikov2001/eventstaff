@@ -4,8 +4,8 @@ import { ReliabilityService } from '@/services/reliability-service';
 import type { NotificationService } from '@/services/notification-service';
 import { publicSiteUrl } from '@/lib/public-site-url';
 
+// Завершение смены (двусторонняя приёмка результата) доступно только когда смена уже идёт.
 const canConfirmStatuses: ShiftStatus[] = [
-  ShiftStatus.PENDING,
   ShiftStatus.ACTIVE,
   ShiftStatus.DISPUTED,
 ];
@@ -25,6 +25,65 @@ type Deps = {
   prisma: PrismaClient;
   notificationService: NotificationService;
 };
+
+/**
+ * Принятие назначенной смены (фаза до проведения).
+ * Работник (или работодатель) подтверждает, что выйдет на смену.
+ * Когда работник принял — смена становится ACTIVE.
+ */
+export async function acceptShift(
+  deps: Deps,
+  shiftId: string,
+  actorUserId: string,
+): Promise<Shift> {
+  const { prisma, notificationService } = deps;
+
+  const shift = await prisma.shift.findUnique({
+    where: { id: shiftId },
+    include: { booking: { include: { linkedVacancy: true } } },
+  });
+  if (!shift) {
+    throw new ShiftConfirmationError(404, 'NOT_FOUND', 'Смена не найдена');
+  }
+  if (shift.status !== ShiftStatus.PENDING) {
+    throw new ShiftConfirmationError(400, 'INVALID_STATE', 'Смену уже нельзя принять');
+  }
+  const isWorker = shift.workerId === actorUserId;
+  const isEmployer = shift.employerId === actorUserId;
+  if (!isWorker && !isEmployer) {
+    throw new ShiftConfirmationError(403, 'FORBIDDEN', 'Нет доступа');
+  }
+
+  const now = new Date();
+  const updated = isWorker
+    ? await prisma.shift.update({
+        where: { id: shiftId },
+        data: { workerAccepted: true, workerAcceptedAt: now },
+      })
+    : await prisma.shift.update({
+        where: { id: shiftId },
+        data: { employerAccepted: true, employerAcceptedAt: now },
+      });
+
+  // Notify the other party
+  const otherId = isWorker ? shift.employerId : shift.workerId;
+  await notificationService.create({
+    userId: otherId,
+    type: 'SHIFT_COMPLETED',
+    title: isWorker ? 'Работник принял смену' : 'Работодатель подтвердил смену',
+    body: 'Смена подтверждена и активна.',
+    data: { shiftId, bookingId: shift.bookingId },
+  });
+
+  // Worker acceptance activates the shift (employer already committed by confirming the application)
+  if (updated.workerAccepted) {
+    return prisma.shift.update({
+      where: { id: shiftId },
+      data: { status: ShiftStatus.ACTIVE },
+    });
+  }
+  return updated;
+}
 
 /** Shared логика подтверждения участия смены (рабочее или работодатель) */
 export async function confirmShiftParticipation(
@@ -98,11 +157,5 @@ export async function confirmShiftParticipation(
     return completed;
   }
 
-  if (shift.status === ShiftStatus.PENDING) {
-    return prisma.shift.update({
-      where: { id: shiftId },
-      data: { status: ShiftStatus.ACTIVE },
-    });
-  }
   return res;
 }

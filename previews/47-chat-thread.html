@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"/><meta name="viewport" content="width=1440"/><title>Юнити · Жан-Поль К. · Жульверн</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"/>
+<style>:root{--bg-0:#08120e;--bg-1:#0f1d16;--bg-2:#16271e;--bg-3:#1e3327;--bg-4:#28402f;--text-primary:#f1eee7;--text-secondary:#a5b0a8;--text-muted:#6a7670;--text-on-accent:#08120e;--border-subtle:rgba(255,255,255,.06);--border-default:rgba(255,255,255,.10);--border-strong:rgba(255,255,255,.18);--border-emerald:rgba(91,184,128,.35);--accent:#5bb880;--accent-hover:#6cc792;--accent-soft:#2c5d44;--accent-faint:rgba(91,184,128,.10);--accent-glow:rgba(91,184,128,.22);--accent-warm:#c6845c;--state-success:#5bb880;--state-success-bg:rgba(91,184,128,.10);--state-warning:#d6a55c;--state-warning-bg:rgba(214,165,92,.10);--state-danger:#d96a6a;--state-danger-bg:rgba(217,106,106,.10);--state-info:#6aa4d9;--state-info-bg:rgba(106,164,217,.10);--font-display:'Onest','Inter',system-ui,sans-serif;--font-body:'Onest','Inter',system-ui,sans-serif;--font-mono:'JetBrains Mono','SF Mono',Menlo,monospace;--r-1:4px;--r-2:6px;--r-3:8px;--r-4:10px;--r-5:14px;--d-micro:120ms}
+*{box-sizing:border-box}html,body{margin:0;padding:0;font-family:var(--font-body);-webkit-font-smoothing:antialiased;font-feature-settings:'ss01';background:var(--bg-0);color:var(--text-primary);font-size:14px;line-height:1.4}a{color:inherit;text-decoration:none}h1,h2,h3,h4,h5{font-family:var(--font-display);font-weight:500;letter-spacing:-.01em;margin:0;color:var(--text-primary)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid transparent;font-family:var(--font-body);font-weight:500;cursor:pointer;text-decoration:none;outline:none;font-size:14px;transition:all var(--d-micro)}.btn-sm{height:32px;padding:0 12px;border-radius:var(--r-3);font-size:13px}.btn-md{height:40px;padding:0 16px;border-radius:var(--r-4)}.btn-primary{background:var(--accent);color:var(--text-on-accent)}.btn-primary:hover{background:var(--accent-hover)}.btn-muted{background:rgba(255,255,255,.04);color:var(--text-primary);border-color:var(--border-default)}.btn-ghost{background:transparent;color:var(--text-secondary)}.btn-ghost:hover{color:var(--text-primary);background:rgba(255,255,255,.04)}.btn-secondary{background:transparent;color:var(--text-primary);border-color:var(--border-emerald)}.btn-block{width:100%}
+.input{height:40px;padding:0 14px;border-radius:var(--r-2);font:inherit;font-size:14px;width:100%;background:rgba(255,255,255,.03);border:1px solid var(--border-default);color:var(--text-primary)}.input::placeholder{color:var(--text-muted)}.input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-faint);outline:none}
+.av{border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:500;flex-shrink:0;font-family:var(--font-display)}.av-sm{width:32px;height:32px;font-size:12px}.av-md{width:40px;height:40px;font-size:14px}.av-lg{width:48px;height:48px;font-size:16px}.av-em{background:linear-gradient(135deg,#2d6a4a,#1a3d2b);color:var(--accent)}.av-moc{background:linear-gradient(135deg,#523426,#2e1f14);color:var(--accent-warm)}.av-slate{background:linear-gradient(135deg,#2c3a35,#1a2422);color:#b8c2bb}.av-ind{background:linear-gradient(135deg,#2d3b58,#18243a);color:#8bb0e0}
+.bdg{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:var(--r-1);font-family:var(--font-mono);font-size:11px;font-weight:500;letter-spacing:.04em;text-transform:uppercase}.bdg-primary{background:var(--accent-faint);color:var(--accent);border:1px solid var(--border-emerald)}.bdg-success{background:var(--state-success-bg);color:var(--state-success)}.bdg-warning{background:var(--state-warning-bg);color:var(--state-warning)}.bdg-danger{background:var(--state-danger-bg);color:var(--state-danger)}.bdg-info{background:var(--state-info-bg);color:var(--state-info)}
+.viewport-toggle{position:fixed;top:8px;right:8px;z-index:9999;display:inline-flex;padding:3px;border-radius:8px;background:rgba(8,18,14,.95);border:1px solid var(--border-default);gap:2px;font-family:var(--font-mono);font-size:11px}.viewport-toggle button{padding:5px 10px;border:0;background:transparent;color:var(--text-secondary);cursor:pointer;border-radius:5px;font-family:inherit;font-size:11px}.viewport-toggle button.active{background:rgba(255,255,255,.08);color:var(--text-primary)}
+/* Chat layout */
+.chat-shell{display:flex;height:100vh;background:linear-gradient(160deg,var(--bg-1) 0%,#0a1810 100%)}
+.chat-sidebar{width:340px;border-right:1px solid var(--border-subtle);display:flex;flex-direction:column;background:rgba(0,0,0,.25);flex-shrink:0}
+.chat-sidebar-h{padding:18px 20px;border-bottom:1px solid var(--border-subtle)}
+.chat-sidebar-h h1{font-size:18px;font-weight:600}
+.chat-sidebar-h .input{height:36px;padding-left:36px;font-size:13px;margin-top:14px}
+.chat-tabs{display:flex;gap:4px;padding:12px 16px;border-bottom:1px solid var(--border-subtle);overflow-x:auto}
+.chat-tabs button{padding:5px 10px;border-radius:9999px;font-size:12px;font-family:var(--font-mono);font-weight:500;letter-spacing:.04em;background:transparent;border:0;color:var(--text-secondary);cursor:pointer;white-space:nowrap}
+.chat-tabs button.active{background:var(--accent-faint);color:var(--accent)}
+.chat-list{flex:1;overflow-y:auto}
+.chat-item{display:flex;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border-subtle);cursor:pointer;transition:background var(--d-micro);position:relative}
+.chat-item:hover{background:rgba(255,255,255,.03)}
+.chat-item.active{background:var(--accent-faint);border-left:3px solid var(--accent);padding-left:15px}
+.chat-item-main{flex:1;min-width:0}
+.chat-item-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:2px}
+.chat-item-name{font-size:14px;font-weight:500;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-item-time{font-family:var(--font-mono);font-size:10px;color:var(--text-muted);letter-spacing:.04em;flex-shrink:0}
+.chat-item-ctx{font-size:11px;color:var(--text-muted);font-family:var(--font-mono);letter-spacing:.04em;text-transform:uppercase;margin-bottom:4px}
+.chat-item-preview{font-size:13px;color:var(--text-secondary);overflow:hidden;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;line-height:1.4}
+.chat-item-badge{position:absolute;right:18px;bottom:14px;background:var(--accent);color:var(--text-on-accent);font-family:var(--font-mono);font-size:10px;font-weight:600;padding:1px 6px;border-radius:9999px}
+/* Thread */
+.chat-thread{flex:1;display:flex;flex-direction:column;min-width:0}
+.chat-thread-h{padding:14px 24px;border-bottom:1px solid var(--border-subtle);display:flex;align-items:center;gap:14px;background:rgba(8,18,14,.6);backdrop-filter:blur(20px)}
+.chat-thread-h-meta{flex:1;min-width:0}
+.chat-thread-h-name{font-size:15px;font-weight:600;display:flex;gap:6px;align-items:center}
+.chat-thread-h-name svg{color:var(--accent)}
+.chat-thread-h-sub{font-size:12px;color:var(--text-secondary);font-family:var(--font-mono);letter-spacing:.04em;margin-top:2px}
+.chat-thread-online{color:var(--accent)}
+.chat-thread-actions{display:flex;gap:6px}
+/* Context pin */
+.chat-ctx-pin{margin:14px 24px;padding:12px 16px;background:rgba(255,255,255,.03);border:1px dashed var(--border-default);border-radius:var(--r-3);display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center}
+.chat-ctx-pin-lbl{font-family:var(--font-mono);font-size:10px;color:var(--text-muted);letter-spacing:.04em;text-transform:uppercase;margin-bottom:4px}
+.chat-ctx-pin-title{font-size:14px;font-weight:500}
+.chat-ctx-pin-meta{font-size:12px;color:var(--text-muted);margin-top:2px;font-family:var(--font-mono);letter-spacing:.04em}
+/* Messages */
+.chat-body{flex:1;overflow-y:auto;padding:24px 24px 8px;display:flex;flex-direction:column;gap:10px}
+.chat-date{align-self:center;font-family:var(--font-mono);font-size:10px;color:var(--text-muted);letter-spacing:.06em;text-transform:uppercase;padding:5px 14px;background:rgba(255,255,255,.04);border-radius:9999px;margin:10px 0 6px}
+.msg{max-width:75%;padding:10px 14px;border-radius:14px;font-size:14px;line-height:1.45;position:relative;animation:fade-in 200ms ease-out}
+@keyframes fade-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.msg-in{background:var(--bg-3);color:var(--text-primary);align-self:flex-start;border-bottom-left-radius:4px}
+.msg-out{background:var(--accent-soft);color:var(--text-primary);align-self:flex-end;border-bottom-right-radius:4px}
+.msg-system{align-self:center;background:transparent;border:1px dashed var(--border-default);color:var(--text-muted);font-size:12px;padding:6px 14px;border-radius:9999px;max-width:90%;text-align:center}
+.msg-pending{opacity:.7}
+.msg-failed{background:rgba(217,106,106,.1)!important;box-shadow:0 0 0 1px var(--state-danger) inset}
+.msg-foot{font-family:var(--font-mono);font-size:10px;color:rgba(255,255,255,.5);letter-spacing:.04em;display:flex;gap:4px;justify-content:flex-end;align-items:center;margin-top:4px}
+.msg-in .msg-foot{color:var(--text-muted)}
+.msg-reply{margin-bottom:6px;padding:6px 10px;border-left:2px solid var(--accent);background:rgba(0,0,0,.3);border-radius:6px;font-size:12px}
+.msg-reply-name{color:var(--accent);font-weight:500;font-size:11px;margin-bottom:2px}
+.msg-reply-text{color:var(--text-secondary)}
+/* Composer */
+.chat-composer{padding:14px 24px;border-top:1px solid var(--border-subtle);background:rgba(8,18,14,.6);backdrop-filter:blur(20px)}
+.chat-templates{display:flex;gap:6px;overflow-x:auto;margin-bottom:10px}
+.chat-templates button{padding:4px 10px;border-radius:9999px;border:1px solid var(--border-default);background:rgba(255,255,255,.03);color:var(--text-secondary);font-size:11px;font-family:var(--font-mono);letter-spacing:.04em;cursor:pointer;white-space:nowrap}
+.chat-composer-row{display:flex;gap:8px;align-items:flex-end}
+.chat-composer textarea{min-height:40px;max-height:120px;resize:none;height:40px;line-height:1.4;padding:10px 14px;font:inherit;font-size:14px;background:rgba(255,255,255,.03);border:1px solid var(--border-default);color:var(--text-primary);border-radius:var(--r-2);flex:1}
+.vp-mobile{max-width:390px;margin:0 auto;border-left:1px solid var(--border-default);border-right:1px solid var(--border-default);overflow:hidden;height:90vh}
+.vp-mobile .chat-shell{height:100%}
+.vp-mobile .chat-sidebar{display:none}
+.vp-mobile .chat-thread-h{padding:14px 16px}
+.vp-mobile .chat-body{padding:16px 16px 8px}
+.vp-mobile .chat-composer{padding:10px 16px}
+.vp-mobile .chat-ctx-pin{margin:10px 16px;padding:10px 12px}
+@media (max-width:1023px){.chat-sidebar{width:280px}}
+@media (max-width:767px){.chat-sidebar{display:none}}</style></head>
+<body data-shell="dark"><div class="viewport-toggle"><button id="vt-d" class="active" onclick="setVP('d')">Desktop</button><button id="vt-m" onclick="setVP('m')">Mobile</button></div><script>function setVP(m){const r=document.body;if(m==='m'){r.classList.add('vp-mobile');document.getElementById('vt-d').classList.remove('active');document.getElementById('vt-m').classList.add('active')}else{r.classList.remove('vp-mobile');document.getElementById('vt-d').classList.add('active');document.getElementById('vt-m').classList.remove('active')}}</script><div class="chat-shell">
+<aside class="chat-sidebar">
+<div class="chat-sidebar-h">
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><a href="/worker/dashboard" class="btn btn-ghost btn-sm" style="padding:0 10px;font-size:12px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 19"/></svg>В кабинет</a></div>
+<h1>Чаты</h1>
+<div style="position:relative;margin-top:14px"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-muted)"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input class="input" placeholder="Поиск по имени или смене"/></div>
+</div>
+<div class="chat-tabs"><button class="active">Все 14</button><button>Новые 3</button><button>По сменам</button><button>Архив</button></div>
+<div class="chat-list"><div class="chat-item active"><div class="av av-md av-em">Ж</div><div class="chat-item-main"><div class="chat-item-h"><span class="chat-item-name">Жан-Поль К. · Жульверн</span><span class="chat-item-time">12:19</span></div><div class="chat-item-ctx">смена · 7 июн · банкет</div><div class="chat-item-preview">Принято. До встречи в 17:30.</div></div></div><div class="chat-item "><div class="av av-md av-moc">B</div><div class="chat-item-main"><div class="chat-item-h"><span class="chat-item-name">Будуар</span><span class="chat-item-time">11:42</span></div><div class="chat-item-ctx">отклик · бармен</div><div class="chat-item-preview">Подскажите, форма выдаётся или своя?</div></div><span class="chat-item-badge">2</span></div><div class="chat-item "><div class="av av-md av-ind">CG</div><div class="chat-item-main"><div class="chat-item-h"><span class="chat-item-name">Catering Group</span><span class="chat-item-time">вчера</span></div><div class="chat-item-ctx">смена · 7 июн · банкет</div><div class="chat-item-preview">Поставил +1 в календарь. До встречи.</div></div></div><div class="chat-item "><div class="av av-md av-slate">СН</div><div class="chat-item-main"><div class="chat-item-h"><span class="chat-item-name">Сергей Никитин</span><span class="chat-item-time">вчера</span></div><div class="chat-item-ctx">отклик · официант</div><div class="chat-item-preview">К сожалению, не смогу. Удачи в подборе.</div></div></div><div class="chat-item "><div class="av av-md av-em">ЕВ</div><div class="chat-item-main"><div class="chat-item-h"><span class="chat-item-name">Екатерина Власова</span><span class="chat-item-time">пн</span></div><div class="chat-item-ctx">смена · 12 июн · корпоратив</div><div class="chat-item-preview">Спасибо, буду рассматривать.</div></div></div><div class="chat-item "><div class="av av-md av-moc">УА</div><div class="chat-item-main"><div class="chat-item-h"><span class="chat-item-name">Усадьба Архангельское</span><span class="chat-item-time">пн</span></div><div class="chat-item-ctx">приглашение · 14 июн</div><div class="chat-item-preview">Михаил, мы видели ваш профиль и…</div></div></div><div class="chat-item "><div class="av av-md av-slate">L</div><div class="chat-item-main"><div class="chat-item-h"><span class="chat-item-name">Lavkalavka</span><span class="chat-item-time">27 мая</span></div><div class="chat-item-ctx">отклик · повар</div><div class="chat-item-preview">Здравствуйте! Готовы рассмотреть.</div></div></div><div class="chat-item "><div class="av av-md av-ind">D</div><div class="chat-item-main"><div class="chat-item-h"><span class="chat-item-name">Doppio Coffee</span><span class="chat-item-time">25 мая</span></div><div class="chat-item-ctx">смена · 8 июн</div><div class="chat-item-preview">Адрес кофейни: Парк культуры, 1.</div></div></div></div>
+</aside>
+<div class="chat-thread">
+
+<!-- Thread header -->
+<div class="chat-thread-h">
+<a href="/dashboard/chat" class="btn btn-ghost btn-sm" style="width:34px;padding:0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 19"/></svg></a>
+<div class="av av-md av-em">Ж</div>
+<div class="chat-thread-h-meta">
+<div class="chat-thread-h-name">Жан-Поль Колесников<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></div>
+<div class="chat-thread-h-sub"><span class="chat-thread-online">● ОНЛАЙН</span> · ★ 4.8 · ЗАКРЫЛ 218 СМЕН</div>
+</div>
+<div class="chat-thread-actions">
+<button class="btn btn-muted btn-sm">Профиль</button>
+<button class="btn btn-primary btn-sm">Пригласить на смену</button>
+</div>
+</div>
+
+<!-- Context pin -->
+<div class="chat-ctx-pin">
+<div>
+<div class="chat-ctx-pin-lbl">Контекст диалога · закреплено</div>
+<div class="chat-ctx-pin-title">Банкет на 120 персон · 7 июня</div>
+<div class="chat-ctx-pin-meta">18:00 → 02:00 · м. Чистые пруды · 4 500 ₽</div>
+</div>
+<a class="btn btn-muted btn-sm" href="/vacancies/banquet-2026">Открыть смену</a>
+</div>
+
+<!-- Body -->
+<div class="chat-body">
+<div class="chat-date">7 июня · сегодня</div>
+
+<div class="msg msg-in">Здравствуйте! Спасибо за приглашение. У вас опыт работы с банкетами от 100 человек, я правильно понимаю?
+<div class="msg-foot">12:12</div>
+</div>
+
+<div class="msg msg-out">Здравствуйте, Михаил. Расскажите, есть ли опыт работы с банкетами на 100+ персон?
+<div class="msg-foot">12:13 <svg width="12" height="10" viewBox="0 0 24 18" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--accent)"><polyline points="2 9 8 15 16 5"/><polyline points="9 15 22 2"/></svg></div>
+</div>
+
+<div class="msg msg-in">Да, последние 2 года — выпускные и свадьбы, в основном «Метрополь» и «Континенталь». На банкет на 120 готов точно.
+<div class="msg-reply">
+<div class="msg-reply-name">Жан-Поль К.</div>
+<div class="msg-reply-text">Здравствуйте, Михаил. Расскажите, есть ли опыт работы с банкетами…</div>
+</div>
+<div class="msg-foot">12:14</div>
+</div>
+
+<div class="msg msg-system">Михаил отправил подтверждение участия в смене · 12:16</div>
+
+<div class="msg msg-out">Отлично. Форма — белая рубашка, чёрные брюки. Бабочку выдадим. Инструктаж в 17:30 на месте. Адрес: Покровка 11, вход со двора, спросить Жан-Поля.
+<div class="msg-foot">12:18 <svg width="12" height="10" viewBox="0 0 24 18" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--accent)"><polyline points="2 9 8 15 16 5"/><polyline points="9 15 22 2"/></svg></div>
+</div>
+
+<div class="msg msg-in">Принято. До встречи в 17:30.
+<div class="msg-foot">12:19</div>
+</div>
+
+<div class="msg msg-system">Юнити удержал гарантию оплаты · 4 500 ₽ · 12:20</div>
+
+<div class="msg msg-out msg-pending">Подскажите, можно ли приехать пораньше для знакомства с залом?
+<div class="msg-foot">отправляется… <svg width="12" height="10" viewBox="0 0 24 18" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="9" r="5"/></svg></div>
+</div>
+
+<div class="msg msg-out msg-failed">Тест сообщения с ошибкой отправки
+<div class="msg-foot" style="justify-content:space-between"><span style="color:var(--state-danger)"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-1px"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="13"/><line x1="12" y1="16" x2="12" y2="16.01"/></svg> не отправлено · <span style="text-decoration:underline;cursor:pointer">повторить</span></span><span>12:25</span></div>
+</div>
+
+<div class="chat-date" style="margin-top:12px;font-size:10px">Жан-Поль печатает…</div>
+</div>
+
+<!-- Composer -->
+<div class="chat-composer">
+<div class="chat-templates">
+<button>+ Запросить медкнижку</button>
+<button>+ Уточнить опыт</button>
+<button>+ Пригласить на другую дату</button>
+<button>+ Поделиться адресом</button>
+</div>
+<div class="chat-composer-row">
+<button class="btn btn-ghost btn-md" style="width:40px;padding:0;height:40px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg></button>
+<textarea placeholder="Написать сообщение…"></textarea>
+<button class="btn btn-primary btn-md" style="width:40px;padding:0;height:40px"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+</div>
+</div>
+
+</div>
+</div></body></html>

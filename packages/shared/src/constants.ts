@@ -5,7 +5,6 @@ export const STAFF_CATEGORIES = {
   administrator: 'Администратор',
   coordinator: 'Координатор',
   technical: 'Технический персонал',
-  hookah_master: 'Кальянщик',
   banquet_manager: 'Банкетный менеджер',
   dj: 'Диджей',
   barista: 'Бариста',
@@ -27,14 +26,33 @@ export const EVENT_TYPES = {
   other: 'Другое',
 } as const;
 
+// Полный набор подписей — для отображения, в т.ч. исторических записей.
 export const RATE_TYPES = {
-  hourly: 'За час',
   per_shift: 'За смену',
+  monthly: 'За месяц',
+  hourly: 'За час',
   fixed: 'Фиксированная',
   daily: 'За день',
   weekly: 'За неделю',
   after_event: 'По итогам мероприятия',
 } as const;
+
+// Доступные для выбора типы оплаты (почасовая убрана): только смена и месяц.
+export const RATE_TYPE_CHOICES = {
+  per_shift: 'За смену',
+  monthly: 'За месяц',
+} as const;
+
+// Короткий суффикс рядом со ставкой («500 ₽ за смену»).
+export const RATE_TYPE_SHORT: Record<string, string> = {
+  per_shift: 'за смену',
+  monthly: 'в месяц',
+  hourly: 'в час',
+  fixed: 'фикс.',
+  daily: 'за день',
+  weekly: 'за неделю',
+  after_event: 'по итогам',
+};
 
 export const EMPLOYMENT_TYPES = {
   single_shift: 'Разовая смена',
@@ -70,7 +88,7 @@ export const APPLICATION_STATUSES = {
   pending: 'Ожидает',
   viewed: 'Просмотрен',
   invited: 'Приглашён',
-  interview: 'Собеседование',
+  interview: 'На связи',
   confirmed: 'Подтверждён',
   shift_started: 'На смене',
   completed: 'Завершён',

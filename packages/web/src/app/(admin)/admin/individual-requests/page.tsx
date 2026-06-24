@@ -79,6 +79,13 @@ export default function AdminIndividualRequestsPage() {
     void load();
   }, [load]);
 
+  // Открытие списка гасит непрочитанные уведомления о заявках — колокольчик сбрасывается.
+  useEffect(() => {
+    void apiClient
+      .post('/notifications/read-by-types', { types: ['INDIVIDUAL_REQUEST'] })
+      .catch(() => {});
+  }, []);
+
   const unreadCount = rows.filter((r) => r.status === 'NEW').length;
 
   return (

@@ -12,6 +12,7 @@ import {
   ImagePlus,
   Inbox,
   Shield,
+  MessagesSquare,
 } from 'lucide-react';
 
 interface Stats {
@@ -26,6 +27,7 @@ interface AlertSummary {
   pendingMedia: number;
   newIndividualRequests: number;
   restrictedUsers: number;
+  newContactRequests: number;
 }
 
 export default function AdminDashboardPage() {
@@ -73,6 +75,12 @@ export default function AdminDashboardPage() {
       icon: Inbox,
     },
     {
+      href: '/admin/contact-requests',
+      label: 'Обращения с сайта (новые)',
+      value: alerts?.newContactRequests ?? 0,
+      icon: MessagesSquare,
+    },
+    {
       href: '/admin/users',
       label: 'Пользователи с ограничением',
       value: alerts?.restrictedUsers ?? 0,
@@ -95,7 +103,13 @@ export default function AdminDashboardPage() {
               <t.icon className="h-4 w-4 text-primary-300" />
               {t.label}
             </span>
-            <span className="rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-semibold text-amber-100">
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                !loading && t.value > 0
+                  ? 'bg-amber-500/25 text-amber-100 ring-1 ring-amber-400/40'
+                  : 'bg-white/10 text-white/40'
+              }`}
+            >
               {loading ? '—' : t.value}
             </span>
           </Link>

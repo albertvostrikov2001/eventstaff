@@ -1,16 +1,18 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { BreadcrumbJsonLd } from '@/components/seo/BreadcrumbJsonLd';
 
 export const metadata: Metadata = {
   title: 'Центр помощи',
   description:
     'Ответы на частые вопросы о платформе Юнити: регистрация, вакансии, оплата, отзывы и безопасность.',
+  alternates: { canonical: '/help' },
 };
 
 const FAQ_ITEMS = [
   {
     q: 'Что такое Юнити и для кого сервис?',
-    a: 'Юнити — маркетплейс для поиска и найма персонала для мероприятий: рестораны, кейтеринг, агентства и частные заказчики находят здесь специалистов, а исполнители — заказы и прозрачные условия.',
+    a: 'Юнити — платформа для поиска и найма персонала для мероприятий: рестораны, кейтеринг, агентства и частные заказчики находят здесь специалистов, а исполнители — заказы и прозрачные условия.',
   },
   {
     q: 'Как зарегистрироваться — как работодатель или специалист?',
@@ -37,52 +39,90 @@ const FAQ_ITEMS = [
     a: 'Пользовательское соглашение, политика конфиденциальности и публичная оферта размещены в разделе правовой информации в подвале сайта. Рекомендуем ознакомиться перед началом работы с сервисом.',
   },
   {
+    q: 'В каких городах работает Юнити?',
+    a: 'Платформа работает по России с фокусом на Краснодарский край — Новороссийск, Анапу, Краснодар и другие города. Специалисты указывают город и готовность к выезду, поэтому подобрать персонал можно как локально, так и с выездом на площадку.',
+  },
+  {
+    q: 'Сколько занимает подбор персонала?',
+    a: 'Скорость зависит от категории, города и условий вакансии. Активные вакансии получают отклики, как правило, в течение нескольких часов; среднее время закрытия — около двух суток. Бусты и тариф с приоритетом ускоряют подбор.',
+  },
+  {
+    q: 'Кто платит за услуги платформы?',
+    a: 'Базовые возможности бесплатны для обеих сторон. Платные тарифы и бусты подключают по желанию: работодатели — для расширенного найма, специалисты — для большей видимости. Прямые расчёты за смену заказчик и исполнитель согласуют между собой.',
+  },
+  {
+    q: 'Можно ли отменить или изменить отклик и бронь?',
+    a: 'Да. Специалист может отозвать отклик до подтверждения, работодатель — закрыть или изменить вакансию. Условия по уже подтверждённым сменам стороны согласуют в чате; спорные ситуации можно вынести в поддержку.',
+  },
+  {
     q: 'Как написать в поддержку?',
-    a: 'Напишите на info@unity-staff.ru или используйте контактную форму на странице «Контакты». В рабочие дни мы отвечаем в порядке очереди; срочные вопросы дублируйте темой письма «Срочно».',
+    a: 'Напишите на Event-Unity@yandex.ru или используйте контактную форму на странице «Контакты». В рабочие дни мы отвечаем в порядке очереди; срочные вопросы дублируйте темой письма «Срочно».',
   },
 ];
 
 export default function HelpPage() {
+  const faqJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: FAQ_ITEMS.map((item) => ({
+      '@type': 'Question',
+      name: item.q,
+      acceptedAnswer: { '@type': 'Answer', text: item.a },
+    })),
+  };
+
   return (
-    <div className="container-page py-16">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold text-gray-900">Центр помощи</h1>
-        <p className="mx-auto mt-3 max-w-2xl text-lg text-gray-500">
-          Краткие ответы на популярные вопросы. Не нашли нужное — напишите на{' '}
-          <a href="mailto:info@unity-staff.ru" className="font-medium text-primary-600 hover:text-primary-700">
-            info@unity-staff.ru
-          </a>
-          .
+    <div className="min-h-screen" style={{ background: 'var(--u-bg-dark)' }}>
+      <BreadcrumbJsonLd items={[{ name: 'Главная', path: '/' }, { name: 'Центр помощи', path: '/help' }]} />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+      />
+      <div className="container-page py-16">
+        <div className="text-center">
+          <h1
+            className="text-white"
+            style={{ fontFamily: 'var(--font-playfair, "Playfair Display", serif)', fontSize: 'clamp(2rem, 4vw, 3rem)', fontWeight: 600 }}
+          >
+            Центр помощи
+          </h1>
+          <p className="mx-auto mt-3 max-w-2xl text-lg" style={{ color: 'rgba(255,255,255,0.6)' }}>
+            Краткие ответы на популярные вопросы. Не нашли нужное — напишите на{' '}
+            <a href="mailto:Event-Unity@yandex.ru" className="font-medium text-[var(--accent)] hover:underline">
+              Event-Unity@yandex.ru
+            </a>
+            .
+          </p>
+        </div>
+
+        <div className="mx-auto mt-12 max-w-3xl space-y-3">
+          {FAQ_ITEMS.map((item) => (
+            <details
+              key={item.q}
+              className="group rounded-card border border-white/[0.08] bg-white/[0.04] px-5 py-1 open:border-emerald-500/30"
+            >
+              <summary className="cursor-pointer list-none py-4 font-semibold text-white/90 marker:content-none [&::-webkit-details-marker]:hidden">
+                <span className="flex items-center justify-between gap-3">
+                  {item.q}
+                  <span className="text-[var(--accent)] transition group-open:rotate-180">▼</span>
+                </span>
+              </summary>
+              <div className="border-t border-white/[0.08] pb-4 pt-2 text-sm leading-relaxed" style={{ color: 'rgba(255,255,255,0.65)' }}>{item.a}</div>
+            </details>
+          ))}
+        </div>
+
+        <p className="mt-10 text-center text-sm" style={{ color: 'rgba(255,255,255,0.5)' }}>
+          Дополнительно:{' '}
+          <Link href="/how-it-works" className="font-medium text-[var(--accent)] hover:underline">
+            как работает платформа
+          </Link>
+          {' · '}
+          <Link href="/contacts" className="font-medium text-[var(--accent)] hover:underline">
+            контакты
+          </Link>
         </p>
       </div>
-
-      <div className="mx-auto mt-12 max-w-3xl space-y-3">
-        {FAQ_ITEMS.map((item) => (
-          <details
-            key={item.q}
-            className="group rounded-card border border-gray-200 bg-white px-5 py-1 shadow-sm open:border-primary-200 open:shadow-md"
-          >
-            <summary className="cursor-pointer list-none py-4 font-semibold text-gray-900 marker:content-none [&::-webkit-details-marker]:hidden">
-              <span className="flex items-center justify-between gap-3">
-                {item.q}
-                <span className="text-primary-500 transition group-open:rotate-180">▼</span>
-              </span>
-            </summary>
-            <div className="border-t border-gray-100 pb-4 pt-2 text-sm text-gray-600 leading-relaxed">{item.a}</div>
-          </details>
-        ))}
-      </div>
-
-      <p className="mt-10 text-center text-sm text-gray-500">
-        Дополнительно:{' '}
-        <Link href="/how-it-works" className="font-medium text-primary-600 hover:text-primary-700">
-          как работает платформа
-        </Link>
-        {' · '}
-        <Link href="/contacts" className="font-medium text-primary-600 hover:text-primary-700">
-          контакты
-        </Link>
-      </p>
     </div>
   );
 }

@@ -3,6 +3,17 @@
 @tailwind utilities;
 
 /* ================================================================
+   Тёмные выпадающие списки нативных <select> под тему сайта.
+   Windows/Chrome/Firefox/Android красят <option> системно (белым),
+   игнорируя color-scheme на самом select — задаём фон явно.
+   ================================================================ */
+select option,
+select optgroup {
+  background-color: #0e1a13;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+/* ================================================================
    UNITY DESIGN TOKENS v2 (aligned with previews)
    ================================================================ */
 
@@ -437,8 +448,43 @@
 [data-shell="dark"] tr:hover td { background: rgba(255,255,255,.03) !important; }
 
 /* Hover overrides */
-[data-shell="dark"] .hover\:bg-gray-50:hover { background: rgba(255,255,255,.04) !important; }
+[data-shell="dark"] .hover\:bg-gray-50:hover  { background: rgba(255,255,255,.04) !important; }
 [data-shell="dark"] .hover\:bg-gray-100:hover { background: rgba(255,255,255,.06) !important; }
+
+/* ── Badge colours: light → dark ── */
+[data-shell="dark"] .bg-amber-50,
+[data-shell="dark"] .bg-amber-100   { background: rgba(245,158,11,.12) !important; }
+[data-shell="dark"] .text-amber-700 { color: #fbbf24 !important; }
+[data-shell="dark"] .border-amber-200 { border-color: rgba(245,158,11,.30) !important; }
+
+[data-shell="dark"] .bg-green-50,
+[data-shell="dark"] .bg-green-100   { background: rgba(34,197,94,.12) !important; }
+[data-shell="dark"] .text-green-700 { color: #4ade80 !important; }
+[data-shell="dark"] .border-green-200 { border-color: rgba(34,197,94,.30) !important; }
+
+[data-shell="dark"] .bg-red-50,
+[data-shell="dark"] .bg-red-100     { background: rgba(239,68,68,.12) !important; }
+[data-shell="dark"] .text-red-600,
+[data-shell="dark"] .text-red-700   { color: #f87171 !important; }
+[data-shell="dark"] .border-red-200 { border-color: rgba(239,68,68,.30) !important; }
+[data-shell="dark"] .hover\:bg-red-50:hover { background: rgba(239,68,68,.12) !important; }
+
+[data-shell="dark"] .bg-blue-50,
+[data-shell="dark"] .bg-blue-100    { background: rgba(59,130,246,.12) !important; }
+[data-shell="dark"] .text-blue-700  { color: #60a5fa !important; }
+[data-shell="dark"] .border-blue-200 { border-color: rgba(59,130,246,.30) !important; }
+
+[data-shell="dark"] .bg-purple-50,
+[data-shell="dark"] .bg-purple-100  { background: rgba(168,85,247,.12) !important; }
+[data-shell="dark"] .text-purple-700 { color: #c084fc !important; }
+[data-shell="dark"] .border-purple-200 { border-color: rgba(168,85,247,.30) !important; }
+
+[data-shell="dark"] .text-emerald-700 { color: #34d399 !important; }
+[data-shell="dark"] .text-emerald-800 { color: #6ee7b7 !important; }
+[data-shell="dark"] .hover\:text-primary-600:hover { color: #6cc792 !important; }
+[data-shell="dark"] .text-primary-600 { color: #5bb880 !important; }
+
+[data-shell="dark"] .bg-gray-300    { background: rgba(255,255,255,.10) !important; }
 
 /* ================================================================ */
 
@@ -539,6 +585,13 @@
     color: var(--u-text-secondary);
     text-transform: uppercase;
     margin-bottom: var(--u-space-lg);
+  }
+
+  /* На мобильных гео-плашка съедает слишком много места — прячем */
+  @media (max-width: 639px) {
+    .hero-badge {
+      display: none;
+    }
   }
 
   .badge-dot {
@@ -749,6 +802,58 @@
   .video-play-btn:focus-visible {
     outline: 2px solid var(--u-emerald);
     outline-offset: 3px;
+  }
+
+  /* Бейдж длительности (маркер живого контента) */
+  .video-duration {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.62);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 12px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    letter-spacing: 0.01em;
+  }
+
+  /* Подводка-строка над видео (вариант 5) */
+  .video-leadin {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-bottom: var(--u-space-xs);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--u-emerald);
+    text-align: center;
+  }
+
+  .video-leadin-arrow {
+    font-weight: 700;
+    animation: video-leadin-bounce 1.8s ease-in-out infinite;
+  }
+
+  @keyframes video-leadin-bounce {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(3px); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .video-leadin-arrow {
+      animation: none;
+    }
   }
 
   .video-caption {

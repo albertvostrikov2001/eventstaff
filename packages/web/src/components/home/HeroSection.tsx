@@ -41,11 +41,11 @@ export function HeroSection() {
             {/* CTA buttons */}
             <div className="mt-10 flex flex-col gap-4 sm:flex-row sm:flex-wrap">
               <Link href={cta1Href} className="btn-hero-primary">
-                <Users className="h-5 w-5" aria-hidden="true" />
+                <Briefcase className="h-5 w-5" aria-hidden="true" />
                 {cta1Label}
               </Link>
               <Link href={cta2Href} className="btn-hero-secondary">
-                <Briefcase className="h-5 w-5" aria-hidden="true" />
+                <Users className="h-5 w-5" aria-hidden="true" />
                 {cta2Label}
               </Link>
             </div>

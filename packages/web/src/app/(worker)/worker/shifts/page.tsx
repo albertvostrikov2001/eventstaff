@@ -19,6 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
+import { ShiftGuidelinesModal } from '@/components/shifts/ShiftGuidelinesModal';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -34,12 +35,6 @@ interface ShiftBooking {
   employer?: { companyName?: string | null; contactName?: string | null; logoUrl?: string | null };
 }
 
-interface ShiftPayment {
-  id: string;
-  status: string;
-  amount: number;
-}
-
 interface ShiftReview {
   id: string;
   reviewerId: string;
@@ -53,7 +48,6 @@ interface Shift {
   completedAt?: string | null;
   booking: ShiftBooking;
   reviews: ShiftReview[];
-  payments: ShiftPayment[];
 }
 
 interface Meta {
@@ -253,10 +247,12 @@ const STATUS_CFG: Record<string, { label: string; cls: string }> = {
   DISPUTED: { label: 'Спорная ситуация', cls: 'bg-amber-500/15 text-amber-300' },
 };
 
-function ShiftCard({ shift, currentUserId, onReview }: {
+function ShiftCard({ shift, currentUserId, onReview, onComplete, completing }: {
   shift: Shift;
   currentUserId: string;
   onReview: (id: string) => void;
+  onComplete: (id: string) => void;
+  completing: boolean;
 }) {
   const cfg = STATUS_CFG[shift.status] ?? { label: shift.status, cls: 'bg-white/10 text-white/45' };
   const v = shift.booking.linkedVacancy;
@@ -292,10 +288,10 @@ function ShiftCard({ shift, currentUserId, onReview }: {
         {location && <span className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 shrink-0" /> {location}</span>}
       </div>
 
-      {shift.status === 'ACTIVE' && (
+      {shift.status === 'ACTIVE' && !shift.workerConfirmed && (
         <div className="mt-3 rounded-[8px] border border-blue-500/20 bg-blue-500/[0.06] px-3 py-2.5 text-[13px] text-blue-200/80">
           <Check className="mr-1.5 inline h-3.5 w-3.5" />
-          Вы приняли смену. Выполните работу согласно договорённостям.
+          Смена идёт. Когда работа завершена — нажмите «Смена выполнена».
         </div>
       )}
 
@@ -309,11 +305,17 @@ function ShiftCard({ shift, currentUserId, onReview }: {
       {/* Подтверждение завершения работодателем */}
       {shift.status === 'ACTIVE' && shift.workerConfirmed && !shift.employerConfirmed && (
         <p className="mt-2 text-[12px] text-white/35">
-          ✓ Вы подтвердили участие. Ожидаем подтверждения от работодателя по завершении.
+          ✓ Вы подтвердили завершение. Ожидаем подтверждения от работодателя.
         </p>
       )}
 
       <div className="mt-4 flex flex-wrap gap-2">
+        {shift.status === 'ACTIVE' && !shift.workerConfirmed && (
+          <button onClick={() => onComplete(shift.id)} disabled={completing}
+            className="flex items-center gap-1.5 rounded-[10px] bg-emerald-500 px-4 py-1.5 text-[13px] font-semibold text-[#08120e] transition hover:bg-emerald-400 disabled:opacity-50">
+            <Check className="h-3.5 w-3.5" /> {completing ? 'Подтверждаем…' : 'Смена выполнена'}
+          </button>
+        )}
         {canReview && (
           <button onClick={() => onReview(shift.id)}
             className="flex items-center gap-1.5 rounded-[10px] border border-amber-400/35 px-4 py-1.5 text-[13px] font-semibold text-amber-300 hover:border-amber-400/60">
@@ -368,6 +370,7 @@ export default function WorkerShiftsPage() {
   const [reviewShiftId, setReviewShiftId] = useState<string | null>(null);
   const [declineBookingId, setDeclineBookingId] = useState<string | null>(null);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [memoShiftId, setMemoShiftId] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -385,15 +388,37 @@ export default function WorkerShiftsPage() {
 
   const handleTabChange = (t: Tab) => { setTab(t); setPage(1); };
 
-  // Accept a pending shift
+  // Accept a pending shift (PENDING → ACTIVE)
   const handleAccept = async (shiftId: string) => {
     setAcceptingId(shiftId);
     try {
-      await apiClient.post(`/shifts/${shiftId}/confirm`);
+      await apiClient.post(`/shifts/${shiftId}/accept`);
       toast('Смена принята! Работодатель получил уведомление.', 'success');
       load();
     } catch {
       toast('Ошибка при принятии смены', 'error');
+    } finally {
+      setAcceptingId(null);
+    }
+  };
+
+  // Confirm acceptance from the guidelines memo, then accept the shift.
+  const confirmAcceptFromMemo = async () => {
+    const id = memoShiftId;
+    if (!id) return;
+    await handleAccept(id);
+    setMemoShiftId(null);
+  };
+
+  // Confirm completion of an active shift (двусторонне → COMPLETED)
+  const handleComplete = async (shiftId: string) => {
+    setAcceptingId(shiftId);
+    try {
+      await apiClient.post(`/shifts/${shiftId}/confirm`);
+      toast('Вы подтвердили завершение смены.', 'success');
+      load();
+    } catch {
+      toast('Не удалось подтвердить завершение', 'error');
     } finally {
       setAcceptingId(null);
     }
@@ -435,6 +460,15 @@ export default function WorkerShiftsPage() {
       )}
       {declineBookingId && (
         <DeclineModal bookingId={declineBookingId} onClose={() => setDeclineBookingId(null)} onDeclined={handleDeclined} />
+      )}
+      {memoShiftId && (
+        <ShiftGuidelinesModal
+          variant="worker"
+          confirmLabel="Понятно, принять смену"
+          loading={acceptingId === memoShiftId}
+          onConfirm={() => void confirmAcceptFromMemo()}
+          onClose={() => setMemoShiftId(null)}
+        />
       )}
 
       <div>
@@ -479,7 +513,7 @@ export default function WorkerShiftsPage() {
                     key={shift.id}
                     shift={shift}
                     accepting={acceptingId === shift.id}
-                    onAccept={() => void handleAccept(shift.id)}
+                    onAccept={() => setMemoShiftId(shift.id)}
                     onDecline={() => setDeclineBookingId(shift.booking.id)}
                   />
                 ))}
@@ -496,6 +530,8 @@ export default function WorkerShiftsPage() {
                 shift={shift}
                 currentUserId={currentUserId}
                 onReview={(id) => setReviewShiftId(id)}
+                onComplete={(id) => void handleComplete(id)}
+                completing={acceptingId === shift.id}
               />
             ))}
           </div>

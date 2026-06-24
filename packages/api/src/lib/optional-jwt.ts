@@ -19,3 +19,30 @@ export async function getOptionalUserId(request: FastifyRequest): Promise<string
     return null;
   }
 }
+
+/**
+ * Decodes the access token (from cookie or Bearer header) without throwing.
+ * Returns the user id and roles, or nulls if absent/invalid. Never sends 401.
+ */
+export async function getOptionalAuth(
+  request: FastifyRequest,
+): Promise<{ userId: string | null; roles: string[] }> {
+  const cookieToken = request.cookies?.access_token;
+  const authHeader = request.headers?.authorization;
+  const headerToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined;
+  const token = cookieToken ?? headerToken;
+  if (!token) return { userId: null, roles: [] };
+  try {
+    const { payload } = await jwtVerify(token, accessSecret);
+    const p = payload as TokenPayload;
+    return { userId: p.sub ?? null, roles: p.roles ?? [] };
+  } catch {
+    return { userId: null, roles: [] };
+  }
+}
+
+/** True if the request carries a valid admin access token. */
+export async function isAdminRequest(request: FastifyRequest): Promise<boolean> {
+  const { roles } = await getOptionalAuth(request);
+  return roles.includes('admin');
+}

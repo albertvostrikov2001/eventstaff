@@ -49,6 +49,9 @@ const workerSchema = z.object({
 
 type Tab = 'employer' | 'worker';
 
+const REQUEST_INPUT =
+  'mt-1 w-full rounded-input border border-white/15 bg-white/[0.06] px-3 py-2 text-sm text-white/90 placeholder:text-white/35 [color-scheme:dark] outline-none focus:border-emerald-500/60';
+
 export default function PublicRequestPage() {
   const { toast } = useToast();
   const [tab, setTab] = useState<Tab>('employer');
@@ -115,18 +118,19 @@ export default function PublicRequestPage() {
   });
 
   return (
+    <div className="min-h-screen" style={{ background: 'var(--u-bg-dark)' }}>
     <div className="container-page max-w-2xl py-12">
-      <h1 className="text-2xl font-bold text-gray-900">Персональный запрос</h1>
-      <p className="mt-1 text-sm text-gray-500">
+      <h1 className="text-2xl font-bold text-white">Персональный запрос</h1>
+      <p className="mt-1 text-sm text-white/55">
         Расскажите, что вам нужно — команда Юнити ответит персонально.
       </p>
 
-      <div className="mt-6 flex gap-2 rounded-input border border-gray-200 bg-white p-1">
+      <div className="mt-6 flex gap-2 rounded-input border border-white/10 bg-white/[0.04] p-1">
         <button
           type="button"
           onClick={() => setTab('employer')}
-          className={`flex-1 rounded-input py-2 text-sm font-medium ${
-            tab === 'employer' ? 'bg-primary-500 text-white' : 'text-gray-600'
+          className={`flex-1 rounded-input py-2 text-sm font-medium transition ${
+            tab === 'employer' ? 'bg-primary-500 text-white' : 'text-white/60 hover:text-white/80'
           }`}
         >
           Для бизнеса
@@ -134,8 +138,8 @@ export default function PublicRequestPage() {
         <button
           type="button"
           onClick={() => setTab('worker')}
-          className={`flex-1 rounded-input py-2 text-sm font-medium ${
-            tab === 'worker' ? 'bg-primary-500 text-white' : 'text-gray-600'
+          className={`flex-1 rounded-input py-2 text-sm font-medium transition ${
+            tab === 'worker' ? 'bg-primary-500 text-white' : 'text-white/60 hover:text-white/80'
           }`}
         >
           Для специалиста
@@ -147,7 +151,7 @@ export default function PublicRequestPage() {
           {(['name', 'phone', 'email', 'company', 'eventType', 'eventDate', 'staffNeeded'] as const).map(
             (f) => (
               <div key={f}>
-                <label className="text-xs text-gray-500">
+                <label className="text-xs text-white/55">
                   {f === 'name' && 'Имя и фамилия *'}
                   {f === 'phone' && 'Телефон *'}
                   {f === 'email' && 'Email *'}
@@ -158,29 +162,29 @@ export default function PublicRequestPage() {
                 </label>
                 <input
                   {...eForm.register(f)}
-                  className="mt-1 w-full rounded-input border border-gray-200 px-3 py-2 text-sm"
+                  className={REQUEST_INPUT}
                 />
                 {eForm.formState.errors[f] && (
-                  <p className="mt-0.5 text-xs text-red-500">Обязательное поле</p>
+                  <p className="mt-0.5 text-xs text-red-400">Обязательное поле</p>
                 )}
               </div>
             ),
           )}
           <div>
-            <label className="text-xs text-gray-500">Количество человек</label>
+            <label className="text-xs text-white/55">Количество человек</label>
             <input
               type="number"
               min={1}
               {...eForm.register('quantity', { valueAsNumber: true })}
-              className="mt-1 w-full rounded-input border border-gray-200 px-3 py-2 text-sm"
+              className={REQUEST_INPUT}
             />
           </div>
           <div>
-            <label className="text-xs text-gray-500">Комментарий *</label>
+            <label className="text-xs text-white/55">Комментарий *</label>
             <textarea
               {...eForm.register('message')}
               rows={4}
-              className="mt-1 w-full rounded-input border border-gray-200 px-3 py-2 text-sm"
+              className={REQUEST_INPUT}
             />
           </div>
           <button
@@ -207,7 +211,7 @@ export default function PublicRequestPage() {
             ] as const
           ).map((f) => (
             <div key={f}>
-              <label className="text-xs text-gray-500">
+              <label className="text-xs text-white/55">
                 {f === 'name' && 'Имя и фамилия *'}
                 {f === 'phone' && 'Телефон *'}
                 {f === 'email' && 'Email *'}
@@ -219,22 +223,22 @@ export default function PublicRequestPage() {
                 <textarea
                   {...wForm.register(f)}
                   rows={f === 'experience' ? 4 : 2}
-                  className="mt-1 w-full rounded-input border border-gray-200 px-3 py-2 text-sm"
+                  className={REQUEST_INPUT}
                 />
               ) : (
                 <input
                   {...wForm.register(f)}
-                  className="mt-1 w-full rounded-input border border-gray-200 px-3 py-2 text-sm"
+                  className={REQUEST_INPUT}
                 />
               )}
             </div>
           ))}
           <div>
-            <label className="text-xs text-gray-500">Комментарий *</label>
+            <label className="text-xs text-white/55">Комментарий *</label>
             <textarea
               {...wForm.register('message')}
               rows={3}
-              className="mt-1 w-full rounded-input border border-gray-200 px-3 py-2 text-sm"
+              className={REQUEST_INPUT}
             />
           </div>
           <button
@@ -247,6 +251,7 @@ export default function PublicRequestPage() {
           </button>
         </form>
       )}
+    </div>
     </div>
   );
 }

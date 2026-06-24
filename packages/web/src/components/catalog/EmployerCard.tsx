@@ -48,9 +48,9 @@ export function EmployerCard({
       : null;
 
   return (
-    <div className="flex flex-col rounded-card border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-card-hover">
+    <div className="flex flex-col rounded-card border border-white/[0.08] bg-white/[0.04] p-5 transition hover:border-white/[0.16] hover:bg-white/[0.06]">
       <div className="flex items-start gap-4">
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-primary-100">
+        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15">
           {logoUrl ? (
             <Image
               src={logoUrl}
@@ -61,36 +61,39 @@ export function EmployerCard({
               sizes="56px"
             />
           ) : (
-            <span className="text-lg font-bold text-primary-600">{initials}</span>
+            <span className="text-lg font-bold text-emerald-300">{initials}</span>
           )}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
             <Link
               href={`/employers/${slug}`}
-              className="block font-semibold text-gray-900 hover:text-primary-600 truncate"
+              className="block font-semibold text-white/90 transition-colors hover:text-[var(--accent)] truncate"
             >
               {displayName}
             </Link>
+            </div>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
             {isVerified && (
-              <span title="Верифицирован" className="inline-flex shrink-0">
-                <ShieldCheck className="h-4 w-4 text-primary-500" aria-hidden />
+              <span className="inline-flex items-center gap-1 rounded-badge bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-300">
+                <ShieldCheck className="h-3 w-3" aria-hidden />
+                Проверен
+              </span>
+            )}
+            {businessLabel && (
+              <span className="inline-block rounded-badge border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-300">
+                {businessLabel}
               </span>
             )}
           </div>
-          {businessLabel && (
-            <span className="mt-0.5 inline-block rounded-badge bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700">
-              {businessLabel}
-            </span>
-          )}
         </div>
       </div>
 
       {description && (
-        <p className="mt-3 line-clamp-2 text-xs text-gray-500 leading-relaxed">{description}</p>
+        <p className="mt-3 line-clamp-2 text-xs text-white/50 leading-relaxed">{description}</p>
       )}
 
-      <div className="mt-4 flex flex-wrap gap-3 text-xs text-gray-500">
+      <div className="mt-4 flex flex-wrap gap-3 text-xs text-white/45">
         {city && (
           <span className="flex items-center gap-1">
             <MapPin className="h-3 w-3" />
@@ -106,7 +109,7 @@ export function EmployerCard({
           {_count.vacancies} {getVacancyWord(_count.vacancies)}
         </span>
         {reliabilityScore != null && Number(reliabilityScore) > 0 && (
-          <span className="flex items-center gap-1 text-green-600">
+          <span className="flex items-center gap-1 text-emerald-300">
             <ShieldCheck className="h-3 w-3" />
             Надёжность {Math.round(Number(reliabilityScore))}%
           </span>
@@ -123,7 +126,7 @@ export function EmployerCard({
         {_count.vacancies > 0 && (
           <Link
             href={`/vacancies?employer=${id}`}
-            className="flex items-center gap-1 rounded-input border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-gray-300"
+            className="flex items-center gap-1 rounded-input border border-white/15 px-3 py-1.5 text-xs font-medium text-white/65 hover:border-white/30"
           >
             <Globe className="h-3.5 w-3.5" />
             Вакансии

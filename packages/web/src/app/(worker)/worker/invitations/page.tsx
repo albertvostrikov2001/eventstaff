@@ -17,6 +17,9 @@ import {
 } from 'lucide-react';
 import { useInvitationRespond } from '@/hooks/useApplyToVacancy';
 import { ScheduleConflictDialog } from '@/components/worker/ScheduleConflictDialog';
+import { DeclineInvitationModal } from '@/components/worker/DeclineInvitationModal';
+import { OpenChatButton } from '@/components/chat/OpenChatButton';
+import { NextStepReminderModal } from '@/components/shifts/NextStepReminderModal';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -35,6 +38,7 @@ interface Invitation {
       companyName?: string | null;
       contactName?: string | null;
       logoUrl?: string | null;
+      userId?: string | null;
     };
     city?: { name: string } | null;
   };
@@ -44,52 +48,6 @@ interface Meta {
   total: number;
   page: number;
   totalPages: number;
-}
-
-// ─── Decline Modal ──────────────────────────────────────────────────────────
-
-function DeclineModal({
-  onConfirm,
-  onClose,
-  loading,
-}: {
-  onConfirm: (message: string) => void;
-  onClose: () => void;
-  loading: boolean;
-}) {
-  const [reason, setReason] = useState('');
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative z-10 mx-4 w-full max-w-sm rounded-modal border border-white/10 bg-[#0f1f17] p-6 shadow-xl">
-        <h3 className="text-base font-semibold text-white">Отклонить приглашение</h3>
-        <p className="mt-1 text-sm text-white/50">Причина необязательна, но поможет работодателю.</p>
-        <textarea
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          rows={3}
-          maxLength={500}
-          placeholder="Причина (необязательно)..."
-          className="mt-4 w-full rounded-input border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-white/30 focus:border-primary-400/50 focus:outline-none"
-        />
-        <div className="mt-4 flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 rounded-input border border-white/20 py-2.5 text-sm text-white/70 hover:border-white/40"
-          >
-            Назад
-          </button>
-          <button
-            onClick={() => onConfirm(reason)}
-            disabled={loading}
-            className="flex-1 rounded-input border border-red-500/40 bg-red-950/50 py-2.5 text-sm font-semibold text-red-300 hover:border-red-500/70 disabled:opacity-50"
-          >
-            {loading ? 'Отклоняем...' : 'Отклонить'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 // ─── Invitation Card ────────────────────────────────────────────────────────
@@ -187,6 +145,14 @@ function InvitationCard({
             </button>
           </>
         )}
+        {employer?.userId && (invitation.status === 'invited' || invitation.status === 'confirmed') && (
+          <OpenChatButton
+            recipientUserId={employer.userId}
+            context={{ type: 'APPLICATION', id: invitation.id }}
+            label="Написать"
+            className="rounded-input border border-white/15 px-3 py-1.5 text-xs font-medium text-white/70 transition hover:border-white/30 hover:text-white/90"
+          />
+        )}
         <Link
           href={`/vacancies/${v.id}`}
           className="ml-auto text-xs text-white/40 hover:text-white/70"
@@ -208,6 +174,7 @@ export default function WorkerInvitationsPage() {
   const [page, setPage] = useState(1);
   const [decliningId, setDecliningId] = useState<string | null>(null);
   const [declineSaving, setDeclineSaving] = useState(false);
+  const [showReminder, setShowReminder] = useState(false);
   const {
     acceptingId,
     pendingConflict,
@@ -234,6 +201,7 @@ export default function WorkerInvitationsPage() {
     const ok = await accept(id);
     if (ok) {
       setInvitations((prev) => prev.map((inv) => (inv.id === id ? { ...inv, status: 'confirmed' } : inv)));
+      setShowReminder(true);
     }
   };
 
@@ -318,7 +286,7 @@ export default function WorkerInvitationsPage() {
       </div>
 
       {decliningId && (
-        <DeclineModal
+        <DeclineInvitationModal
           onConfirm={handleDeclineConfirm}
           onClose={() => setDecliningId(null)}
           loading={declineSaving}
@@ -337,11 +305,16 @@ export default function WorkerInvitationsPage() {
             setInvitations((prev) =>
               prev.map((inv) => (inv.id === id ? { ...inv, status: 'confirmed' } : inv)),
             );
+            setShowReminder(true);
           }
         }}
         onDismiss={dismissConflict}
         confirmLabel="Всё равно принять"
       />
+
+      {showReminder && (
+        <NextStepReminderModal variant="worker" onClose={() => setShowReminder(false)} />
+      )}
     </div>
   );
 }

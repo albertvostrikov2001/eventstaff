@@ -26,7 +26,7 @@ export const workerRoutes: FastifyPluginAsync = async (fastify) => {
       return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
     }
 
-    const [applicationsCount, activeShiftsCount, pendingInvitationsCount] = await Promise.all([
+    const [applicationsCount, activeShiftsCount, pendingInvitationsCount, sub, applyUsage] = await Promise.all([
       fastify.prisma.application.count({ where: { workerId: worker.id } }),
       fastify.prisma.shift.count({
         where: { workerId: uid, status: { in: [ShiftStatus.PENDING, ShiftStatus.ACTIVE, ShiftStatus.DISPUTED] } },
@@ -34,12 +34,43 @@ export const workerRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.prisma.application.count({
         where: { workerId: worker.id, status: 'invited' },
       }),
+      subSvc.getWorkerSubscription(worker.id),
+      subSvc.canWorkerApply(worker.id),
     ]);
+
+    const now = new Date();
+    const workerProfile = await fastify.prisma.workerProfile.findUnique({
+      where: { id: worker.id },
+      select: { viewsCount: true, boostUntil: true },
+    });
 
     return replyOk(reply, {
       applicationsCount,
       activeShiftsCount,
       pendingInvitationsCount,
+      applicationUsage: {
+        used: applyUsage.used,
+        limit: applyUsage.limit,
+        unlimited: applyUsage.limit === -1,
+      },
+      subscription: {
+        key: sub.key,
+        label: sub.label,
+        isPremium: sub.key === 'premium',
+        currentPeriodEnd: sub.currentPeriodEnd,
+        grantedByAdmin: sub.grantedByAdmin,
+        hasProfileStats: sub.hasProfileStats,
+        hasFreeBoost: sub.hasFreeBoost,
+      },
+      // Статистика профиля (для Premium)
+      profileStats: sub.hasProfileStats
+        ? {
+            viewsCount: workerProfile?.viewsCount ?? 0,
+            isBoosted: !!workerProfile?.boostUntil && workerProfile.boostUntil > now,
+            boostUntil: workerProfile?.boostUntil ?? null,
+            boostAvailable: !workerProfile?.boostUntil,
+          }
+        : null,
     });
   });
 
@@ -153,7 +184,6 @@ export const workerRoutes: FastifyPluginAsync = async (fastify) => {
             },
           },
           reviews: { select: { id: true, reviewerId: true } },
-          payments: { select: { id: true, status: true, amount: true } },
         },
       }),
     ]);
@@ -335,6 +365,54 @@ export const workerRoutes: FastifyPluginAsync = async (fastify) => {
     return replyOk(reply, updated);
   });
 
+  // PATCH /applications/:id/withdraw — worker отзывает свой отклик (pending/viewed)
+  fastify.patch('/applications/:id/withdraw', { preHandler: workerAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    const profile = await fastify.prisma.workerProfile.findUnique({
+      where: { userId: request.jwtUser.sub },
+      select: { id: true, firstName: true, lastName: true },
+    });
+    if (!profile) {
+      return replyFail(reply, 404, 'NOT_FOUND', 'Profile not found');
+    }
+
+    const application = await fastify.prisma.application.findUnique({
+      where: { id },
+      include: {
+        vacancy: {
+          include: { employer: { include: { user: { select: { id: true } } } } },
+        },
+      },
+    });
+    if (!application || application.workerId !== profile.id) {
+      return replyFail(reply, 404, 'NOT_FOUND', 'Application not found');
+    }
+    if (application.status !== 'pending' && application.status !== 'viewed') {
+      return replyFail(reply, 400, 'INVALID_STATE', 'Этот отклик уже нельзя отозвать');
+    }
+
+    const updated = await fastify.prisma.application.update({
+      where: { id },
+      data: { status: 'cancelled' },
+    });
+
+    // Notify employer (soft)
+    const employerUserId = application.vacancy.employer.user?.id;
+    if (employerUserId) {
+      const workerName = `${profile.firstName} ${profile.lastName}`.trim() || 'Работник';
+      await fastify.notificationService.create({
+        userId: employerUserId,
+        type: 'CANCELLATION',
+        title: 'Отклик отозван',
+        body: `${workerName} отозвал отклик на «${application.vacancy.title}»`,
+        data: { applicationId: id, vacancyId: application.vacancyId },
+      });
+    }
+
+    return replyOk(reply, updated);
+  });
+
   // GET /applications
   fastify.get('/applications', { preHandler: workerAuth }, async (request, reply) => {
     const query = z
@@ -364,7 +442,16 @@ export const workerRoutes: FastifyPluginAsync = async (fastify) => {
         include: {
           vacancy: {
             include: {
-              employer: { select: { id: true, companyName: true, isVerified: true, logoUrl: true } },
+              employer: {
+                select: {
+                  id: true,
+                  companyName: true,
+                  contactName: true,
+                  isVerified: true,
+                  logoUrl: true,
+                  userId: true,
+                },
+              },
               city: true,
             },
           },
@@ -608,6 +695,78 @@ export const workerRoutes: FastifyPluginAsync = async (fastify) => {
     );
 
     return replyOk(reply, { success: true });
+  });
+
+  // GET /stats — статистика профиля (только для Premium) ──────────────────
+  fastify.get('/stats', { preHandler: workerAuth }, async (request, reply) => {
+    const uid = request.jwtUser.sub;
+    const profile = await fastify.prisma.workerProfile.findUnique({
+      where: { userId: uid },
+      select: { id: true, viewsCount: true, boostUntil: true },
+    });
+    if (!profile) return replyFail(reply, 404, 'NOT_FOUND', 'Профиль не найден');
+
+    const sub = await subSvc.getWorkerSubscription(profile.id);
+    if (!sub.hasProfileStats) {
+      return replyFail(reply, 403, 'PREMIUM_REQUIRED', 'Статистика профиля доступна только на тарифе Premium');
+    }
+
+    // Отклики за текущий месяц
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    const [applicationsThisMonth, totalApplications] = await Promise.all([
+      fastify.prisma.application.count({
+        where: { workerId: profile.id, createdAt: { gte: monthStart } },
+      }),
+      fastify.prisma.application.count({ where: { workerId: profile.id } }),
+    ]);
+
+    const now = new Date();
+    const isBoosted = !!profile.boostUntil && profile.boostUntil > now;
+
+    return replyOk(reply, {
+      viewsCount: profile.viewsCount,
+      applicationsThisMonth,
+      totalApplications,
+      isBoosted,
+      boostUntil: profile.boostUntil ?? null,
+      boostAvailable: !profile.boostUntil, // свободный буст доступен если ни разу не использован
+    });
+  });
+
+  // POST /boost — активировать разовый буст (только для Premium) ──────────
+  fastify.post('/boost', { preHandler: workerAuth }, async (request, reply) => {
+    const uid = request.jwtUser.sub;
+    const profile = await fastify.prisma.workerProfile.findUnique({
+      where: { userId: uid },
+      select: { id: true, boostUntil: true },
+    });
+    if (!profile) return replyFail(reply, 404, 'NOT_FOUND', 'Профиль не найден');
+
+    const sub = await subSvc.getWorkerSubscription(profile.id);
+    if (!sub.hasFreeBoost) {
+      return replyFail(reply, 403, 'PREMIUM_REQUIRED', 'Буст анкеты доступен только на тарифе Premium');
+    }
+
+    // Проверяем: буст ещё не был использован (boostUntil === null)
+    if (profile.boostUntil !== null) {
+      const now = new Date();
+      if (profile.boostUntil > now) {
+        return replyFail(reply, 400, 'BOOST_ACTIVE', 'Буст уже активен');
+      }
+      return replyFail(reply, 400, 'BOOST_USED', 'Разовый бесплатный буст уже был использован');
+    }
+
+    const boostUntil = new Date();
+    boostUntil.setDate(boostUntil.getDate() + 3);
+
+    await fastify.prisma.workerProfile.update({
+      where: { id: profile.id },
+      data: { boostUntil },
+    });
+
+    return replyOk(reply, { boostUntil, daysLeft: 3 });
   });
 
   // GET /reviews — отзывы о текущем работнике (после смен)

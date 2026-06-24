@@ -1,8 +1,8 @@
 'use client';
 
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Eye, EyeOff } from 'lucide-react';
 import type { InputHTMLAttributes } from 'react';
-import { forwardRef } from 'react';
+import { forwardRef, useState } from 'react';
 import type { EmployerFieldTone, EmployerFormVariant } from '@/components/forms/form-styles';
 import {
   formControlCn,
@@ -39,6 +39,7 @@ export const FormField = forwardRef<HTMLInputElement, FormFieldProps>(
       id,
       disabled,
       readOnly,
+      type,
       ...props
     },
     ref,
@@ -48,31 +49,56 @@ export const FormField = forwardRef<HTMLInputElement, FormFieldProps>(
     const tone: EmployerFieldTone = error ? 'error' : visuallySuccess ? 'success' : 'default';
     const isRequired = Boolean(required);
 
+    const [showPassword, setShowPassword] = useState(false);
+    const isPassword = type === 'password';
+    const inputType = isPassword && showPassword ? 'text' : type;
+
     return (
       <div className={variant === 'cabinet' ? 'min-w-0' : ''}>
         <label htmlFor={fieldId} className={formLabelCn(variant)}>
           <span>{label}</span>
           {isRequired && <span className={formRequiredAsteriskCn(variant)} aria-hidden>*</span>}
         </label>
-        <input
-          ref={ref}
-          id={fieldId}
-          required={required}
-          disabled={disabled}
-          readOnly={readOnly}
-          {...props}
-          aria-invalid={error ? true : undefined}
-          className={cn(
-            formControlCn(variant, tone, { disabled }),
-            readOnly &&
-              variant === 'cabinet' &&
-              '!cursor-default border-white/[0.08] bg-white/[0.03] text-white/85 [&:hover]:border-white/[0.12] [&:hover]:bg-white/[0.04]',
-            readOnly &&
-              variant === 'default' &&
-              'cursor-default bg-gray-50 text-gray-700 [&:hover]:border-gray-300',
-            className,
+        <div className="relative">
+          <input
+            ref={ref}
+            id={fieldId}
+            type={inputType}
+            required={required}
+            disabled={disabled}
+            readOnly={readOnly}
+            {...props}
+            aria-invalid={error ? true : undefined}
+            className={cn(
+              formControlCn(variant, tone, { disabled }),
+              isPassword && 'pr-11',
+              readOnly &&
+                variant === 'cabinet' &&
+                '!cursor-default border-white/[0.08] bg-white/[0.03] text-white/85 [&:hover]:border-white/[0.12] [&:hover]:bg-white/[0.04]',
+              readOnly &&
+                variant === 'default' &&
+                'cursor-default bg-gray-50 text-gray-700 [&:hover]:border-gray-300',
+              className,
+            )}
+          />
+          {isPassword && !disabled && (
+            <button
+              type="button"
+              onClick={() => setShowPassword((s) => !s)}
+              aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
+              aria-pressed={showPassword}
+              title={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
+              className={cn(
+                'absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md transition-colors',
+                variant === 'cabinet'
+                  ? 'text-white/45 hover:text-white/80 hover:bg-white/10'
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100',
+              )}
+            >
+              {showPassword ? <EyeOff className="h-[1.05rem] w-[1.05rem]" /> : <Eye className="h-[1.05rem] w-[1.05rem]" />}
+            </button>
           )}
-        />
+        </div>
 
         {!error && helperText && <p className={formHelperRowCn(variant)}>{helperText}</p>}
         {error && (

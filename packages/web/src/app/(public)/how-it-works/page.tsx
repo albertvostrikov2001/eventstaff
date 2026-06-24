@@ -1,10 +1,12 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { UserPlus, FileText, Search, MessageSquare, CalendarCheck, Star, ArrowRight } from 'lucide-react';
+import { BreadcrumbJsonLd } from '@/components/seo/BreadcrumbJsonLd';
 
 export const metadata: Metadata = {
   title: 'Как это работает',
-  description: 'Узнайте, как работает платформа Юнити для подбора event-персонала',
+  description: 'Пошаговое руководство по работе с платформой Юнити: регистрация, поиск персонала, отклики, смены и оплата. Просто и прозрачно.',
+  alternates: { canonical: '/how-it-works' },
 };
 
 const EMPLOYER_STEPS = [
@@ -103,6 +105,7 @@ export default function HowItWorksPage() {
       className="min-h-screen"
       style={{ background: 'var(--u-bg-dark)' }}
     >
+      <BreadcrumbJsonLd items={[{ name: 'Главная', path: '/' }, { name: 'Как это работает', path: '/how-it-works' }]} />
       <div className="container-page py-16 lg:py-24">
 
         {/* Page header */}
@@ -176,7 +179,7 @@ export default function HowItWorksPage() {
               boxShadow: '0 4px 16px rgba(45,106,74,0.3)',
             }}
           >
-            Начать сейчас
+            Создать аккаунт — бесплатно
             <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </Link>
         </div>

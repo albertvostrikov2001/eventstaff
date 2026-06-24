@@ -6,9 +6,11 @@ import Link from 'next/link';
 import { BUSINESS_TYPES } from '@unity/shared';
 import {
   MapPin, Star, ShieldCheck, Globe,
-  ArrowLeft, Calendar, Users, X,
+  Calendar, Users, X,
 } from 'lucide-react';
 import { EmployerLogoMark } from '@/components/employer/EmployerLogoMark';
+import { PhotoLightbox } from '@/components/media/PhotoLightbox';
+import { Breadcrumbs } from '@/components/ui/Breadcrumbs';
 import { config } from '@/lib/config';
 
 const API = config.apiUrl;
@@ -46,8 +48,9 @@ interface EmployerDetail {
 }
 
 const RATE_SUFFIXES: Record<string, string> = {
-  hourly: '/ч',
   per_shift: '/смена',
+  monthly: '/мес',
+  hourly: '/ч',
   fixed: ' фикс.',
   daily: '/день',
   weekly: '/нед.',
@@ -89,20 +92,24 @@ export function EmployerDetailPageClient() {
 
   if (loading) {
     return (
-      <div className="container-page py-8">
-        <div className="h-8 w-48 animate-pulse rounded bg-gray-200" />
-        <div className="mt-6 h-40 animate-pulse rounded-card bg-gray-200" />
+      <div className="min-h-screen" style={{ background: 'var(--u-bg-dark)' }}>
+        <div className="container-page py-8">
+          <div className="h-8 w-48 animate-pulse rounded bg-white/10" />
+          <div className="mt-6 h-40 animate-pulse rounded-card bg-white/10" />
+        </div>
       </div>
     );
   }
 
   if (notFound || !employer) {
     return (
-      <div className="container-page py-16 text-center">
-        <h2 className="text-xl font-semibold text-gray-900">Работодатель не найден</h2>
-        <Link href="/employers" className="mt-4 inline-block text-sm text-primary-600 hover:underline">
-          ← Вернуться к списку
-        </Link>
+      <div className="min-h-screen" style={{ background: 'var(--u-bg-dark)' }}>
+        <div className="container-page py-16 text-center">
+          <h2 className="text-xl font-semibold text-white/90">Работодатель не найден</h2>
+          <Link href="/employers" className="mt-4 inline-block text-sm text-[var(--accent)] hover:underline">
+            ← Вернуться к списку
+          </Link>
+        </div>
       </div>
     );
   }
@@ -117,15 +124,19 @@ export function EmployerDetailPageClient() {
   const lightboxUrl = lightbox !== null ? gallery[lightbox]?.url : null;
 
   return (
+    <div className="min-h-screen" style={{ background: 'var(--u-bg-dark)' }}>
     <div className="container-page py-8">
-      <Link href="/employers" className="flex items-center gap-1 text-sm text-gray-500 hover:text-primary-600">
-        <ArrowLeft className="h-4 w-4" />
-        Назад к работодателям
-      </Link>
+      <Breadcrumbs
+        items={[
+          { label: 'Главная', href: '/' },
+          { label: 'Работодатели', href: '/employers' },
+          { label: displayName },
+        ]}
+      />
 
       <div className="relative mt-6">
         {employer.bannerUrl && bannerOk ? (
-          <div className="h-[320px] w-full overflow-hidden rounded-card border border-gray-200 bg-gray-100 shadow-sm">
+          <div className="h-[200px] sm:h-[320px] w-full overflow-hidden rounded-card border border-white/[0.08] bg-white/[0.04]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={employer.bannerUrl}
@@ -136,36 +147,44 @@ export function EmployerDetailPageClient() {
           </div>
         ) : (
           <div
-            className="h-[140px] w-full rounded-card border border-gray-200 bg-gradient-to-r from-gray-100 to-gray-50 sm:h-[180px]"
+            className="h-[140px] w-full rounded-card border border-white/[0.08] sm:h-[180px]"
+            style={{ background: 'linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))' }}
             aria-hidden
           />
         )}
 
         <div className="relative z-[1] -mt-12 flex flex-col gap-4 px-2 sm:-mt-14 sm:flex-row sm:items-end sm:gap-6 sm:px-4">
-          <EmployerLogoMark
-            size="xl"
-            logoUrl={employer.logoUrl}
-            companyName={employer.companyName}
-            contactName={employer.contactName}
+          <PhotoLightbox
+            src={employer.logoUrl}
             alt={displayName}
-            className="ring-4 ring-white shadow-md"
-          />
+            className="rounded-full"
+            disabled={!employer.logoUrl}
+          >
+            <EmployerLogoMark
+              size="xl"
+              logoUrl={employer.logoUrl}
+              companyName={employer.companyName}
+              contactName={employer.contactName}
+              alt={displayName}
+              className="ring-4 ring-[var(--u-bg-dark)] shadow-md"
+            />
+          </PhotoLightbox>
           <div className="min-w-0 flex-1 pb-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold text-gray-900 drop-shadow-sm">{displayName}</h1>
+              <h1 className="text-2xl font-bold text-white drop-shadow-sm">{displayName}</h1>
               {employer.isVerified && (
-                <span className="flex items-center gap-1 rounded-badge bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                <span className="flex items-center gap-1 rounded-badge bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-300">
                   <ShieldCheck className="h-3.5 w-3.5" />
                   Верифицирован
                 </span>
               )}
             </div>
             {businessLabel && (
-              <span className="mt-1 inline-block rounded-badge bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700">
+              <span className="mt-1 inline-block rounded-badge border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-300">
                 {businessLabel}
               </span>
             )}
-            <div className="mt-2 flex flex-wrap gap-4 text-sm text-gray-600">
+            <div className="mt-2 flex flex-wrap gap-4 text-sm text-white/65">
               {employer.city && (
                 <span className="flex items-center gap-1.5">
                   <MapPin className="h-4 w-4" />
@@ -177,18 +196,18 @@ export function EmployerDetailPageClient() {
                 {Number(employer.ratingScore).toFixed(1)}
               </span>
               {employer.totalShifts !== undefined && employer.totalShifts > 0 && (
-                <span className="text-gray-500">Смен завершено: {employer.totalShifts}</span>
+                <span className="text-white/50">Смен завершено: {employer.totalShifts}</span>
               )}
-              {employer.reliabilityScore && (
-                <span className="flex items-center gap-1.5 text-green-600">
+              {employer.reliabilityScore != null && Number(employer.reliabilityScore) > 0 && (
+                <span className="flex items-center gap-1.5 text-emerald-300">
                   <ShieldCheck className="h-4 w-4" />
-                  Надёжность {employer.reliabilityScore}%
+                  Надёжность {Math.round(Number(employer.reliabilityScore))}%
                 </span>
               )}
-              {employer.responseRate && (
+              {employer.responseRate != null && Number(employer.responseRate) > 0 && (
                 <span className="flex items-center gap-1.5">
                   <Users className="h-4 w-4" />
-                  Ответы {employer.responseRate}%
+                  Ответы {Math.round(Number(employer.responseRate))}%
                 </span>
               )}
               {employer.website && (
@@ -196,7 +215,7 @@ export function EmployerDetailPageClient() {
                   href={employer.website}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 text-primary-600 hover:underline"
+                  className="flex items-center gap-1.5 text-[var(--accent)] hover:underline"
                 >
                   <Globe className="h-4 w-4" />
                   Сайт
@@ -207,27 +226,27 @@ export function EmployerDetailPageClient() {
         </div>
       </div>
 
-      <div className="mt-8 rounded-card border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-bold text-gray-900">О компании</h2>
+      <div className="mt-8 rounded-card border border-white/[0.08] bg-white/[0.04] p-6">
+        <h2 className="text-lg font-bold text-white">О компании</h2>
         {employer.description ? (
-          <p className="mt-3 whitespace-pre-line text-sm text-gray-600 leading-relaxed">
+          <p className="mt-3 whitespace-pre-line text-sm text-white/65 leading-relaxed">
             {employer.description}
           </p>
         ) : (
-          <p className="mt-3 text-sm text-gray-400">Описание скоро появится.</p>
+          <p className="mt-3 text-sm text-white/40">Описание скоро появится.</p>
         )}
       </div>
 
       {gallery.length > 0 ? (
         <div className="mt-8">
-          <h2 className="text-lg font-bold text-gray-900">Мероприятия</h2>
+          <h2 className="text-lg font-bold text-white">Мероприятия</h2>
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
             {gallery.map((g, idx) => (
               <button
                 key={g.id}
                 type="button"
                 onClick={() => setLightbox(idx)}
-                className="aspect-square overflow-hidden rounded-lg border border-gray-200 bg-gray-100 text-left transition hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="aspect-square overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.06] text-left transition hover:opacity-95 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={g.url} alt="" className="h-full w-full object-cover" />
@@ -239,7 +258,7 @@ export function EmployerDetailPageClient() {
 
       {employer.vacancies.length > 0 ? (
         <div className="mt-8" id="active-vacancies">
-          <h2 className="text-lg font-bold text-gray-900">
+          <h2 className="text-lg font-bold text-white">
             Активные вакансии ({employer.vacancies.length})
           </h2>
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -247,10 +266,10 @@ export function EmployerDetailPageClient() {
               <Link
                 key={v.id}
                 href={`/vacancies/${v.id}`}
-                className="flex flex-col rounded-card border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-card-hover hover:border-primary-200"
+                className="flex flex-col rounded-card border border-white/[0.08] bg-white/[0.04] p-4 transition hover:border-emerald-500/30 hover:bg-white/[0.06]"
               >
-                <span className="font-semibold text-gray-900">{v.title}</span>
-                <div className="mt-2 flex flex-wrap gap-3 text-xs text-gray-500">
+                <span className="font-semibold text-white/90">{v.title}</span>
+                <div className="mt-2 flex flex-wrap gap-3 text-xs text-white/45">
                   {v.city && (
                     <span className="flex items-center gap-1">
                       <MapPin className="h-3 w-3" />
@@ -262,7 +281,7 @@ export function EmployerDetailPageClient() {
                     {new Date(v.dateStart).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
                   </span>
                 </div>
-                <div className="mt-2 text-base font-bold text-primary-600">
+                <div className="mt-2 text-base font-bold text-[var(--accent)]">
                   {Number(v.rate).toLocaleString('ru-RU')} ₽{RATE_SUFFIXES[v.rateType] ?? ''}
                 </div>
               </Link>
@@ -308,6 +327,7 @@ export function EmployerDetailPageClient() {
           />
         </div>
       ) : null}
+    </div>
     </div>
   );
 }
