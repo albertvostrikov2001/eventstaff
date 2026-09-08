@@ -9,6 +9,21 @@ import { YandexMetrika } from '@/components/analytics/YandexMetrika';
 
 import { config } from '@/lib/config';
 
+const TOP_MAIL_RU_COUNTER = `
+var _tmr = window._tmr || (window._tmr = []);
+_tmr.push({id: "3791253", type: "pageView", start: (new Date()).getTime()});
+(function (d, w, id) {
+  if (d.getElementById(id)) return;
+  var ts = d.createElement("script"); ts.type = "text/javascript"; ts.async = true; ts.id = id;
+  ts.src = "https://top-fwz1.mail.ru/js/code.js";
+  var f = function () {var s = d.getElementsByTagName("script")[0]; s.parentNode.insertBefore(ts, s);};
+  if (w.opera == "[object Opera]") { d.addEventListener("DOMContentLoaded", f, false); } else { f(); }
+})(document, window, "tmr-code");
+`;
+
+const TOP_MAIL_RU_NOSCRIPT =
+  '<div><img src="https://top-fwz1.mail.ru/counter?id=3791253;js=na" style="position:absolute;left:-9999px;" alt="Top.Mail.Ru" /></div>';
+
 let metadataBaseUrl: URL;
 try {
   metadataBaseUrl = new URL(config.siteUrl);
@@ -31,6 +46,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 import { QueryProvider } from '@/providers/QueryProvider';
+import { ImpersonationBanner } from '@/components/admin/ImpersonationBanner';
 
 export const metadata: Metadata = {
   metadataBase: metadataBaseUrl,
@@ -93,6 +109,7 @@ export const metadata: Metadata = {
   },
   verification: {
     yandex: 'e1f7eade0fd58c6a',
+    google: 'Z8wWDz66fugRORfXmcXXDdFm3btDiqlqrpC1t96AGXA',
   },
 };
 
@@ -100,12 +117,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ru" className={`${onest.variable} ${jetbrainsMono.variable}`}>
       <body className="min-h-screen font-sans antialiased">
+        <script
+          id="top-mail-ru-counter"
+          type="text/javascript"
+          dangerouslySetInnerHTML={{ __html: TOP_MAIL_RU_COUNTER }}
+        />
+        <noscript dangerouslySetInnerHTML={{ __html: TOP_MAIL_RU_NOSCRIPT }} />
         <ToastProvider>
           <NetworkErrorBanner />
           <QueryProvider>
             <AuthProvider>{children}</AuthProvider>
           </QueryProvider>
           <CookieNotice />
+          <ImpersonationBanner />
         </ToastProvider>
         <YandexMetrika />
       </body>
