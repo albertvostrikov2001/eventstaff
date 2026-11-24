@@ -3,12 +3,14 @@
   "name": "unity-telegram-bot",
   "main": "worker.mjs",
   "compatibility_date": "2026-11-24",
+  "workers_dev": true,
+  "preview_urls": false,
   "vars": {
     "UNITY_API_URL": "https://unityevent.ru/api/v1",
     "UNITY_SITE_URL": "https://unityevent.ru"
   },
   "kv_namespaces": [
-    { "binding": "BOT_STATE", "id": "REPLACE_AFTER_KV_CREATE" }
+    { "binding": "BOT_STATE", "id": "7155308af5f14ceebd7aad558b00cb1e" }
   ],
   "triggers": {
     "crons": ["*/15 * * * *"]
