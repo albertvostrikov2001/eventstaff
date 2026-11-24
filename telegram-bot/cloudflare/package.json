@@ -1,0 +1,12 @@
+{
+  "name": "unity-telegram-cloudflare",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test worker.test.mjs ../bot.test.mjs",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.53.0"
+  }
+}

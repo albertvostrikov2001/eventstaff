@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "unity-telegram-bot",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-11-24",
+  "vars": {
+    "UNITY_API_URL": "https://unityevent.ru/api/v1",
+    "UNITY_SITE_URL": "https://unityevent.ru"
+  },
+  "kv_namespaces": [
+    { "binding": "BOT_STATE", "id": "REPLACE_AFTER_KV_CREATE" }
+  ],
+  "triggers": {
+    "crons": ["*/15 * * * *"]
+  },
+  "observability": {
+    "enabled": true
+  }
+}
