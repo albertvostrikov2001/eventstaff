@@ -65,6 +65,18 @@ export function recordUrl(siteUrl, user, item) {
   return `${siteUrl.replace(/\/$/, '')}/${path}/${encodeURIComponent(item.slug || item.id)}`;
 }
 
+export function itemPhoto(siteUrl, user, item) {
+  const candidate = user.role === 'worker'
+    ? item.coverImageUrl || item.employer?.logoUrl
+    : item.photoUrl;
+  if (!candidate) return `${siteUrl.replace(/\/$/, '')}/unity-mark-original-green-1024.png`;
+  try {
+    const url = new URL(candidate, siteUrl);
+    if (url.protocol === 'https:' || url.protocol === 'http:') return url.href;
+  } catch { /* Use the branded fallback below. */ }
+  return `${siteUrl.replace(/\/$/, '')}/unity-mark-original-green-1024.png`;
+}
+
 // Plain text: names and titles from the catalog cannot inject Telegram HTML/Markdown.
 export function describe(user, item, categories = []) {
   const label = (key) => categories.find((c) => c.id === key)?.name || key;
@@ -74,8 +86,13 @@ export function describe(user, item, categories = []) {
   if (user.role === 'worker') {
     const date = item.dateStart && !Number.isNaN(Date.parse(item.dateStart))
       ? new Date(item.dateStart).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' }) : 'уточняется';
+    const time = [item.timeStart, item.timeEnd].filter(Boolean).join('–');
+    const benefits = [item.foodProvided ? 'питание' : null, item.transportProvided ? 'трансфер' : null,
+      item.tipsPossible ? 'чаевые' : null].filter(Boolean);
     return [short(item.title), label(item.category), short(item.employer?.companyName || item.employer?.contactName),
-      short(item.city?.name), `Дата: ${date}`, `${money(item.rate)} ₽ ${period[item.rateType] || ''}`].filter(Boolean).join('\n');
+      short(item.city?.name), `Дата: ${date}${time ? ` · ${short(time, 40)}` : ''}`,
+      `${money(item.rate)} ₽ ${period[item.rateType] || ''}`,
+      benefits.length ? `Условия: ${benefits.join(', ')}` : null].filter(Boolean).join('\n');
   }
   return [short(`${item.firstName || ''} ${item.lastName || ''}`),
     (item.categories || []).map((c) => label(c.category)).join(', ').slice(0, 220), short(item.city?.name),

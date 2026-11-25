@@ -4,7 +4,7 @@ import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createBot } from './bot.mjs';
-import { createCatalog, describe, queryFor, parseRate, validDate } from './catalog.mjs';
+import { createCatalog, describe, itemPhoto, queryFor, parseRate, validDate } from './catalog.mjs';
 import { openStore } from './store.mjs';
 import { createTelegram, TelegramError } from './telegram.mjs';
 import { telegramCurlRequest, telegramCurlSettings, telegramCurlConfig } from './telegram-curl.mjs';
@@ -23,8 +23,8 @@ function harness(role = 'worker') {
     page: async () => ({ data: items, meta: { totalPages: 1 } }),
   };
   const telegram = async (method, data) => {
-    if (failure && method === 'sendMessage') throw failure;
-    if (method === 'sendMessage') sent.push(data);
+    if (failure && ['sendMessage', 'sendPhoto', 'editMessageMedia'].includes(method)) throw failure;
+    if (['sendMessage', 'sendPhoto', 'editMessageMedia'].includes(method)) sent.push({ ...data, _method: method });
   };
   const bot = createBot({ store, catalog, telegram, siteUrl: 'https://unityevent.ru', now: () => time });
   const action = (data) => bot.handle({ callback_query: { id: 'q', data, message: { chat: { id: 1, type: 'private' } } } });
@@ -75,12 +75,40 @@ test('onboarding offers roles and ignores groups', async () => {
   delete h.store.state.users['1'];
   await h.bot.init();
   await h.text('/start');
-  assert.match(h.sent[0].text, /Кого вы ищете/);
+  assert.match(h.sent[0].text, /чем бот может помочь/);
   await h.action('role:employer');
   assert.equal(h.store.state.users['1'].role, 'employer');
   const count = h.sent.length;
   await h.bot.handle({ message: { chat: { id: 2, type: 'group' }, text: '/start' } });
   assert.equal(h.sent.length, count);
+});
+
+test('onboarding asks filters and explicit notification consent', async () => {
+  const h = harness(); delete h.store.state.users['1']; await h.bot.init();
+  await h.text('/start'); await h.action('role:worker');
+  assert.equal(h.store.state.users['1'].onboarding, 'category');
+  await h.action('oncat:waiter');
+  assert.equal(h.store.state.users['1'].onboarding, 'city');
+  await h.action('oncity:city1');
+  assert.equal(h.store.state.users['1'].onboarding, 'notifications');
+  assert.match(h.sent.at(-1).text, /Включить уведомления/);
+  await h.action('subscribe:0.25');
+  assert.equal(h.store.state.users['1'].enabled, true);
+  assert.equal(h.store.state.users['1'].hours, 0.25);
+  assert.ok(h.store.state.users['1'].notificationsConsentAt);
+});
+
+test('carousel edits one photo card and uses site images with a branded fallback', async () => {
+  const h = harness(); await h.bot.init();
+  h.setItems([{ id: 'v1', title: 'Официант', coverImageUrl: 'https://unityevent.ru/uploads/v1.jpg' }]);
+  await h.bot.handle({ callback_query: { id: 'q', data: 'list:0', message: {
+    message_id: 77, photo: [{ file_id: 'old' }], chat: { id: 1, type: 'private' },
+  } } });
+  assert.equal(h.sent[0]._method, 'editMessageMedia');
+  assert.equal(h.sent[0].message_id, 77);
+  assert.equal(h.sent[0].media.media, 'https://unityevent.ru/uploads/v1.jpg');
+  assert.equal(itemPhoto('https://unityevent.ru', { role: 'worker' }, {}),
+    'https://unityevent.ru/unity-mark-original-green-1024.png');
 });
 
 test('digest sends only new visible entries, excludes closed entries, and does not repeat', async () => {
@@ -90,14 +118,14 @@ test('digest sends only new visible entries, excludes closed entries, and does n
   h.advance(); h.sent.length = 0;
   await h.bot.digest();
   assert.equal(h.sent.length, 1);
-  assert.match(h.sent[0].text, /Новая вакансия/);
-  assert.doesNotMatch(h.sent[0].text, /Существующая/);
+  assert.match(h.sent[0].caption, /Новая вакансия/);
+  assert.doesNotMatch(h.sent[0].caption, /Существующая/);
   h.advance(); await h.bot.digest();
   assert.equal(h.sent.length, 1);
 });
 
 test('more than five new records are retained for next digest', async () => {
-  const h = harness(); await h.bot.init(); await h.action('subscribe:12');
+  const h = harness(); await h.bot.init(); await h.action('subscribe:0.25');
   h.setItems(Array.from({ length: 7 }, (_, i) => ({ id: `n${i}`, title: `Новое ${i}` })));
   h.advance(); await h.bot.digest();
   assert.equal(h.store.state.users['1'].seen.length, 6);
@@ -137,11 +165,12 @@ test('stop and delete work, role switch disables old subscriptions', async () =>
 test('browse reads latest catalog every time and links to website', async () => {
   const h = harness('employer'); await h.bot.init();
   h.setItems([{ id: 'w1', firstName: 'Анна', lastName: 'Иванова', desiredRate: '2500', rateType: 'per_shift' }]);
-  await h.action('list:1');
-  assert.match(h.sent[0].text, /Анна Иванова/);
-  assert.match(h.sent[0].text, /за смену/);
+  await h.action('list:0');
+  assert.match(h.sent[0].caption, /Анна Иванова/);
+  assert.match(h.sent[0].caption, /за смену/);
+  assert.equal(h.sent[0]._method, 'sendPhoto');
   assert.equal(h.sent[0].reply_markup.inline_keyboard[0][0].url, 'https://unityevent.ru/workers/w1');
-  h.setItems([]); h.sent.length = 0; await h.action('list:1');
+  h.setItems([]); h.sent.length = 0; await h.action('list:0');
   assert.match(h.sent[0].text, /пока ничего нет/);
 });
 

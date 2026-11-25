@@ -1,15 +1,43 @@
-import { describe, newItems, parseRate, recordUrl, validDate } from './catalog.mjs';
+import { describe, itemPhoto, newItems, parseRate, recordUrl, validDate } from './catalog.mjs';
 
 const button = (text, callback_data) => ({ text, callback_data });
-const HOURS = [12, 24, 168];
+const INTERVALS = [
+  { hours: 0.25, label: 'Сразу · до 15 минут' },
+  { hours: 24, label: 'Раз в день' },
+  { hours: 168, label: 'Раз в неделю' },
+];
+const HOURS = INTERVALS.map((item) => item.hours);
+const intervalLabel = (hours) => INTERVALS.find((item) => item.hours === hours)?.label || `каждые ${hours} ч`;
 export function createBot({ store, catalog, telegram, siteUrl, now = Date.now }) {
   let categories = [];
   const send = (id, text, rows = []) => telegram('sendMessage', {
     chat_id: id, text, link_preview_options: { is_disabled: true },
     ...(rows.length ? { reply_markup: { inline_keyboard: rows } } : {}),
   });
+  const cardRows = (user, item, position, total, mode = 'list') => {
+    const rows = [];
+    const nav = [];
+    if (position > 0) nav.push(button('← Предыдущая', `${mode}:${position - 1}`));
+    if (position + 1 < total) nav.push(button('Следующая →', `${mode}:${position + 1}`));
+    if (nav.length) rows.push(nav);
+    rows.push([{ text: user.role === 'worker' ? 'Подробнее о вакансии' : 'Открыть анкету', url: recordUrl(siteUrl, user, item) }]);
+    rows.push([button('🔔 Уведомления', 'notifications'), button('Меню', 'menu')]);
+    return rows;
+  };
+  async function card(id, user, item, position, total, mode, message) {
+    const caption = `${mode === 'digest' ? 'Новое по вашим фильтрам' : user.role === 'worker' ? 'Актуальная вакансия' : 'Профиль работника'} · ${position + 1} из ${total}\n\n${describe(user, item, categories)}`;
+    const data = {
+      chat_id: id,
+      media: { type: 'photo', media: itemPhoto(siteUrl, user, item), caption },
+      reply_markup: { inline_keyboard: cardRows(user, item, position, total, mode) },
+    };
+    if (message?.message_id && message.photo) {
+      return telegram('editMessageMedia', { ...data, message_id: message.message_id });
+    }
+    return telegram('sendPhoto', { chat_id: id, photo: data.media.media, caption, reply_markup: data.reply_markup });
+  }
   async function menu(id, user) {
-    if (!user.role) return send(id, 'Добро пожаловать в Юнити! Кого вы ищете?', [
+    if (!user.role) return send(id, 'Добро пожаловать в Юнити! Выберите, чем бот может помочь:', [
       [button('Я работник — ищу работу', 'role:worker')],
       [button('Я работодатель — ищу персонал', 'role:employer')],
     ]);
@@ -18,11 +46,11 @@ export function createBot({ store, catalog, telegram, siteUrl, now = Date.now })
     return send(id, [user.role === 'worker' ? 'Вы ищете вакансии' : 'Вы ищете работников',
       `${category} · ${city}`, user.rateMax !== undefined ? `Ставка: ${user.rateMin}–${user.rateMax} ₽` : 'Ставка: любая',
       user.date ? `Дата: ${user.date}` : 'Дата: любая',
-      user.enabled ? `Рассылка: каждые ${user.hours} ч` : 'Рассылка выключена'].join('\n'), [
-      [button('Показать актуальные', 'list:1')],
+      user.enabled ? `Уведомления: ${intervalLabel(user.hours)}` : 'Уведомления выключены'].join('\n'), [
+      [button(user.role === 'worker' ? 'Смотреть вакансии' : 'Смотреть работников', 'list:0')],
       [button('Специальность', 'categories:0'), button('Город', 'cities:0')],
       [button('Ставка', 'rate'), button('Дата', 'date')],
-      [button('Уведомления', 'notifications')],
+      [button('🔔 Настроить уведомления', 'notifications')],
       [button('Сменить роль', 'role')],
     ]);
   }
@@ -43,27 +71,43 @@ export function createBot({ store, catalog, telegram, siteUrl, now = Date.now })
   async function options(id, user, kind, page) {
     const all = kind === 'categories' ? categories : await catalog.options('cities');
     const start = page * 8;
-    const rows = all.slice(start, start + 8).map((item) => [button(item.name, `${kind === 'categories' ? 'cat' : 'city'}:${item.id}`)]);
+    const onboarding = (kind === 'categories' && user.onboarding === 'category') ||
+      (kind === 'cities' && user.onboarding === 'city');
+    const choicePrefix = onboarding
+      ? (kind === 'categories' ? 'oncat' : 'oncity')
+      : (kind === 'categories' ? 'cat' : 'city');
+    const rows = all.slice(start, start + 8).map((item) => [button(item.name, `${choicePrefix}:${item.id}`)]);
     const nav = [];
     if (page > 0) nav.push(button('← Назад', `${kind}:${page - 1}`));
     if (start + 8 < all.length) nav.push(button('Далее →', `${kind}:${page + 1}`));
     if (nav.length) rows.push(nav);
-    rows.push([button('Все', kind === 'categories' ? 'cat:all' : 'city:all'), button('Меню', 'menu')]);
-    return send(id, kind === 'categories' ? 'Выберите специальность' : 'Выберите город', rows);
+    rows.push([button(kind === 'categories' ? 'Все специальности' : 'Все города', `${choicePrefix}:all`), button('Меню', 'menu')]);
+    const title = kind === 'categories'
+      ? (user.role === 'worker' ? 'Кем хотите работать?' : 'Какие специалисты вам нужны?')
+      : (user.role === 'worker' ? 'В каком городе ищете работу?' : 'В каком городе ищете персонал?');
+    return send(id, title, rows);
   }
-  async function listing(id, user, page) {
-    const result = await catalog.page(user, page);
-    if (!result.data.length) return send(id, 'По этим фильтрам пока ничего нет. Измените фильтры или включите уведомления.', [[button('Меню', 'menu')]]);
-    for (const item of result.data) await send(id, describe(user, item, categories), [[{ text: 'Открыть на сайте', url: recordUrl(siteUrl, user, item) }]]);
-    const nav = [];
-    if (page > 1) nav.push(button('← Назад', `list:${page - 1}`));
-    if (page < result.meta.totalPages) nav.push(button('Далее →', `list:${page + 1}`));
-    return send(id, `Страница ${page} из ${result.meta.totalPages}. Данные получены с сайта сейчас.`, [nav, [button('Обновить', `list:${page}`), button('Меню', 'menu')]].filter((row) => row.length));
+  async function listing(id, user, position, message) {
+    const result = await catalog.page(user, position + 1, 1);
+    if (!result.data.length) return send(id, 'По этим фильтрам пока ничего нет. Включите уведомления — сообщим, когда появится подходящее предложение.', [
+      [button('🔔 Включить уведомления', 'notifications')], [button('Изменить фильтры', 'menu')],
+    ]);
+    return card(id, user, result.data[0], position, result.meta.totalPages, 'list', message);
+  }
+  async function digestCard(id, user, position, message) {
+    const items = await catalog.all(user);
+    const byId = new Map(items.map((item) => [item.id, item]));
+    const digestItems = (user.lastDigestIds || []).map((itemId) => byId.get(itemId)).filter(Boolean);
+    if (!digestItems.length) return send(id, 'Эта подборка уже неактуальна. Покажу свежие предложения.', [[button('Смотреть актуальные', 'list:0')]]);
+    const safePosition = Math.min(Math.max(0, position), digestItems.length - 1);
+    return card(id, user, digestItems[safePosition], safePosition, digestItems.length, 'digest', message);
   }
   async function notifications(id, user) {
-    return send(id, 'Присылать только новые вакансии или анкеты по вашим фильтрам? После изменения фильтров отсчёт начинается заново. Пустых подборок не будет.', [
-      ...HOURS.map((hours) => [button(hours === 168 ? 'Раз в неделю' : hours === 24 ? 'Раз в день' : 'Два раза в день', `subscribe:${hours}`)]),
-      [button('Выключить', 'stop'), button('Меню', 'menu')],
+    return send(id, `Включить уведомления о новых ${user.role === 'worker' ? 'вакансиях' : 'работниках'} по выбранным фильтрам? Пустых и повторных сообщений не будет.`, [
+      ...INTERVALS.map(({ hours, label }) => [button(label, `subscribe:${hours}`)]),
+      user.onboarding === 'notifications'
+        ? [button('Не сейчас', 'skip-notifications')]
+        : [button('Выключить', 'stop'), button('Меню', 'menu')],
     ]);
   }
   return {
@@ -85,7 +129,8 @@ export function createBot({ store, catalog, telegram, siteUrl, now = Date.now })
       const text = message.text?.trim() || '';
       const action = update.callback_query?.data || '';
       if ((!action && /^\/stop(?:@\w+)?$/.test(text)) || action === 'stop') {
-        user.enabled = false; user.pending = undefined;
+        user.enabled = false; user.pending = undefined; user.onboarding = undefined;
+        user.notificationsDeclinedAt = new Date(now()).toISOString();
         await store.save();
         return send(id, 'Уведомления выключены.', [[button('Меню', 'menu')]]);
       }
@@ -97,19 +142,29 @@ export function createBot({ store, catalog, telegram, siteUrl, now = Date.now })
       if (action.startsWith('role:')) {
         const role = action.slice(5);
         if (!['worker', 'employer'].includes(role)) return;
-        store.state.users[id] = { role, enabled: false, hours: 24, seen: [] };
+        store.state.users[id] = { role, enabled: false, hours: 24, seen: [], onboarding: 'category', onboardingVersion: 2 };
         await store.save();
-        return menu(id, store.state.users[id]);
+        return options(id, store.state.users[id], 'categories', 0);
       }
       if (action === 'role') return menu(id, {});
       if (!user.role) return menu(id, user);
+      if (!action && /^\/start(?:@\w+)?$/.test(text) && user.onboardingVersion !== 2) {
+        user.onboardingVersion = 2;
+        await store.save();
+        if (!user.enabled) return notifications(id, user);
+      }
       if ((!action && /^\/(start|menu|help)(?:@\w+)?$/.test(text)) || action === 'menu') {
         user.pending = undefined; await store.save();
         return menu(id, user);
       }
       if (action.startsWith('list:')) {
-        const page = Number(action.slice(5));
-        if (Number.isSafeInteger(page) && page > 0 && page <= 100_000) return listing(id, user, page);
+        const position = Number(action.slice(5));
+        if (Number.isSafeInteger(position) && position >= 0 && position <= 100_000) return listing(id, user, position, message);
+        return;
+      }
+      if (action.startsWith('digest:')) {
+        const position = Number(action.slice(7));
+        if (Number.isSafeInteger(position) && position >= 0 && position <= 100) return digestCard(id, user, position, message);
         return;
       }
       for (const kind of ['categories', 'cities']) {
@@ -118,6 +173,16 @@ export function createBot({ store, catalog, telegram, siteUrl, now = Date.now })
           if (Number.isSafeInteger(page) && page >= 0 && page <= 100_000) return options(id, user, kind, page);
           return;
         }
+      }
+      if (action.startsWith('oncat:') || action.startsWith('oncity:')) {
+        const isCity = action.startsWith('oncity:');
+        const value = action.split(':')[1];
+        const choices = isCity ? await catalog.options('cities') : categories;
+        if (value !== 'all' && !choices.some((c) => c.id === value)) return send(id, 'Этот вариант уже недоступен. Попробуйте выбрать снова.', [[button('Меню', 'menu')]]);
+        user[isCity ? 'cityId' : 'category'] = value === 'all' ? undefined : value;
+        user.onboarding = isCity ? 'notifications' : 'city';
+        await store.save();
+        return isCity ? notifications(id, user) : options(id, user, 'cities', 0);
       }
       if (action.startsWith('cat:') || action.startsWith('city:')) {
         const isCity = action.startsWith('city:');
@@ -132,14 +197,21 @@ export function createBot({ store, catalog, telegram, siteUrl, now = Date.now })
           ? 'Введите минимум и максимум через пробел, например: 2000 5000. Учитывайте единицу оплаты в карточке: смена или месяц. Для сброса: «любая».'
           : 'Введите дату в формате ГГГГ-ММ-ДД. Для работников ищем свободных в этот день, для вакансий — дату начала смены. Для сброса: «любая».', [[button('Меню', 'menu')]]);
       }
-      if (action === 'notifications') return notifications(id, user);
+      if (action === 'notifications' || (!action && /^\/notifications(?:@\w+)?$/.test(text))) return notifications(id, user);
+      if (action === 'skip-notifications') {
+        Object.assign(user, { enabled: false, onboarding: undefined, notificationsDeclinedAt: new Date(now()).toISOString() });
+        await store.save();
+        await send(id, 'Хорошо, уведомления не включены. Их можно включить позже через меню.');
+        return menu(id, user);
+      }
       if (action.startsWith('subscribe:')) {
         const hours = Number(action.split(':')[1]);
         if (!HOURS.includes(hours)) return;
         const seen = (await catalog.all(user)).map((item) => item.id);
-        Object.assign(user, { enabled: true, hours, seen, nextAt: now() + hours * 3_600_000, pending: undefined });
+        Object.assign(user, { enabled: true, hours, seen, nextAt: now() + hours * 3_600_000, pending: undefined,
+          onboarding: undefined, notificationsConsentAt: new Date(now()).toISOString(), notificationsDeclinedAt: undefined });
         await store.save();
-        await send(id, 'Уведомления включены. Будем присылать новые записи, появившиеся после подписки. Текущие можно посмотреть кнопкой «Показать актуальные».');
+        await send(id, `Уведомления включены: ${intervalLabel(hours)}. Пришлём только новые подходящие предложения.`);
         return menu(id, user);
       }
       if (!action && user.pending === 'rate') {
@@ -165,8 +237,8 @@ export function createBot({ store, catalog, telegram, siteUrl, now = Date.now })
           const items = await catalog.all(user);
           const fresh = newItems(items, user.seen).slice(0, 5);
           if (fresh.length) {
-            const text = ['Новое по вашим фильтрам в Юнити:', ...fresh.map((item, i) => `${i + 1}. ${describe(user, item, categories)}`)].join('\n\n');
-            await send(id, text, [...fresh.map((item, i) => [{ text: `Открыть ${i + 1} на сайте`, url: recordUrl(siteUrl, user, item) }]), [button('Все актуальные', 'list:1'), button('Выключить', 'stop')]]);
+            user.lastDigestIds = fresh.map((item) => item.id);
+            await card(id, user, fresh[0], 0, fresh.length, 'digest');
             user.seen = [...new Set([...user.seen, ...fresh.map((item) => item.id)])];
           }
           user.nextAt = now() + user.hours * 3_600_000;

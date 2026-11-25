@@ -55,6 +55,7 @@ async function setup(request, env) {
   await telegram('setMyCommands', { commands: [
     { command: 'start', description: 'Начать / открыть меню' },
     { command: 'menu', description: 'Поиск и фильтры' },
+    { command: 'notifications', description: 'Настроить уведомления' },
     { command: 'stop', description: 'Выключить уведомления' },
     { command: 'delete', description: 'Удалить настройки и подписку' },
   ] });
