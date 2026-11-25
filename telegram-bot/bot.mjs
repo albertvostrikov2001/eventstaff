@@ -8,7 +8,7 @@ const INTERVALS = [
 ];
 const HOURS = INTERVALS.map((item) => item.hours);
 const intervalLabel = (hours) => INTERVALS.find((item) => item.hours === hours)?.label || `каждые ${hours} ч`;
-export function createBot({ store, catalog, telegram, siteUrl, now = Date.now }) {
+export function createBot({ store, catalog, telegram, siteUrl, accountApi = null, now = Date.now }) {
   let categories = [];
   const send = (id, text, rows = []) => telegram('sendMessage', {
     chat_id: id, text, link_preview_options: { is_disabled: true },
@@ -51,8 +51,53 @@ export function createBot({ store, catalog, telegram, siteUrl, now = Date.now })
       [button('Специальность', 'categories:0'), button('Город', 'cities:0')],
       [button('Ставка', 'rate'), button('Дата', 'date')],
       [button('🔔 Настроить уведомления', 'notifications')],
+      [button('👤 Мой аккаунт Unity', 'account')],
       [button('Сменить роль', 'role')],
     ]);
+  }
+
+  async function accountSummary(id, user) {
+    if (!accountApi) return send(id, 'Связь с аккаунтом временно недоступна.', [[button('Меню', 'menu')]]);
+    try {
+      const summary = await accountApi(`summary?chatId=${encodeURIComponent(id)}`);
+      user.siteLinked = true;
+      const counts = summary.counts || {};
+      const lines = [
+        `Аккаунт Unity: ${summary.displayName}`,
+        summary.role === 'worker' ? 'Роль: работник' : summary.role === 'employer' ? 'Роль: работодатель' : null,
+        `Отклики: ${counts.applications || 0}`,
+        `Приглашения: ${counts.invitations || 0}`,
+        `Активные смены: ${counts.shifts || 0}`,
+        `Непрочитанные сообщения: ${counts.unreadMessages || 0}`,
+      ].filter(Boolean);
+      if (summary.applications?.length) {
+        lines.push('', 'Последние отклики:');
+        for (const application of summary.applications.slice(0, 5)) {
+          const person = application.worker
+            ? ` · ${application.worker.firstName || ''} ${application.worker.lastName || ''}`.trimEnd()
+            : '';
+          lines.push(`• ${application.vacancy?.title || 'Вакансия'}${person} — ${application.status}`);
+        }
+      }
+      user.siteSeenNotificationIds ??= (summary.notifications || []).map((item) => item.id);
+      await store.save();
+      const cabinet = summary.role === 'employer' ? '/employer/applications' : '/worker/applications';
+      return send(id, lines.join('\n'), [
+        [{ text: 'Открыть личный кабинет', url: `${siteUrl.replace(/\/$/, '')}${cabinet}` }],
+        [button(user.accountNotifications === false ? 'Включить личные уведомления' : 'Выключить личные уведомления', 'account-notifications')],
+        [button('Обновить', 'account'), button('Отключить аккаунт', 'account-unlink-confirm')],
+        [button('Меню', 'menu')],
+      ]);
+    } catch (error) {
+      if (error.code !== 'NOT_LINKED' && error.code !== 404) throw error;
+      user.siteLinked = false;
+      await store.save();
+      const settingsPath = user.role === 'employer' ? '/employer/settings' : '/worker/settings';
+      return send(id, 'Свяжите Telegram с аккаунтом Unity:\n1. Откройте настройки на сайте.\n2. Нажмите «Подключить Telegram».\n3. Отправьте сюда полученный 8-значный код.', [
+        [{ text: 'Получить код на сайте', url: `${siteUrl.replace(/\/$/, '')}${settingsPath}` }],
+        [button('Меню', 'menu')],
+      ]);
+    }
   }
   async function rebaseline(user) {
     if (user.enabled) {
@@ -157,6 +202,43 @@ export function createBot({ store, catalog, telegram, siteUrl, now = Date.now })
         user.pending = undefined; await store.save();
         return menu(id, user);
       }
+      if (action === 'account') return accountSummary(id, user);
+      if (action === 'account-notifications') {
+        user.accountNotifications = user.accountNotifications === false;
+        await store.save();
+        await send(id, user.accountNotifications ? 'Личные уведомления включены.' : 'Личные уведомления выключены. Уведомления о новых вакансиях настраиваются отдельно.');
+        return accountSummary(id, user);
+      }
+      if (action === 'account-unlink-confirm') {
+        return send(id, 'Отключить Telegram от аккаунта Unity? Уведомления о вакансиях останутся доступными.', [
+          [button('Да, отключить', 'account-unlink'), button('Отмена', 'account')],
+        ]);
+      }
+      if (action === 'account-unlink') {
+        if (accountApi) await accountApi('disconnect', { method: 'POST', body: { chatId: id } });
+        Object.assign(user, { siteLinked: false, accountNotifications: false, siteSeenNotificationIds: [] });
+        await store.save();
+        return send(id, 'Аккаунт Unity отключён от Telegram.', [[button('Меню', 'menu')]]);
+      }
+      if (!action && /^[A-Z2-9]{8}$/i.test(text)) {
+        if (!accountApi) return send(id, 'Связь с аккаунтом временно недоступна. Попробуйте позже.');
+        try {
+          const linked = await accountApi('connect', { method: 'POST', body: {
+            code: text.toUpperCase(), chatId: id,
+            username: update.message?.from?.username || update.callback_query?.from?.username || null,
+          } });
+          Object.assign(user, { siteLinked: true, accountNotifications: true });
+          delete user.siteSeenNotificationIds;
+          await store.save();
+          await send(id, `Готово! Telegram связан с аккаунтом ${linked.displayName}. Личные уведомления включены.`);
+          return accountSummary(id, user);
+        } catch (error) {
+          if (error.code === 'INVALID_LINK_CODE' || error.code === 400) {
+            return send(id, 'Код неверный или уже истёк. Создайте новый код в настройках Unity.', [[button('Мой аккаунт', 'account')]]);
+          }
+          throw error;
+        }
+      }
       if (action.startsWith('list:')) {
         const position = Number(action.slice(5));
         if (Number.isSafeInteger(position) && position >= 0 && position <= 100_000) return listing(id, user, position, message);
@@ -250,6 +332,34 @@ export function createBot({ store, catalog, telegram, siteUrl, now = Date.now })
           await store.save();
           // Do not print tokens, chat IDs, profile data or request URLs.
           console.error('Digest delivery deferred; code:', error.code || 'network/catalog');
+        }
+      }
+    },
+    async accountDigest() {
+      if (!accountApi) return;
+      let processed = 0;
+      for (const [id, user] of Object.entries(store.state.users)) {
+        if (!user.siteLinked || user.accountNotifications === false) continue;
+        if (processed++ >= 20) break;
+        try {
+          const summary = await accountApi(`summary?chatId=${encodeURIComponent(id)}`);
+          const seen = new Set(user.siteSeenNotificationIds || []);
+          const fresh = (summary.notifications || []).filter((item) => !seen.has(item.id)).reverse().slice(0, 3);
+          for (const notification of fresh) {
+            await send(id, `${notification.title}\n\n${notification.body}`, [
+              [button('Открыть аккаунт', 'account'), button('Меню', 'menu')],
+            ]);
+            seen.add(notification.id);
+          }
+          user.siteSeenNotificationIds = [...seen].slice(-100);
+          await store.save();
+        } catch (error) {
+          if (error.code === 'NOT_LINKED' || error.code === 404) {
+            user.siteLinked = false;
+            await store.save();
+          } else {
+            console.error('Account notification delivery deferred; code:', error.code || 'network');
+          }
         }
       }
     },

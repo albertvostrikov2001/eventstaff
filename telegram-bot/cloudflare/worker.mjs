@@ -3,9 +3,29 @@ import { createCatalog } from '../catalog.mjs';
 import { openKvStore } from './kv-store.mjs';
 
 function assertConfig(env) {
-  for (const key of ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_WEBHOOK_SECRET', 'ADMIN_SETUP_SECRET', 'UNITY_API_URL', 'UNITY_SITE_URL']) {
+  for (const key of ['TELEGRAM_BOT_TOKEN', 'TELEGRAM_WEBHOOK_SECRET', 'ADMIN_SETUP_SECRET', 'UNITY_TELEGRAM_SECRET', 'UNITY_API_URL', 'UNITY_SITE_URL']) {
     if (!env[key]) throw new Error(`Missing ${key}`);
   }
+}
+
+function createAccountApi(apiUrl, secret) {
+  return async (path, options = {}) => {
+    const response = await fetch(`${apiUrl.replace(/\/$/, '')}/telegram/${path}`, {
+      method: options.method || 'GET',
+      headers: {
+        'content-type': 'application/json',
+        'x-telegram-integration-secret': secret,
+      },
+      ...(options.body ? { body: JSON.stringify(options.body) } : {}),
+    });
+    const result = await response.json().catch(() => null);
+    if (!response.ok || result?.success !== true) {
+      const error = new Error(result?.error?.message || 'Unity account API error');
+      error.code = result?.error?.code || response.status;
+      throw error;
+    }
+    return result.data;
+  };
 }
 
 function createTelegram(token) {
@@ -35,6 +55,7 @@ async function runtime(env) {
     telegram,
     catalog: createCatalog(env.UNITY_API_URL),
     siteUrl: env.UNITY_SITE_URL,
+    accountApi: createAccountApi(env.UNITY_API_URL, env.UNITY_TELEGRAM_SECRET),
   });
   await bot.init();
   return { bot, store, telegram };
@@ -102,6 +123,7 @@ export default {
       try {
         const { bot } = await runtime(env);
         await bot.digest();
+        await bot.accountDigest();
       } catch (error) {
         console.error('Scheduled digest failed', error?.code || error?.name || 'error');
       }

@@ -15,7 +15,7 @@ const memoryKv = () => {
 
 test('health endpoint is available without exposing configuration', async () => {
   const env = {
-    TELEGRAM_BOT_TOKEN: 'test', TELEGRAM_WEBHOOK_SECRET: 'hook', ADMIN_SETUP_SECRET: 'admin',
+    TELEGRAM_BOT_TOKEN: 'test', TELEGRAM_WEBHOOK_SECRET: 'hook', ADMIN_SETUP_SECRET: 'admin', UNITY_TELEGRAM_SECRET: 'integration',
     UNITY_API_URL: 'https://unityevent.ru/api/v1', UNITY_SITE_URL: 'https://unityevent.ru', BOT_STATE: memoryKv(),
   };
   const response = await worker.fetch(new Request('https://bot.example/'), env);
@@ -25,7 +25,7 @@ test('health endpoint is available without exposing configuration', async () => 
 
 test('webhook rejects requests without Telegram secret', async () => {
   const env = {
-    TELEGRAM_BOT_TOKEN: 'test', TELEGRAM_WEBHOOK_SECRET: 'hook', ADMIN_SETUP_SECRET: 'admin',
+    TELEGRAM_BOT_TOKEN: 'test', TELEGRAM_WEBHOOK_SECRET: 'hook', ADMIN_SETUP_SECRET: 'admin', UNITY_TELEGRAM_SECRET: 'integration',
     UNITY_API_URL: 'https://unityevent.ru/api/v1', UNITY_SITE_URL: 'https://unityevent.ru', BOT_STATE: memoryKv(),
   };
   const response = await worker.fetch(new Request('https://bot.example/telegram', { method: 'POST', body: '{}' }), env);
