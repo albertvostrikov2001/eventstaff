@@ -107,6 +107,8 @@ test('carousel edits one photo card and uses site images with a branded fallback
   assert.equal(h.sent[0]._method, 'editMessageMedia');
   assert.equal(h.sent[0].message_id, 77);
   assert.equal(h.sent[0].media.media, 'https://unityevent.ru/uploads/v1.jpg');
+  assert.equal(h.sent[0].reply_markup.inline_keyboard[1][0].web_app.url,
+    'https://unityevent.ru/telegram?role=worker');
   assert.equal(itemPhoto('https://unityevent.ru', { role: 'worker' }, {}),
     'https://unityevent.ru/unity-mark-original-green-1024.png');
 });

@@ -1,6 +1,7 @@
 import { describe, itemPhoto, newItems, parseRate, recordUrl, validDate } from './catalog.mjs';
 
 const button = (text, callback_data) => ({ text, callback_data });
+const webButton = (text, url) => ({ text, web_app: { url } });
 const INTERVALS = [
   { hours: 0.25, label: 'Сразу · до 15 минут' },
   { hours: 24, label: 'Раз в день' },
@@ -21,6 +22,7 @@ export function createBot({ store, catalog, telegram, siteUrl, accountApi = null
     if (position + 1 < total) nav.push(button('Следующая →', `${mode}:${position + 1}`));
     if (nav.length) rows.push(nav);
     rows.push([{ text: user.role === 'worker' ? 'Подробнее о вакансии' : 'Открыть анкету', url: recordUrl(siteUrl, user, item) }]);
+    rows.push([webButton('Открыть каталог', `${siteUrl.replace(/\/$/, '')}/telegram?role=${user.role}`)]);
     rows.push([button('🔔 Уведомления', 'notifications'), button('Меню', 'menu')]);
     return rows;
   };
@@ -47,7 +49,8 @@ export function createBot({ store, catalog, telegram, siteUrl, accountApi = null
       `${category} · ${city}`, user.rateMax !== undefined ? `Ставка: ${user.rateMin}–${user.rateMax} ₽` : 'Ставка: любая',
       user.date ? `Дата: ${user.date}` : 'Дата: любая',
       user.enabled ? `Уведомления: ${intervalLabel(user.hours)}` : 'Уведомления выключены'].join('\n'), [
-      [button(user.role === 'worker' ? 'Смотреть вакансии' : 'Смотреть работников', 'list:0')],
+      [webButton(user.role === 'worker' ? 'Открыть каталог вакансий' : 'Открыть каталог работников', `${siteUrl.replace(/\/$/, '')}/telegram?role=${user.role}`)],
+      [button('Смотреть карточки в чате', 'list:0')],
       [button('Специальность', 'categories:0'), button('Город', 'cities:0')],
       [button('Ставка', 'rate'), button('Дата', 'date')],
       [button('🔔 Настроить уведомления', 'notifications')],
