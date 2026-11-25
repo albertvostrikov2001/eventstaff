@@ -125,9 +125,9 @@ test('one-time code links Unity account and personal notifications are delivered
       return {
         role: 'worker', displayName: 'Анна Иванова',
         counts: { applications: 2, invitations: 1, shifts: 1, unreadMessages: 0 },
-        applications: [],
+        applications: [{ status: 'pending', vacancy: { title: 'Официант' } }],
         notifications: summaryCalls === 1 ? [{ id: 'old', title: 'Старое', body: 'Не отправлять' }]
-          : [{ id: 'new', title: 'Новый отклик', body: 'Работодатель ответил' }, { id: 'old', title: 'Старое', body: 'Не отправлять' }],
+          : [{ id: 'new', type: 'APPLICATION_RESPONSE', title: 'Новый отклик', body: 'Работодатель ответил' }, { id: 'old', title: 'Старое', body: 'Не отправлять' }],
       };
     }
     return { connected: false };
@@ -135,14 +135,25 @@ test('one-time code links Unity account and personal notifications are delivered
   const h = harness('worker', accountApi); await h.bot.init();
   await h.text('ABCD2345');
   assert.equal(h.store.state.users['1'].siteLinked, true);
+  assert.match(h.sent.at(-1).text, /ожидает ответа/);
   assert.deepEqual(h.store.state.users['1'].siteSeenNotificationIds, ['old']);
   h.sent.length = 0;
   await h.bot.accountDigest();
   assert.equal(h.sent.length, 1);
   assert.match(h.sent[0].text, /Новый отклик/);
+  assert.equal(h.sent[0].reply_markup.inline_keyboard[0][0].url,
+    'https://unityevent.ru/worker/applications');
   h.sent.length = 0;
   await h.bot.accountDigest();
   assert.equal(h.sent.length, 0);
+});
+
+test('help explains the main flow and keeps navigation available', async () => {
+  const h = harness(); await h.bot.init();
+  await h.text('/help');
+  assert.match(h.sent.at(-1).text, /Как пользоваться ботом/);
+  assert.equal(h.sent.at(-1).reply_markup.inline_keyboard[0][0].web_app.url,
+    'https://unityevent.ru/telegram?role=worker');
 });
 
 test('digest sends only new visible entries, excludes closed entries, and does not repeat', async () => {

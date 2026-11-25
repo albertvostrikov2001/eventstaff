@@ -9,6 +9,12 @@ const INTERVALS = [
 ];
 const HOURS = INTERVALS.map((item) => item.hours);
 const intervalLabel = (hours) => INTERVALS.find((item) => item.hours === hours)?.label || `каждые ${hours} ч`;
+const APPLICATION_STATUS = {
+  pending: 'ожидает ответа', viewed: 'просмотрен', invited: 'приглашение', interview: 'собеседование',
+  confirmed: 'подтверждён', shift_started: 'смена началась', completed: 'завершён',
+  cancelled: 'отменён', rejected: 'отклонён',
+};
+const applicationStatus = (status) => APPLICATION_STATUS[status] || status || 'без статуса';
 export function createBot({ store, catalog, telegram, siteUrl, accountApi = null, now = Date.now }) {
   let categories = [];
   const send = (id, text, rows = []) => telegram('sendMessage', {
@@ -55,8 +61,43 @@ export function createBot({ store, catalog, telegram, siteUrl, accountApi = null
       [button('Ставка', 'rate'), button('Дата', 'date')],
       [button('🔔 Настроить уведомления', 'notifications')],
       [button('👤 Мой аккаунт Unity', 'account')],
-      [button('Сменить роль', 'role')],
+      [button('Помощь', 'help'), button('Сменить роль', 'role')],
     ]);
+  }
+
+  function help(id, user) {
+    return send(id, [
+      'Как пользоваться ботом:',
+      '• откройте каталог и настройте фильтры;',
+      '• включите уведомления — пришлём только новые предложения;',
+      '• свяжите аккаунт Unity, чтобы получать ответы, приглашения и сообщения;',
+      '• изменить роль и фильтры можно в меню.',
+      '',
+      'Если что-то не открывается, нажмите «Меню» и повторите действие.',
+    ].join('\n'), [
+      [webButton('Открыть каталог', `${siteUrl.replace(/\/$/, '')}/telegram?role=${user.role || 'worker'}`)],
+      [button('Мой аккаунт', 'account'), button('Меню', 'menu')],
+    ]);
+  }
+
+  function accountLinks(role) {
+    const root = siteUrl.replace(/\/$/, '');
+    const prefix = role === 'employer' ? '/employer' : '/worker';
+    return [
+      [{ text: role === 'employer' ? 'Все отклики' : 'Мои отклики', url: `${root}${prefix}/applications` },
+        { text: 'Приглашения', url: `${root}${prefix}/invitations` }],
+      [{ text: 'Сообщения', url: `${root}${prefix}/messages` }, { text: 'Смены', url: `${root}${prefix}/shifts` }],
+    ];
+  }
+
+  function notificationPath(role, type) {
+    const prefix = role === 'employer' ? '/employer' : '/worker';
+    if (type === 'NEW_CHAT_MESSAGE') return `${prefix}/messages`;
+    if (['INVITATION', 'APPLICATION_RECEIVED', 'APPLICATION_RESPONSE'].includes(type)) {
+      return type === 'INVITATION' ? `${prefix}/invitations` : `${prefix}/applications`;
+    }
+    if (String(type || '').startsWith('SHIFT_') || String(type || '').startsWith('PAYMENT_')) return `${prefix}/shifts`;
+    return `${prefix}/notifications`;
   }
 
   async function accountSummary(id, user) {
@@ -79,13 +120,14 @@ export function createBot({ store, catalog, telegram, siteUrl, accountApi = null
           const person = application.worker
             ? ` · ${application.worker.firstName || ''} ${application.worker.lastName || ''}`.trimEnd()
             : '';
-          lines.push(`• ${application.vacancy?.title || 'Вакансия'}${person} — ${application.status}`);
+          lines.push(`• ${application.vacancy?.title || 'Вакансия'}${person} — ${applicationStatus(application.status)}`);
         }
       }
       user.siteSeenNotificationIds ??= (summary.notifications || []).map((item) => item.id);
       await store.save();
       const cabinet = summary.role === 'employer' ? '/employer/applications' : '/worker/applications';
       return send(id, lines.join('\n'), [
+        ...accountLinks(summary.role),
         [{ text: 'Открыть личный кабинет', url: `${siteUrl.replace(/\/$/, '')}${cabinet}` }],
         [button(user.accountNotifications === false ? 'Включить личные уведомления' : 'Выключить личные уведомления', 'account-notifications')],
         [button('Обновить', 'account'), button('Отключить аккаунт', 'account-unlink-confirm')],
@@ -201,10 +243,11 @@ export function createBot({ store, catalog, telegram, siteUrl, accountApi = null
         await store.save();
         if (!user.enabled) return notifications(id, user);
       }
-      if ((!action && /^\/(start|menu|help)(?:@\w+)?$/.test(text)) || action === 'menu') {
+      if ((!action && /^\/(start|menu)(?:@\w+)?$/.test(text)) || action === 'menu') {
         user.pending = undefined; await store.save();
         return menu(id, user);
       }
+      if (action === 'help' || (!action && /^\/help(?:@\w+)?$/.test(text))) return help(id, user);
       if (action === 'account') return accountSummary(id, user);
       if (action === 'account-notifications') {
         user.accountNotifications = user.accountNotifications === false;
@@ -314,57 +357,70 @@ export function createBot({ store, catalog, telegram, siteUrl, accountApi = null
     },
     async digest() {
       let processed = 0;
+      const stats = { processed: 0, sent: 0, disabled: 0, errors: 0 };
       for (const [id, user] of Object.entries(store.state.users)) {
         if (!user.enabled || !user.role || user.nextAt > now()) continue;
         // Bound each batch so polling still processes /stop and interactive searches.
         if (processed++ >= 10) break;
+        stats.processed++;
         try {
           const items = await catalog.all(user);
           const fresh = newItems(items, user.seen).slice(0, 5);
           if (fresh.length) {
             user.lastDigestIds = fresh.map((item) => item.id);
             await card(id, user, fresh[0], 0, fresh.length, 'digest');
+            stats.sent++;
             user.seen = [...new Set([...user.seen, ...fresh.map((item) => item.id)])];
           }
           user.nextAt = now() + user.hours * 3_600_000;
           await store.save();
         } catch (error) {
           if (error.code === 'BOT_STORAGE') throw error;
-          if (error.code === 403) user.enabled = false;
+          stats.errors++;
+          if (error.code === 403) { user.enabled = false; stats.disabled++; }
           else user.nextAt = now() + Math.max(300, error.retryAfter || 0) * 1000;
           await store.save();
           // Do not print tokens, chat IDs, profile data or request URLs.
           console.error('Digest delivery deferred; code:', error.code || 'network/catalog');
         }
       }
+      return stats;
     },
     async accountDigest() {
-      if (!accountApi) return;
+      const stats = { processed: 0, sent: 0, disconnected: 0, errors: 0 };
+      if (!accountApi) return stats;
       let processed = 0;
       for (const [id, user] of Object.entries(store.state.users)) {
         if (!user.siteLinked || user.accountNotifications === false) continue;
         if (processed++ >= 20) break;
+        stats.processed++;
         try {
           const summary = await accountApi(`summary?chatId=${encodeURIComponent(id)}`);
           const seen = new Set(user.siteSeenNotificationIds || []);
           const fresh = (summary.notifications || []).filter((item) => !seen.has(item.id)).reverse().slice(0, 3);
           for (const notification of fresh) {
+            const target = `${siteUrl.replace(/\/$/, '')}${notificationPath(summary.role, notification.type)}`;
             await send(id, `${notification.title}\n\n${notification.body}`, [
-              [button('Открыть аккаунт', 'account'), button('Меню', 'menu')],
+              [{ text: 'Посмотреть на сайте', url: target }],
+              [button('Мой аккаунт', 'account'), button('Меню', 'menu')],
             ]);
             seen.add(notification.id);
+            stats.sent++;
           }
           user.siteSeenNotificationIds = [...seen].slice(-100);
           await store.save();
         } catch (error) {
           if (error.code === 'NOT_LINKED' || error.code === 404) {
             user.siteLinked = false;
+            stats.disconnected++;
             await store.save();
           } else {
+            stats.errors++;
             console.error('Account notification delivery deferred; code:', error.code || 'network');
           }
         }
       }
+      return stats;
     },
     async failure(update) {
       const chat = update.message?.chat || update.callback_query?.message?.chat;

@@ -77,6 +77,7 @@ async function setup(request, env) {
     { command: 'start', description: 'Начать / открыть меню' },
     { command: 'menu', description: 'Поиск и фильтры' },
     { command: 'notifications', description: 'Настроить уведомления' },
+    { command: 'help', description: 'Как пользоваться ботом' },
     { command: 'stop', description: 'Выключить уведомления' },
     { command: 'delete', description: 'Удалить настройки и подписку' },
   ] });
@@ -93,7 +94,13 @@ async function webhook(request, env) {
   if (Number.isSafeInteger(update.update_id) && update.update_id < store.state.offset) {
     return Response.json({ ok: true, duplicate: true });
   }
-  await bot.handle(update);
+  try {
+    await bot.handle(update);
+  } catch (error) {
+    if (error?.code === 'BOT_STORAGE') throw error;
+    console.error('Bot update failed', error?.code || error?.name || 'error');
+    await bot.failure(update);
+  }
   if (Number.isSafeInteger(update.update_id)) {
     store.state.offset = update.update_id + 1;
     await store.save();
@@ -109,6 +116,18 @@ export default {
       if (request.method === 'GET' && url.pathname === '/') {
         return Response.json({ ok: true, service: 'unity-telegram-bot' });
       }
+      if (request.method === 'GET' && url.pathname === '/status') {
+        if (request.headers.get('authorization') !== `Bearer ${env.ADMIN_SETUP_SECRET}`) return new Response('Forbidden', { status: 403 });
+        const { store } = await runtime(env);
+        const users = Object.values(store.state.users || {});
+        return Response.json({
+          ok: true,
+          users: users.length,
+          catalogSubscriptions: users.filter((user) => user.enabled).length,
+          linkedAccounts: users.filter((user) => user.siteLinked).length,
+          monitoring: store.state.monitoring || null,
+        });
+      }
       if (request.method === 'POST' && url.pathname === '/setup') return setup(request, env);
       if (request.method === 'POST' && url.pathname === '/telegram') return webhook(request, env);
       return new Response('Not found', { status: 404 });
@@ -120,11 +139,20 @@ export default {
 
   async scheduled(_controller, env, ctx) {
     ctx.waitUntil((async () => {
+      let store;
       try {
-        const { bot } = await runtime(env);
-        await bot.digest();
-        await bot.accountDigest();
+        const runtimeState = await runtime(env);
+        const { bot } = runtimeState;
+        store = runtimeState.store;
+        const catalog = await bot.digest();
+        const accounts = await bot.accountDigest();
+        store.state.monitoring = { ok: true, completedAt: new Date().toISOString(), catalog, accounts };
+        await store.save();
       } catch (error) {
+        if (store) {
+          store.state.monitoring = { ok: false, completedAt: new Date().toISOString(), code: String(error?.code || error?.name || 'error').slice(0, 40) };
+          try { await store.save(); } catch { /* Keep the original error. */ }
+        }
         console.error('Scheduled digest failed', error?.code || error?.name || 'error');
       }
     })());
